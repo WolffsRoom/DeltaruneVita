@@ -28,6 +28,22 @@ Loader already contains a DELTARUNE keymap and a DELTARUNE-specific
 This does **not** yet prove that all chapters, audio, video, saving, or controls
 work correctly on the Vita.
 
+## Project files
+
+- [YoYo Loader Nightly VPK](downloads/YoYoLoader-Nightly.vpk) — prebuilt
+  baseline used for the first hardware test;
+- [YoYo Loader builder](downloads/yoyoloader-builder.zip) — upstream standalone
+  launcher builder and binaries;
+- [DLTVITA-0001 source package](downloads/yoyoloader-deltarune-DLTVITA-0001-source.zip)
+  — instrumented source awaiting a VitaSDK-softfp build;
+- [Baseline test instructions](BASELINE-INSTRUCTIONS.md);
+- [DLTVITA-0001 technical report](DLTVITA-0001-REPORT.md);
+- [Portuguese installation note](downloads/INSTALL-PT-BR.txt).
+
+The APK and game assets are intentionally not included. After downloading the
+project files, supply your own compatible APK and rename it to `game.apk` as
+described below.
+
 ## Installation layout
 
 Install the official YoYo Loader VPK, then place your legally obtained Android

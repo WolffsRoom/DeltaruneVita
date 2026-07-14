@@ -1,0 +1,43 @@
+DELTARUNE 1-5 - TESTE BASE NO PS VITA
+=====================================
+
+ESTADO: IMPLEMENTADO, AGUARDANDO TESTE NO HARDWARE
+
+1. Instale DELTARUNE_YoYoLoader.vpk pelo VitaShell.
+
+2. Copie o conteúdo da pasta deploy/ux0 para ux0: no Vita, preservando os
+   caminhos. O resultado deve ser:
+
+   ux0:data/gms/deltarune/game.apk
+   ux0:data/gms/deltarune/yyl.cfg
+
+3. Requisitos do YoYo Loader:
+
+   - kubridge.skprx
+   - fd_fix.skprx, exceto quando rePatch estiver instalado
+   - libshacccg.suprx
+
+4. Abra o YoYo Loader e selecione DELTARUNE.
+
+5. No primeiro teste, nao use Optimize APK nem externalizacao de assets.
+
+6. Depois da execucao, copie imediatamente:
+
+   ux0:data/gms/shared/yyl.log
+
+   Se ocorrer crash, copie tambem o psp2core da mesma execucao.
+
+HASHES
+------
+
+DELTARUNE_YoYoLoader.vpk
+SHA-256: AADB6E092B8094E91B1E14829232673A93191EB7BD2E8104F9ABA54830DD82CA
+
+game.apk
+SHA-256: C25CCCCB42CD7C62FC41480B188F72367F60F123FEC395A762E072CC4DB7AC48
+
+OBSERVACAO
+----------
+
+O VPK contem apenas o YoYo Loader oficial. Os dados do jogo permanecem na
+pasta ux0:data/gms/deltarune, separados do aplicativo instalado.

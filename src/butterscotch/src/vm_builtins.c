@@ -9498,7 +9498,8 @@ static bool vitaShouldHideMobileControl(Runner* runner, int32_t spriteIndex) {
     extern int g_vitaTouchEnabled;
     if (g_vitaTouchEnabled || spriteIndex < 0 || (uint32_t)spriteIndex >= runner->dataWin->sprt.count) return false;
     Sprite* sprite = &runner->dataWin->sprt.sprites[spriteIndex];
-    return sprite->name != nullptr && strcmp(sprite->name, "spr_control_return") == 0;
+    return sprite->name != nullptr &&
+           (strcmp(sprite->name, "spr_control_return") == 0 || strcmp(sprite->name, "spr_darkconfigbt") == 0);
 #else
     (void)runner;
     (void)spriteIndex;

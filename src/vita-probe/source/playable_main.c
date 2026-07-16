@@ -114,7 +114,7 @@ int main(void) {
     sceIoRemove(LOG_PATH);
     int active_chapter = consume_next_chapter();
 
-    log_line("Deltarune Butterscotch VitaRenderer runner 00.33");
+    log_line("Deltarune Butterscotch VitaRenderer runner 00.34");
     log_line("MAIN_STACK=4194304");
     char startup_line[96];
     snprintf(startup_line, sizeof(startup_line), "AUDIO=openal ENTRY=chapter%d CONTROLS=vita+touch", active_chapter);
@@ -264,6 +264,14 @@ int main(void) {
                                      (pad.buttons & SCE_CTRL_CROSS) || touch_confirm,
                                      (pad.buttons & (SCE_CTRL_CIRCLE | SCE_CTRL_SQUARE)) || touch_cancel,
                                      (pad.buttons & SCE_CTRL_TRIANGLE) || touch_menu);
+        for (ptrdiff_t i = 0; i < arrlen(runner->instances); ++i) {
+            Instance* inst = runner->instances[i];
+            if (inst == NULL || inst->objectIndex < 0 || (uint32_t)inst->objectIndex >= dw->objt.count) continue;
+            const char* object_name = dw->objt.objects[inst->objectIndex].name;
+            if (object_name != NULL && strcmp(object_name, "obj_mobilecontroller") == 0) {
+                inst->visible = settings.touchEnabled;
+            }
+        }
 
         bool controls_enabled = !settings.open && !settings.adjustMode;
         set_key(runner->keyboard, VK_UP, controls_enabled && ((pad.buttons & SCE_CTRL_UP) || dy < -48 || touch_up), &previous[0]);

@@ -17,15 +17,15 @@ int g_vitaTouchEnabled = 1;
 static bool g_launcherMode = false;
 
 static void applyDisplaySettings(const VitaSettings* s) {
-    g_vitaDisplayOffsetX = g_launcherMode ? 0 : s->displayOffsetX;
-    g_vitaDisplayOffsetY = g_launcherMode ? 0 : s->displayOffsetY;
-    g_vitaDisplayZoom = g_launcherMode ? 100 : s->displayZoom;
+    g_vitaDisplayOffsetX = g_launcherMode ? 0 : 113 + s->displayOffsetX;
+    g_vitaDisplayOffsetY = g_launcherMode ? 0 : 36 + s->displayOffsetY;
+    g_vitaDisplayZoom = g_launcherMode ? 100 : 115 * s->displayZoom / 100;
     g_vitaTouchEnabled = s->touchEnabled ? 1 : 0;
 }
 
 static void saveSettings(const VitaSettings* s) {
     char text[128];
-    int length = snprintf(text, sizeof(text), "touch=%d\nmod=%s\nwidescreen=%d\nvolume=%d\noffset_x=%d\noffset_y=%d\nzoom=%d\n",
+    int length = snprintf(text, sizeof(text), "touch=%d\nmod=%s\nwidescreen=%d\nvolume=%d\nscreen_profile=2\noffset_x=%d\noffset_y=%d\nzoom=%d\n",
                           s->touchEnabled ? 1 : 0, s->ptbrEnabled ? "PTBR" : "Original",
                           s->widescreenEnabled ? 1 : 0, s->volume,
                           s->displayOffsetX, s->displayOffsetY, s->displayZoom);
@@ -41,9 +41,10 @@ void VitaSettings_load(VitaSettings* s) {
     s->touchEnabled = true;
     s->widescreenEnabled = true;
     s->volume = 10;
-    s->displayOffsetX = 113;
-    s->displayOffsetY = 36;
-    s->displayZoom = 115;
+    s->displayOffsetX = 0;
+    s->displayOffsetY = 0;
+    s->displayZoom = 100;
+    bool migrateScreenProfile = false;
     char text[256] = {0};
     SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_RDONLY, 0);
     if (fd >= 0) {
@@ -64,12 +65,19 @@ void VitaSettings_load(VitaSettings* s) {
         if (offsetX != NULL) sscanf(offsetX + 9, "%d", &s->displayOffsetX);
         if (offsetY != NULL) sscanf(offsetY + 9, "%d", &s->displayOffsetY);
         if (zoom != NULL) sscanf(zoom + 5, "%d", &s->displayZoom);
+        if (strstr(text, "screen_profile=2") == NULL) {
+            s->displayOffsetX = 0;
+            s->displayOffsetY = 0;
+            s->displayZoom = 100;
+            migrateScreenProfile = true;
+        }
     }
     if (s->volume < 0) s->volume = 0;
     if (s->volume > 10) s->volume = 10;
     if (s->displayZoom < 50) s->displayZoom = 50;
     if (s->displayZoom > 160) s->displayZoom = 160;
     applyDisplaySettings(s);
+    if (migrateScreenProfile) saveSettings(s);
 }
 
 void VitaSettings_applyAudio(VitaSettings* s, AudioSystem* audio) {
@@ -93,9 +101,9 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
         if (ry > 48 && s->displayZoom > 50) s->displayZoom--;
         applyDisplaySettings(s);
         if (pressed & SCE_CTRL_CIRCLE) {
-            s->displayOffsetX = 113;
-            s->displayOffsetY = 36;
-            s->displayZoom = 115;
+            s->displayOffsetX = 0;
+            s->displayOffsetY = 0;
+            s->displayZoom = 100;
             applyDisplaySettings(s);
         }
         if (pressed & (SCE_CTRL_CROSS | SCE_CTRL_SELECT)) {
@@ -235,10 +243,10 @@ void VitaSettings_drawCalibration(VitaSettings* s, Renderer* r) {
         width = 960;
         height = (gameH * 960) / gameW;
     }
-    width = width * s->displayZoom / 100;
-    height = height * s->displayZoom / 100;
-    int x = (960 - width) / 2 + s->displayOffsetX;
-    int y = (544 - height) / 2 + s->displayOffsetY;
+    width = width * g_vitaDisplayZoom / 100;
+    height = height * g_vitaDisplayZoom / 100;
+    int x = (960 - width) / 2 + g_vitaDisplayOffsetX;
+    int y = (544 - height) / 2 + g_vitaDisplayOffsetY;
     g_vitaPortOverlayFullScreen = 1;
     r->vtable->beginGUI(r, 960, 544, 0, 0, 960, 544, RENDER_TARGET_HOST_FRAMEBUFFER);
     r->vtable->drawRectangle(r, (float)x, (float)y, (float)(x + width - 1), (float)(y + height - 1), 0xFFFFFF, 1.0f, true);
@@ -277,7 +285,7 @@ void VitaSettings_drawLauncherCredit(VitaSettings* s, Renderer* r, bool launcher
     if (r->drawFont < 0 || (uint32_t)r->drawFont >= r->dataWin->font.count) r->drawFont = 0;
     g_vitaPortOverlayFullScreen = 1;
     r->vtable->beginGUI(r, 960, 544, 0, 0, 960, 544, RENDER_TARGET_HOST_FRAMEBUFFER);
-    r->vtable->drawTextColor(r, "PSVita port by Woff", 730.0f, 512.0f, 0.72f, 0.72f, 0.0f,
+    r->vtable->drawTextColor(r, "PSVita port by Woff", 710.0f, 510.0f, 0.80f, 0.80f, 0.0f,
                              0x808080, 0x808080, 0x808080, 0x808080, 1.0f, -1.0f);
     r->vtable->endGUI(r);
     g_vitaPortOverlayFullScreen = 0;

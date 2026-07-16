@@ -2,6 +2,15 @@
 
 O desenvolvimento foi feito em ciclos curtos no hardware real. As versões antigas são preservadas como registro técnico e podem estar incompletas ou instáveis.
 
+## v0.34 — perfil-base e controle táctil
+
+- `0,0 / 100%` passa a representar o perfil-base `113,36 / 115%` nos capítulos;
+- configurações antigas são migradas automaticamente para o novo perfil;
+- seletor continua usando o enquadramento neutro real;
+- contorno da calibração acompanha o enquadramento efetivo;
+- objeto `obj_mobilecontroller` e seus sprites de configuração ficam ocultos com Touch desligado;
+- crédito do port aumentado em aproximadamente 10%.
+
 ## v0.33 — enquadramento e navegação
 
 - perfil 113,36 / 115% definido como padrão dos capítulos;

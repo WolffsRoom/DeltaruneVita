@@ -372,8 +372,28 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
                 return -1;
             }
 
-            AudioEntry* entry = &ma->base.audioGroups[sound->audioGroup]->audo.entries[sound->audioFile];
-            WAVFile wav = WAV_ParseFileData(entry->data);
+            DataWin* audioDw = ma->base.audioGroups[sound->audioGroup];
+            AudioEntry* entry = &audioDw->audo.entries[sound->audioFile];
+            uint8_t* transientData = nullptr;
+            const uint8_t* audioData = entry->data;
+            if (audioData == nullptr && entry->dataSize > 0 && audioDw->lazyLoadFile != nullptr) {
+                transientData = (uint8_t*)safeMalloc(entry->dataSize);
+                long previous = ftell(audioDw->lazyLoadFile);
+                fseek(audioDw->lazyLoadFile, (long)entry->dataOffset, SEEK_SET);
+                size_t got = fread(transientData, 1, entry->dataSize, audioDw->lazyLoadFile);
+                fseek(audioDw->lazyLoadFile, previous, SEEK_SET);
+                if (got != entry->dataSize) {
+                    free(transientData);
+                    fprintf(stderr, "Audio: Failed lazy read for sound '%s'\n", sound->name);
+                    return -1;
+                }
+                audioData = transientData;
+            }
+            if (audioData == nullptr) {
+                fprintf(stderr, "Audio: Missing AUDO data for sound '%s'\n", sound->name);
+                return -1;
+            }
+            WAVFile wav = WAV_ParseFileData(audioData);
 
             uint32_t format;
             if (wav.header.number_of_channels == 1)
@@ -398,6 +418,7 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
             );
             alSourcei(slot->alSource, AL_BUFFER, slot->alBuffer);
             if(wav.data != NULL) free(wav.data);
+            free(transientData);
         } else {
             // External audio: load from file
             char* path = resolveExternalPath(ma, sound);
@@ -824,6 +845,7 @@ static void maGroupLoad(AudioSystem* audio, int32_t groupIndex) {
 
         DataWinParserOptions options = {0};
         options.parseAudo = true;
+        options.lazyLoadAudio = true;
         DataWin *audioGroup = DataWin_parse(((AlAudioSystem*)audio)->fileSystem->vtable->resolvePath(((AlAudioSystem*)audio)->fileSystem, buf), options);
         arrput(audio->audioGroups, audioGroup);
         free(buf);

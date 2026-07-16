@@ -17,9 +17,11 @@ typedef struct {
     FileSystem base;
     char* bundlePath; // includes trailing '/'
     char* savePath; // includes trailing '/'
+    char* modPath; // optional read-only override, includes trailing '/'
 } OverlayFileSystem;
 
 OverlayFileSystem* OverlayFileSystem_create(const char* bundlePath, const char* savePath);
+void OverlayFileSystem_setModPath(OverlayFileSystem* fs, const char* modPath);
 void OverlayFileSystem_destroy(OverlayFileSystem* fs);
 
 #endif /* _BS_OVERLAY_FILE_SYSTEM_H_ */

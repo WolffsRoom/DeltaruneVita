@@ -5,6 +5,7 @@
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/gxm.h>
+#include <psp2/touch.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,11 +15,13 @@
 
 #include "data_win.h"
 #include "gl_legacy_renderer.h"
-#include "noop_audio_system.h"
+#include "audio/openal/al_audio_system.h"
 #include "overlay_file_system.h"
 #include "runner.h"
 #include "runner_gamepad.h"
 #include "runner_keyboard.h"
+#include "runner_mouse.h"
+#include "vita_settings.h"
 #include "vm.h"
 
 #define DATA_ROOT "ux0:data/deltarune/butterscotch/"
@@ -36,9 +39,9 @@ typedef struct { uint32_t mask; int key; } KeyMap;
 static const KeyMap KEY_MAP[] = {
     {SCE_CTRL_UP, VK_UP}, {SCE_CTRL_DOWN, VK_DOWN},
     {SCE_CTRL_LEFT, VK_LEFT}, {SCE_CTRL_RIGHT, VK_RIGHT},
-    {SCE_CTRL_CROSS, 'Z'}, {SCE_CTRL_CIRCLE, 'Z'},
+    {SCE_CTRL_CROSS, 'Z'}, {SCE_CTRL_CIRCLE, 'X'},
     {SCE_CTRL_SQUARE, 'X'}, {SCE_CTRL_TRIANGLE, 'C'},
-    {SCE_CTRL_START, 'C'}, {SCE_CTRL_LTRIGGER, VK_PAGEDOWN},
+    {SCE_CTRL_LTRIGGER, VK_PAGEDOWN},
     {SCE_CTRL_RTRIGGER, VK_PAGEUP}
 };
 
@@ -78,14 +81,14 @@ static int consume_next_chapter(void) {
 
 static bool restart_into_chapter(int chapter) {
     if (chapter < 0 || chapter > 5) return false;
-    char value = (char) ('0' + chapter);
+    char value = (char)('0' + chapter);
     SceUID fd = sceIoOpen(NEXT_CHAPTER_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
     if (fd < 0) return false;
     bool written = sceIoWrite(fd, &value, 1) == 1;
     sceIoClose(fd);
     if (!written) return false;
     char line[80];
-    snprintf(line, sizeof(line), "GAME_CHANGE=restart chapter=%d", chapter);
+    snprintf(line, sizeof(line), "GAME_CHANGE=loadexec chapter=%d", chapter);
     log_line(line);
     int result = sceAppMgrLoadExec("app0:eboot.bin", NULL, NULL);
     snprintf(line, sizeof(line), "GAME_CHANGE=loadexec_returned result=0x%08X", result);
@@ -109,18 +112,15 @@ int main(void) {
     sceIoMkdir(SAVE_PATH, 0777);
     sceIoRemove(LOG_PATH);
     int active_chapter = consume_next_chapter();
-    char game_path[128];
-    char bundle_path[128];
-    snprintf(game_path, sizeof(game_path), DATA_ROOT "chapter%d/game.droid", active_chapter);
-    snprintf(bundle_path, sizeof(bundle_path), DATA_ROOT "chapter%d/", active_chapter);
 
-    log_line("Deltarune Butterscotch VitaRenderer runner 00.18");
+    log_line("Deltarune Butterscotch VitaRenderer runner 00.31");
     log_line("MAIN_STACK=4194304");
     char startup_line[96];
-    snprintf(startup_line, sizeof(startup_line), "AUDIO=noop ENTRY=chapter%d CONTROLS=vita", active_chapter);
+    snprintf(startup_line, sizeof(startup_line), "AUDIO=openal ENTRY=chapter%d CONTROLS=vita+touch", active_chapter);
     log_line(startup_line);
 
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
+    sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
     // The generated fixed-pipeline shader used by the legacy renderer trips the
     // aggressive runtime optimizer on Vita. O0 is slower only during the first
     // compilation and avoids that optimizer path entirely.
@@ -131,6 +131,24 @@ int main(void) {
     vglInitExtended(0, 960, 544, 64 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
     log_line("VITAGL=init_complete");
 
+    VitaSettings settings;
+    VitaSettings_load(&settings);
+
+    int next_chapter = -1;
+    char game_path[192];
+    char bundle_path[128];
+    snprintf(game_path, sizeof(game_path), DATA_ROOT "chapter%d/game.droid", active_chapter);
+    snprintf(bundle_path, sizeof(bundle_path), DATA_ROOT "chapter%d/", active_chapter);
+    if (settings.ptbrEnabled) {
+        SceIoStat mod_stat;
+        char mod_game[160];
+        snprintf(mod_game, sizeof(mod_game), DATA_ROOT "mods/PTBR/chapter%d/game.droid", active_chapter);
+        if (sceIoGetstat(mod_game, &mod_stat) >= 0) {
+            snprintf(game_path, sizeof(game_path), "%s", mod_game);
+            log_line("MOD=PTBR alternate_game=enabled");
+        }
+    }
+
     DataWinParserOptions options = {0};
     options.parseGen8 = true; options.parseOptn = true; options.parseLang = true;
     options.parseExtn = true; options.parseSond = true; options.parseAgrp = true;
@@ -139,10 +157,11 @@ int main(void) {
     options.parseFont = true; options.parseTmln = true; options.parseObjt = true;
     options.parseRoom = true; options.parseTpag = true; options.parseCode = true;
     options.parseVari = true; options.parseFunc = true; options.parseStrg = true;
-    options.parseTxtr = true; options.parseAudo = false;
+    options.parseTxtr = true; options.parseAudo = true;
     options.skipLoadingPreciseMasksForNonPreciseSprites = true;
     options.lazyLoadRooms = true;
     options.lazyLoadTextures = true;
+    options.lazyLoadAudio = true;
     options.loadType = DATAWINLOADTYPE_LOAD_PER_CHUNK;
     options.progressCallback = progress;
 
@@ -152,45 +171,108 @@ int main(void) {
     VMContext *vm = VM_create(dw);
     log_line("VM=create_complete");
     OverlayFileSystem *fs = OverlayFileSystem_create(bundle_path, SAVE_PATH);
+    char mod_path[160];
+    if (settings.ptbrEnabled && active_chapter > 0) {
+        snprintf(mod_path, sizeof(mod_path), DATA_ROOT "mods/PTBR/chapter%d/", active_chapter);
+        OverlayFileSystem_setModPath(fs, mod_path);
+        log_line("MOD=PTBR overlay=enabled");
+    } else {
+        log_line("MOD=Original overlay=disabled");
+    }
     Renderer *renderer = GLLegacyRenderer_create();
-    AudioSystem *audio = (AudioSystem *)NoopAudioSystem_create();
+    AudioSystem *audio = (AudioSystem *)AlAudioSystem_create();
     log_line("SUBSYSTEMS=create_complete");
 
     Runner *runner = Runner_create(dw, vm, renderer, (FileSystem *)fs, audio);
-    char *game_args[] = {"eboot.bin", "-game", "data.win"};
-    Runner_setGameArgs(runner, game_args, 3);
+    VitaSettings_applyAudio(&settings, audio);
+    char *launcher_args[] = {"eboot.bin", "-game", "data.win"};
+    char *chapter_args[] = {"eboot.bin", "-game", "data.win", "launcher", "switch_-1", "returning_0"};
+    if (active_chapter == 0) {
+        Runner_setGameArgs(runner, launcher_args, 3);
+        log_line("ARGS=eboot.bin|-game|data.win");
+    } else {
+        Runner_setGameArgs(runner, chapter_args, 6);
+        log_line("ARGS=eboot.bin|-game|data.win|launcher|switch_-1|returning_0");
+    }
     runner->debugMode = false;
     log_line("RUNNER=create_complete");
     Runner_initFirstRoom(runner);
     log_line("RUNNER=first_room_complete");
+    char display_line[160];
+    snprintf(display_line, sizeof(display_line), "DISPLAY=gen8_%dx%d applied_%dx%d host_960x544 mode=native_centered",
+             (int)dw->gen8.defaultWindowWidth, (int)dw->gen8.defaultWindowHeight,
+             (int)dw->gen8.defaultWindowWidth, (int)dw->gen8.defaultWindowHeight);
+    log_line(display_line);
 
     bool previous[sizeof(KEY_MAP) / sizeof(KEY_MAP[0])] = {0};
-    bool stick_previous[4] = {0};
     uint32_t frame = 0;
     uint64_t last_time = sceKernelGetProcessTimeWide();
     bool exit_requested = false;
+    int logged_game_w = -1;
+    int logged_game_h = -1;
 
     while (!exit_requested && !runner->shouldExit) {
+        uint64_t frame_start = sceKernelGetProcessTimeWide();
         RunnerKeyboard_beginFrame(runner->keyboard);
         RunnerGamepad_beginFrame(runner->gamepads);
+        RunnerMouse_beginFrame(runner->mouse);
         SceCtrlData pad = {0};
         sceCtrlPeekBufferPositive(0, &pad, 1);
-        for (unsigned i = 0; i < sizeof(KEY_MAP) / sizeof(KEY_MAP[0]); ++i)
-            set_key(runner->keyboard, KEY_MAP[i].key, (pad.buttons & KEY_MAP[i].mask) != 0, &previous[i]);
-
+        bool restart_for_settings = VitaSettings_handleInput(&settings, &pad, audio);
+        if (restart_for_settings) {
+            log_line("SETTINGS=restart_for_mod");
+            if (restart_into_chapter(active_chapter)) {
+                sceKernelDelayThread(500000);
+                sceKernelExitProcess(0);
+            }
+        }
         int dx = (int)pad.lx - 128, dy = (int)pad.ly - 128;
-        set_key(runner->keyboard, VK_LEFT, dx < -48, &stick_previous[0]);
-        set_key(runner->keyboard, VK_RIGHT, dx > 48, &stick_previous[1]);
-        set_key(runner->keyboard, VK_UP, dy < -48, &stick_previous[2]);
-        set_key(runner->keyboard, VK_DOWN, dy > 48, &stick_previous[3]);
-        if (pad.buttons & SCE_CTRL_SELECT) exit_requested = true;
+        SceTouchData touch = {0};
+        bool touch_up = false, touch_down = false, touch_left = false, touch_right = false;
+        bool touch_confirm = false, touch_cancel = false, touch_menu = false;
+        if (settings.touchEnabled && !settings.open && sceTouchPeek(SCE_TOUCH_PORT_FRONT, &touch, 1) > 0) {
+            for (unsigned i = 0; i < touch.reportNum; ++i) {
+                int tx = touch.report[i].x;
+                int ty = touch.report[i].y;
+                if (tx < 960) {
+                    int tdx = tx - 480;
+                    int tdy = ty - 730;
+                    if (abs(tdx) > abs(tdy)) {
+                        touch_left |= tdx < -90;
+                        touch_right |= tdx > 90;
+                    } else {
+                        touch_up |= tdy < -90;
+                        touch_down |= tdy > 90;
+                    }
+                } else if (tx >= 1540) {
+                    touch_confirm = true;
+                } else if (tx >= 1250) {
+                    touch_cancel = true;
+                } else {
+                    touch_menu = true;
+                }
+            }
+        }
+
+        bool controls_enabled = !settings.open && !settings.adjustMode;
+        set_key(runner->keyboard, VK_UP, controls_enabled && ((pad.buttons & SCE_CTRL_UP) || dy < -48 || touch_up), &previous[0]);
+        set_key(runner->keyboard, VK_DOWN, controls_enabled && ((pad.buttons & SCE_CTRL_DOWN) || dy > 48 || touch_down), &previous[1]);
+        set_key(runner->keyboard, VK_LEFT, controls_enabled && ((pad.buttons & SCE_CTRL_LEFT) || dx < -48 || touch_left), &previous[2]);
+        set_key(runner->keyboard, VK_RIGHT, controls_enabled && ((pad.buttons & SCE_CTRL_RIGHT) || dx > 48 || touch_right), &previous[3]);
+        set_key(runner->keyboard, 'Z', controls_enabled && ((pad.buttons & SCE_CTRL_CROSS) || touch_confirm), &previous[4]);
+        set_key(runner->keyboard, 'X', controls_enabled && ((pad.buttons & (SCE_CTRL_CIRCLE | SCE_CTRL_SQUARE)) || touch_cancel), &previous[5]);
+        set_key(runner->keyboard, 'C', controls_enabled && ((pad.buttons & SCE_CTRL_TRIANGLE) || touch_menu), &previous[7]);
+        set_key(runner->keyboard, VK_PAGEDOWN, controls_enabled && (pad.buttons & SCE_CTRL_LTRIGGER), &previous[8]);
+        set_key(runner->keyboard, VK_PAGEUP, controls_enabled && (pad.buttons & SCE_CTRL_RTRIGGER), &previous[9]);
 
         uint64_t now = sceKernelGetProcessTimeWide();
         runner->deltaTime = (double)(now - last_time);
         last_time = now;
-        if (frame == 0) log_line("FRAME0=step_begin");
-        Runner_step(runner);
-        if (frame == 0) log_line("FRAME0=step_complete");
+        if (!settings.open && !settings.adjustMode) {
+            if (frame == 0) log_line("FRAME0=step_begin");
+            Runner_step(runner);
+            if (frame == 0) log_line("FRAME0=step_complete");
+        }
         if (runner->pendingWorkingDirectory != NULL) {
             int requested_chapter = chapter_from_request(runner->pendingWorkingDirectory);
             char line[160];
@@ -199,11 +281,14 @@ int main(void) {
                      runner->pendingLaunchParameters ? runner->pendingLaunchParameters : "<null>",
                      requested_chapter);
             log_line(line);
-            if (restart_into_chapter(requested_chapter)) {
-                sceKernelDelayThread(500000);
-                sceKernelExitProcess(0);
-            }
-            log_line("GAME_CHANGE=restart_failed");
+            if (requested_chapter >= 0 && requested_chapter <= 5) {
+                next_chapter = requested_chapter;
+                if (restart_into_chapter(next_chapter)) {
+                    sceKernelDelayThread(500000);
+                    sceKernelExitProcess(0);
+                }
+                log_line("GAME_CHANGE=loadexec_failed");
+            } else log_line("GAME_CHANGE=invalid_chapter");
             exit_requested = true;
             continue;
         }
@@ -211,8 +296,25 @@ int main(void) {
 
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
-        int game_w = (int)dw->gen8.defaultWindowWidth;
-        int game_h = (int)dw->gen8.defaultWindowHeight;
+        int game_w = runner->applicationWidth > 0 ? runner->applicationWidth : (int)dw->gen8.defaultWindowWidth;
+        int game_h = runner->applicationHeight > 0 ? runner->applicationHeight : (int)dw->gen8.defaultWindowHeight;
+        runner->widescreenExtraWidth = 0;
+        runner->widescreenExtraHeight = 0;
+        if (settings.widescreenEnabled && game_w > 0 && game_h > 0) {
+            int target_w = (int)((float)game_h * (960.0f / 544.0f) + 0.5f);
+            if (target_w > game_w) {
+                runner->widescreenExtraWidth = target_w - game_w;
+                game_w = target_w;
+            }
+        }
+        if (game_w != logged_game_w || game_h != logged_game_h) {
+            char runtime_display[128];
+            snprintf(runtime_display, sizeof(runtime_display),
+                     "DISPLAY=runtime_%dx%d host_960x544 centered", game_w, game_h);
+            log_line(runtime_display);
+            logged_game_w = game_w;
+            logged_game_h = game_h;
+        }
         if (frame == 0) log_line("FRAME0=draw_pre_begin");
         Runner_drawPre(runner, 960, 544);
         if (frame == 0) log_line("FRAME0=draw_pre_complete");
@@ -224,20 +326,41 @@ int main(void) {
         Runner_drawPost(runner, 960, 544);
         renderer->vtable->endFrameEnd(renderer);
         Runner_drawGUI(runner, 960, 544, game_w, game_h);
+        VitaSettings_drawTouchControls(&settings, renderer);
+        VitaSettings_draw(&settings, renderer);
+        VitaSettings_drawCalibration(&settings, renderer);
         if (runner->pendingRoom == -1) vglSwapBuffers(GL_FALSE);
         Runner_handlePendingRoomChange(runner);
 
         frame++;
         if (frame == 1) log_line("FRAME=first_complete");
-        if (frame == 60) log_line("FRAME=60_complete");
+        if (frame == 60) {
+            char room_line[128];
+            snprintf(room_line, sizeof(room_line), "FRAME=60_complete chapter=%d room=%s index=%d",
+                     active_chapter,
+                     runner->currentRoom && runner->currentRoom->name ? runner->currentRoom->name : "<null>",
+                     runner->currentRoomIndex);
+            log_line(room_line);
+        }
         int speed = runner->currentRoom && runner->currentRoom->speed ? (int)runner->currentRoom->speed : 30;
-        sceKernelDelayThread((unsigned int)(1000000 / speed));
+        uint64_t target = 1000000ULL / (unsigned int)speed;
+        uint64_t elapsed = sceKernelGetProcessTimeWide() - frame_start;
+        if (elapsed < target) sceKernelDelayThread((unsigned int)(target - elapsed));
     }
 
-    log_line(exit_requested ? "EXIT=select_pressed" : "EXIT=runner_requested");
-    runner->audioSystem->vtable->destroy(runner->audioSystem);
-    renderer->vtable->destroy(renderer);
+    if (runner->shouldExit && active_chapter > 0) {
+        log_line("GAME_CHANGE=game_end_return_to_launcher");
+        if (restart_into_chapter(0)) {
+            sceKernelDelayThread(500000);
+            sceKernelExitProcess(0);
+        }
+        log_line("GAME_CHANGE=launcher_loadexec_failed");
+    }
+    log_line(next_chapter >= 0 ? "EXIT=chapter_switch" : "EXIT=runner_requested");
     Runner_free(runner);
+    runner = NULL;
+    audio->vtable->destroy(audio);
+    renderer->vtable->destroy(renderer);
     OverlayFileSystem_destroy(fs);
     VM_free(vm);
     DataWin_free(dw);

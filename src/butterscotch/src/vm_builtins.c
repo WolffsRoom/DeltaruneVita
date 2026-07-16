@@ -4111,6 +4111,15 @@ static RValue builtin_script_execute(VMContext* ctx, RValue* args, int32_t argCo
 // ===[ OS FUNCTIONS ]===
 
 static RValue builtin_os_get_language(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+#ifdef PLATFORM_VITA
+    FILE* config = fopen("ux0:data/deltarune/config.ini", "rb");
+    if (config != nullptr) {
+        char text[192] = {0};
+        fread(text, 1, sizeof(text) - 1, config);
+        fclose(config);
+        if (strstr(text, "mod=PTBR") != nullptr) return RValue_makeOwnedString(safeStrdup("pt"));
+    }
+#endif
     return RValue_makeOwnedString(safeStrdup("en"));
 }
 
@@ -9834,6 +9843,18 @@ static RValue builtin_draw_set_valign(VMContext* ctx, RValue* args, MAYBE_UNUSED
     return RValue_makeUndefined();
 }
 
+#ifdef PLATFORM_VITA
+static bool vitaIsVersionLabel(const char* str) {
+    return str != nullptr && strstr(str, "DELTARUNE v") != nullptr;
+}
+
+static void vitaDrawPortCredit(Runner* runner, const char* str, float x, float y, float xscale, float yscale, float angle) {
+    if (vitaIsVersionLabel(str)) {
+        runner->renderer->vtable->drawText(runner->renderer, " - Port to PSVita by Wolff", x + 150.0f * xscale, y, xscale, yscale, angle, -1.0f);
+    }
+}
+#endif
+
 static RValue builtin_draw_text(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
     if (runner->renderer == nullptr) return RValue_makeUndefined();
@@ -9842,6 +9863,9 @@ static RValue builtin_draw_text(VMContext* ctx, RValue* args, MAYBE_UNUSED int32
     float y = (float) RValue_toReal(args[1]);
     char* str = RValue_toString(args[2]);
 
+#ifdef PLATFORM_VITA
+    vitaDrawPortCredit(runner, str, x, y, 1.0f, 1.0f, 0.0f);
+#endif
     PreprocessedText processedText = TextUtils_preprocessGmlTextIfNeeded(runner, str);
     runner->renderer->vtable->drawText(runner->renderer, processedText.text, x, y, 1.0f, 1.0f, 0.0f, -1.0f);
     PreprocessedText_free(processedText);
@@ -9886,6 +9910,9 @@ static void drawTextExtCommonColor(Runner* runner, const char* str, float x, flo
     PreprocessedText_free(processedText);
 }
 static void drawTextExtCommon(Runner* runner, const char* str, float x, float y, float xscale, float yscale, float angle, int32_t separation, int32_t width) {
+#ifdef PLATFORM_VITA
+    vitaDrawPortCredit(runner, str, x, y, xscale, yscale, angle);
+#endif
     uint32_t fill = runner->renderer->drawColor;
     drawTextExtCommonColor(runner, str, x, y, xscale, yscale, angle, separation, width, fill, fill, fill, fill);
 }
@@ -9937,6 +9964,9 @@ static RValue builtin_draw_text_color(VMContext* ctx, RValue* args, MAYBE_UNUSED
     int32_t c4 = RValue_toInt32(args[6]);
     float alpha = (float) RValue_toReal(args[7]);
 
+#ifdef PLATFORM_VITA
+    vitaDrawPortCredit(runner, str, x, y, 1.0f, 1.0f, 0.0f);
+#endif
     PreprocessedText processedText = TextUtils_preprocessGmlTextIfNeeded(runner, str);
     runner->renderer->vtable->drawTextColor(runner->renderer, processedText.text, x, y, 1.0f, 1.0f, 0.0f, c1, c2, c3, c4, alpha, -1.0f);
     PreprocessedText_free(processedText);
@@ -9960,6 +9990,9 @@ static RValue builtin_draw_text_color_transformed(VMContext* ctx, RValue* args, 
     int32_t c4 = RValue_toInt32(args[9]);
     float alpha = (float) RValue_toReal(args[10]);
 
+#ifdef PLATFORM_VITA
+    vitaDrawPortCredit(runner, str, x, y, xscale, yscale, angle);
+#endif
     PreprocessedText processedText = TextUtils_preprocessGmlTextIfNeeded(runner, str);
     runner->renderer->vtable->drawTextColor(runner->renderer, processedText.text, x, y, xscale, yscale, angle, c1, c2, c3, c4, alpha, -1.0f);
     PreprocessedText_free(processedText);
@@ -9969,6 +10002,9 @@ static RValue builtin_draw_text_color_transformed(VMContext* ctx, RValue* args, 
 
 // Drives draw_text_color_ext / draw_text_color_ext_transformed by wrapping the (preprocessed) text and forwarding to drawTextColor.
 static void drawTextColorExtCommon(Runner* runner, const char* str, float x, float y, float xscale, float yscale, float angle, int32_t separation, int32_t width, int32_t c1, int32_t c2, int32_t c3, int32_t c4, float alpha) {
+#ifdef PLATFORM_VITA
+    vitaDrawPortCredit(runner, str, x, y, xscale, yscale, angle);
+#endif
     int32_t fontIndex = runner->renderer->drawFont;
     if (0 > fontIndex || runner->dataWin->font.count <= (uint32_t) fontIndex) return;
     Font* font = &runner->dataWin->font.fonts[fontIndex];

@@ -72,6 +72,7 @@ static char* resolveForRead(OverlayFileSystem* ofs, const char* relativePath) {
     // Check if the path is already resolved
     if (strncmp(normalized, ofs->savePath, strlen(ofs->savePath)) == 0) return normalized;
     if (strncmp(normalized, ofs->bundlePath, strlen(ofs->bundlePath)) == 0) return normalized;
+    if (ofs->modPath != nullptr && strncmp(normalized, ofs->modPath, strlen(ofs->modPath)) == 0) return normalized;
 
     char* saveFull = joinPath(ofs->savePath, normalized);
     if (pathExists(saveFull)) {
@@ -79,6 +80,14 @@ static char* resolveForRead(OverlayFileSystem* ofs, const char* relativePath) {
         return saveFull;
     }
     free(saveFull);
+    if (ofs->modPath != nullptr) {
+        char* modFull = joinPath(ofs->modPath, normalized);
+        if (pathExists(modFull)) {
+            free(normalized);
+            return modFull;
+        }
+        free(modFull);
+    }
     char* bundleFull = joinPath(ofs->bundlePath, normalized);
     free(normalized);
     return bundleFull;
@@ -93,6 +102,7 @@ static char* resolveForWrite(OverlayFileSystem* ofs, const char* relativePath) {
     // Check if the path is already resolved
     if (strncmp(normalized, ofs->savePath, strlen(ofs->savePath)) == 0) return normalized;
     if (strncmp(normalized, ofs->bundlePath, strlen(ofs->bundlePath)) == 0) return normalized;
+    if (ofs->modPath != nullptr && strncmp(normalized, ofs->modPath, strlen(ofs->modPath)) == 0) return normalized;
 
     char* full = joinPath(ofs->savePath, normalized);
     free(normalized);
@@ -131,7 +141,13 @@ static char* overlayResolvePath(FileSystem* fs, const char* relativePath) {
     if (strncmp(normalized, ofs->savePath, strlen(ofs->savePath)) == 0) return normalized;
     if (strncmp(normalized, ofs->bundlePath, strlen(ofs->bundlePath)) == 0) return normalized;
 
-    char* full = joinPath(ofs->bundlePath, normalized);
+    char* full = nullptr;
+    if (ofs->modPath != nullptr) {
+        char* candidate = joinPath(ofs->modPath, normalized);
+        if (pathExists(candidate)) full = candidate;
+        else free(candidate);
+    }
+    if (full == nullptr) full = joinPath(ofs->bundlePath, normalized);
     free(normalized);
     return full;
 }
@@ -444,12 +460,20 @@ OverlayFileSystem* OverlayFileSystem_create(const char* bundlePath, const char* 
     overlayFileSystemVtable.listDirectory = overlayListDirectory;
     fs->bundlePath = withTrailingSlash(bundlePath);
     fs->savePath = withTrailingSlash(savePath);
+    fs->modPath = nullptr;
     return fs;
+}
+
+void OverlayFileSystem_setModPath(OverlayFileSystem* fs, const char* modPath) {
+    if (fs == nullptr) return;
+    free(fs->modPath);
+    fs->modPath = (modPath != nullptr && modPath[0] != '\0') ? withTrailingSlash(modPath) : nullptr;
 }
 
 void OverlayFileSystem_destroy(OverlayFileSystem* fs) {
     if (fs == nullptr) return;
     free(fs->bundlePath);
     free(fs->savePath);
+    free(fs->modPath);
     free(fs);
 }

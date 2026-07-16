@@ -4006,7 +4006,7 @@ void Runner_beginFrame(
     // And the Port W/Port H are scaled by the window size too (set by the GEN8 chunk)
     Runner_computeViewDisplayScale(runner, gameW, gameH, &runner->displayScaleX, &runner->displayScaleY);
 
-    // Calculate viewport (letterboxing) in screen coordinates for mouse mapping
+    // Calculate viewport in screen coordinates for mouse mapping.
     int32_t scaledW, scaledH;
     if ((gameW * windowH) / gameH < windowW) {
         scaledW = (gameW * windowH) / gameH;

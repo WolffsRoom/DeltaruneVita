@@ -20,11 +20,16 @@ for ($chapter = 0; $chapter -le 5; $chapter++) {
     New-Item -ItemType Directory -Force -Path $target | Out-Null
     $archive = [System.IO.Compression.ZipFile]::OpenRead($wad)
     try {
-        $entry = $archive.GetEntry('assets/game.droid')
-        if ($null -eq $entry) { throw "assets/game.droid ausente em $wad" }
-        $output = Join-Path $target 'game.droid'
-        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $output, $true)
-        Write-Host "Capitulo $chapter -> $output ($($entry.Length) bytes)"
+        $gameEntry = $archive.GetEntry('assets/game.droid')
+        if ($null -eq $gameEntry) { throw "assets/game.droid ausente em $wad" }
+        foreach ($entry in $archive.Entries) {
+            if (-not $entry.FullName.StartsWith('assets/') -or [string]::IsNullOrEmpty($entry.Name)) { continue }
+            $relative = $entry.FullName.Substring(7).Replace('/', [IO.Path]::DirectorySeparatorChar)
+            $output = Join-Path $target $relative
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $output) | Out-Null
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $output, $true)
+        }
+        Write-Host "Capitulo $chapter -> dados e audio extraidos"
     }
     finally {
         $archive.Dispose()

@@ -24,8 +24,11 @@ if(PLAYABLE_RUNNER)
   )
   add_executable(${PROJECT_NAME}
     source/playable_main.c
+    source/vita_settings.c
     ${BS_COMMON_SOURCES}
     ${BS_GL_SOURCES}
+    ../butterscotch/src/audio/openal/al_audio_system.c
+    ../butterscotch/src/audio/openal/wave.c
     ../butterscotch/src/android/stb_impl.c
     ../butterscotch/vendor/md5/md5.c
     ../butterscotch/vendor/sha1/sha1.c
@@ -69,6 +72,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   ../butterscotch/src/image
   ../butterscotch/src/gl_common
   ../butterscotch/src/gl_legacy
+  ../butterscotch/src/audio/openal
   ../butterscotch/vendor/bzip2
   ../butterscotch/vendor/md5
   ../butterscotch/vendor/sha1
@@ -98,13 +102,17 @@ target_link_libraries(${PROJECT_NAME}
   SceTouch_stub
   kubridge_stub
   mathneon
+  openal
+  pthread
+  SceAudio_stub
+  SceAudioIn_stub
   z
   m
 )
 
 vita_create_self(eboot.bin ${PROJECT_NAME} UNSAFE)
 vita_create_vpk(Deltarune.vpk DLTVITA01 eboot.bin
-  VERSION 00.18
+  VERSION 00.31
   NAME "Deltarune"
   FILE
     ${CMAKE_SOURCE_DIR}/../../data/legacy-assets/icon0.png sce_sys/icon0.png

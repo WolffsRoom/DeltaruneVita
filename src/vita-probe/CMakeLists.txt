@@ -112,7 +112,7 @@ target_link_libraries(${PROJECT_NAME}
 
 vita_create_self(eboot.bin ${PROJECT_NAME} UNSAFE)
 vita_create_vpk(Deltarune.vpk DLTVITA01 eboot.bin
-  VERSION 00.34
+  VERSION 00.35
   NAME "Deltarune"
   FILE
     ${CMAKE_SOURCE_DIR}/../../data/legacy-assets/icon0.png sce_sys/icon0.png

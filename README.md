@@ -22,7 +22,7 @@ O projeto executa os dados GameMaker da versão Android através de uma adaptaç
 
 ## Estado atual
 
-A versão atual é a **v0.34**. Os capítulos 1 a 5 inicializam e são jogáveis no hardware real.
+A versão atual é a **v0.35**. Os capítulos 1 a 5 inicializam e são jogáveis no hardware real.
 
 - seletor e troca de capítulos;
 - renderização VitaGL adaptada ao renderer legado do Butterscotch;
@@ -66,7 +66,7 @@ Depois copie o conteúdo de `data/prepared/deltarune/butterscotch` para:
 ux0:data/deltarune/butterscotch/
 ```
 
-A estrutura deve conter `chapter0` até `chapter5`, cada um com seu `game.droid` e os demais assets do capítulo. Não copie apenas o `game.droid`, pois música, sons e arquivos auxiliares também são necessários.
+A estrutura deve conter `chapter0` até `chapter5`, cada um com seu `game.droid`, além da pasta compartilhada `music`. Não copie apenas o `game.droid`: a pasta `music`, os sons e os arquivos auxiliares também são necessários.
 
 ## Controles
 

@@ -10,6 +10,14 @@ if (-not $Destination) { $Destination = Join-Path $root 'data\prepared\deltarune
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 
+$musicSource = Join-Path $SourceAssets 'mus'
+$musicTarget = Join-Path $Destination 'music'
+if (Test-Path -LiteralPath $musicSource) {
+    New-Item -ItemType Directory -Force -Path $musicTarget | Out-Null
+    Copy-Item -Force -Path (Join-Path $musicSource '*') -Destination $musicTarget
+    Write-Host "Musicas compartilhadas -> $musicTarget"
+}
+
 for ($chapter = 0; $chapter -le 5; $chapter++) {
     $wad = Join-Path $SourceAssets "chapter$chapter.wad"
     if (-not (Test-Path -LiteralPath $wad)) {

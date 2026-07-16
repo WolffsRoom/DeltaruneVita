@@ -114,7 +114,7 @@ int main(void) {
     sceIoRemove(LOG_PATH);
     int active_chapter = consume_next_chapter();
 
-    log_line("Deltarune Butterscotch VitaRenderer runner 00.34");
+    log_line("Deltarune Butterscotch VitaRenderer runner 00.35");
     log_line("MAIN_STACK=4194304");
     char startup_line[96];
     snprintf(startup_line, sizeof(startup_line), "AUDIO=openal ENTRY=chapter%d CONTROLS=vita+touch", active_chapter);
@@ -209,12 +209,12 @@ int main(void) {
     bool previous[sizeof(KEY_MAP) / sizeof(KEY_MAP[0])] = {0};
     uint32_t frame = 0;
     uint64_t last_time = sceKernelGetProcessTimeWide();
+    uint64_t next_frame_deadline = last_time;
     bool exit_requested = false;
     int logged_game_w = -1;
     int logged_game_h = -1;
 
     while (!exit_requested && !runner->shouldExit) {
-        uint64_t frame_start = sceKernelGetProcessTimeWide();
         RunnerKeyboard_beginFrame(runner->keyboard);
         RunnerGamepad_beginFrame(runner->gamepads);
         RunnerMouse_beginFrame(runner->mouse);
@@ -357,7 +357,7 @@ int main(void) {
         VitaSettings_drawLauncherCredit(&settings, renderer, active_chapter == 0);
         VitaSettings_draw(&settings, renderer);
         VitaSettings_drawCalibration(&settings, renderer);
-        if (runner->pendingRoom == -1) vglSwapBuffers(GL_FALSE);
+        if (runner->pendingRoom == -1) vglSwapBuffers(settings.vsyncEnabled ? GL_TRUE : GL_FALSE);
         Runner_handlePendingRoomChange(runner);
 
         frame++;
@@ -370,10 +370,18 @@ int main(void) {
                      runner->currentRoomIndex);
             log_line(room_line);
         }
-        int speed = runner->currentRoom && runner->currentRoom->speed ? (int)runner->currentRoom->speed : 30;
-        uint64_t target = 1000000ULL / (unsigned int)speed;
-        uint64_t elapsed = sceKernelGetProcessTimeWide() - frame_start;
-        if (elapsed < target) sceKernelDelayThread((unsigned int)(target - elapsed));
+        if (settings.vsyncEnabled) {
+            const uint64_t target = 1000000ULL / 30ULL;
+            next_frame_deadline += target;
+            uint64_t current_time = sceKernelGetProcessTimeWide();
+            if (next_frame_deadline > current_time) {
+                sceKernelDelayThread((unsigned int)(next_frame_deadline - current_time));
+            } else if (current_time - next_frame_deadline > target) {
+                next_frame_deadline = current_time;
+            }
+        } else {
+            next_frame_deadline = sceKernelGetProcessTimeWide();
+        }
     }
 
     if (runner->shouldExit && active_chapter > 0) {

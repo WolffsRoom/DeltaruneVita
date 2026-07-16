@@ -34,6 +34,7 @@ typedef struct {
     float fadeTotalTime;
     float startGain;
     int32_t priority;
+    bool music;
 
     // Streaming state (only valid when streaming == true)
     bool streaming;
@@ -62,8 +63,11 @@ typedef struct {
     int32_t nextInstanceCounter;
     FileSystem* fileSystem;
     AudioStreamEntry streams[MAX_AUDIO_STREAMS];
+    float musicGain;
+    float sfxGain;
 } AlAudioSystem;
 
 AlAudioSystem* AlAudioSystem_create(void);
+void AlAudioSystem_setCategoryGains(AlAudioSystem* audio, float musicGain, float sfxGain);
 
 #endif /* _BS_AL_AUDIO_SYSTEM_H_ */

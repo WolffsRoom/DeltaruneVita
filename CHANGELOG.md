@@ -2,6 +2,17 @@
 
 O desenvolvimento foi feito em ciclos curtos no hardware real. As versões antigas são preservadas como registro técnico e podem estar incompletas ou instáveis.
 
+## v0.35 — música, volumes e frame pacing
+
+- preparador passa a copiar as 339 músicas de `assets/mus` para uma biblioteca compartilhada;
+- OpenAL procura músicas em `butterscotch/music` sem duplicá-las por capítulo;
+- controles separados para efeitos sonoros e música;
+- VSync / limitador de 30 FPS configurável, ativado por padrão;
+- frame pacing usa relógio absoluto para evitar acumulação de atrasos;
+- VSync desligado libera o swap e o limitador para comparação de desempenho;
+- perfil de tela migra para 726×544, centralizado com aproximadamente 117 px em cada lateral;
+- Side borders fica desligado por padrão para preservar a proporção medida.
+
 ## v0.34 — perfil-base e controle táctil
 
 - `0,0 / 100%` passa a representar o perfil-base `113,36 / 115%` nos capítulos;

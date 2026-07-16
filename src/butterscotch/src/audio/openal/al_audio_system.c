@@ -156,7 +156,16 @@ static char* resolveExternalPath(AlAudioSystem* ma, Sound* sound) {
         snprintf(filename, sizeof(filename), "%s.ogg", file);
     }
 
-    return ma->fileSystem->vtable->resolvePath(ma->fileSystem, filename);
+    char* resolved = ma->fileSystem->vtable->resolvePath(ma->fileSystem, filename);
+    if (resolved != nullptr && ma->fileSystem->vtable->fileExists(ma->fileSystem, resolved)) return resolved;
+    free(resolved);
+    char shared[560];
+    snprintf(shared, sizeof(shared), "../music/%s", filename);
+    return ma->fileSystem->vtable->resolvePath(ma->fileSystem, shared);
+}
+
+static float instanceCategoryGain(AlAudioSystem* ma, SoundInstance* inst) {
+    return inst->music ? ma->musicGain : ma->sfxGain;
 }
 
 // ===[ Vtable Implementations ]===
@@ -175,6 +184,8 @@ static void maInit(AudioSystem* audio, DataWin* dataWin, FileSystem* fileSystem)
     }
 
     memset(ma->instances, 0, sizeof(ma->instances));
+    ma->musicGain = 1.0f;
+    ma->sfxGain = 1.0f;
     ma->nextInstanceCounter = 0;
 
     fprintf(stderr, "Audio: OpenAL engine initialized\n");
@@ -226,7 +237,7 @@ static void maUpdate(AudioSystem* audio, float deltaTime) {
                 float t = 1.0f - (inst->fadeTimeRemaining / inst->fadeTotalTime);
                 inst->currentGain = inst->startGain + (inst->targetGain - inst->startGain) * t;
             }
-            alSourcef(inst->alSource, AL_GAIN, inst->currentGain);
+            alSourcef(inst->alSource, AL_GAIN, inst->currentGain * instanceCategoryGain(ma, inst));
         }
 
         if (inst->streaming) {
@@ -315,6 +326,12 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
     slot->decodeScratch = nullptr;
     slot->streamEnded = false;
     slot->playedSamples = 0;
+    slot->music = isStream;
+    if (sound != nullptr) {
+        const char* categoryName = sound->file != nullptr ? sound->file : sound->name;
+        slot->music = categoryName != nullptr && strncmp(categoryName, "snd_", 4) != 0 &&
+                      strncmp(categoryName, "AUDIO_INTRONOISE", 16) != 0;
+    }
 
     if (isStream) {
         // Streaming path: open the decoder, queue a few small buffers, and let maUpdate() top them up.
@@ -447,7 +464,7 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
     // Apply properties
     float volume = isStream ? 1.0f : sound->volume;
     float pitch = isStream ? 1.0f : sound->pitch;
-    alSourcef(slot->alSource, AL_GAIN, volume);
+    alSourcef(slot->alSource, AL_GAIN, volume * instanceCategoryGain(ma, slot));
 
     if (pitch != 1.0f) {
         alSourcef(slot->alSource, AL_PITCH, pitch != 0.0f ? pitch : 1.0f);
@@ -620,7 +637,7 @@ static void maSetSoundGain(AudioSystem* audio, int32_t soundOrInstance, float ga
                 inst->currentGain = gain;
                 inst->targetGain = gain;
                 inst->fadeTimeRemaining = 0.0f;
-                alSourcef(inst->alSource, AL_GAIN, gain);
+                alSourcef(inst->alSource, AL_GAIN, gain * instanceCategoryGain(ma, inst));
             } else {
                 inst->startGain = inst->currentGain;
                 inst->targetGain = gain;
@@ -636,7 +653,7 @@ static void maSetSoundGain(AudioSystem* audio, int32_t soundOrInstance, float ga
                     inst->currentGain = gain;
                     inst->targetGain = gain;
                     inst->fadeTimeRemaining = 0.0f;
-                    alSourcef(inst->alSource, AL_GAIN, gain);
+                    alSourcef(inst->alSource, AL_GAIN, gain * instanceCategoryGain(ma, inst));
                 } else {
                     inst->startGain = inst->currentGain;
                     inst->targetGain = gain;
@@ -876,6 +893,12 @@ static int32_t maCreateStream(AudioSystem* audio, const char* filename) {
     }
 
     char* resolved = ma->fileSystem->vtable->resolvePath(ma->fileSystem, filename);
+    if (resolved != nullptr && !ma->fileSystem->vtable->fileExists(ma->fileSystem, resolved)) {
+        free(resolved);
+        char shared[560];
+        snprintf(shared, sizeof(shared), "../music/%s", filename);
+        resolved = ma->fileSystem->vtable->resolvePath(ma->fileSystem, shared);
+    }
     if (resolved == nullptr) {
         fprintf(stderr, "Audio: Could not resolve path for stream '%s'\n", filename);
         return -1;
@@ -953,4 +976,14 @@ AlAudioSystem* AlAudioSystem_create(void) {
     AlAudioSystemVtable.destroyStream = maDestroyStream;
     ma->base.vtable = &AlAudioSystemVtable;
     return ma;
+}
+
+void AlAudioSystem_setCategoryGains(AlAudioSystem* ma, float musicGain, float sfxGain) {
+    if (ma == nullptr) return;
+    ma->musicGain = musicGain;
+    ma->sfxGain = sfxGain;
+    repeat(MAX_SOUND_INSTANCES, i) {
+        SoundInstance* inst = &ma->instances[i];
+        if (inst->active) alSourcef(inst->alSource, AL_GAIN, inst->currentGain * instanceCategoryGain(ma, inst));
+    }
 }

@@ -5,9 +5,10 @@
 #include <string.h>
 
 #include "runner.h"
+#include "audio/openal/al_audio_system.h"
 
 #define SETTINGS_PATH "ux0:data/deltarune/config.ini"
-#define SETTINGS_ITEMS 6
+#define SETTINGS_ITEMS 8
 
 int g_vitaDisplayOffsetX = 0;
 int g_vitaDisplayOffsetY = 0;
@@ -17,17 +18,17 @@ int g_vitaTouchEnabled = 1;
 static bool g_launcherMode = false;
 
 static void applyDisplaySettings(const VitaSettings* s) {
-    g_vitaDisplayOffsetX = g_launcherMode ? 0 : 113 + s->displayOffsetX;
-    g_vitaDisplayOffsetY = g_launcherMode ? 0 : 36 + s->displayOffsetY;
-    g_vitaDisplayZoom = g_launcherMode ? 100 : 115 * s->displayZoom / 100;
+    g_vitaDisplayOffsetX = g_launcherMode ? 0 : s->displayOffsetX;
+    g_vitaDisplayOffsetY = g_launcherMode ? 0 : s->displayOffsetY;
+    g_vitaDisplayZoom = g_launcherMode ? 100 : s->displayZoom;
     g_vitaTouchEnabled = s->touchEnabled ? 1 : 0;
 }
 
 static void saveSettings(const VitaSettings* s) {
-    char text[128];
-    int length = snprintf(text, sizeof(text), "touch=%d\nmod=%s\nwidescreen=%d\nvolume=%d\nscreen_profile=2\noffset_x=%d\noffset_y=%d\nzoom=%d\n",
+    char text[256];
+    int length = snprintf(text, sizeof(text), "touch=%d\nmod=%s\nwidescreen=%d\nmusic_volume=%d\nsfx_volume=%d\nvsync=%d\nscreen_profile=3\noffset_x=%d\noffset_y=%d\nzoom=%d\n",
                           s->touchEnabled ? 1 : 0, s->ptbrEnabled ? "PTBR" : "Original",
-                          s->widescreenEnabled ? 1 : 0, s->volume,
+                          s->widescreenEnabled ? 1 : 0, s->musicVolume, s->sfxVolume, s->vsyncEnabled ? 1 : 0,
                           s->displayOffsetX, s->displayOffsetY, s->displayZoom);
     SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
     if (fd >= 0) {
@@ -39,8 +40,10 @@ static void saveSettings(const VitaSettings* s) {
 void VitaSettings_load(VitaSettings* s) {
     memset(s, 0, sizeof(*s));
     s->touchEnabled = true;
-    s->widescreenEnabled = true;
-    s->volume = 10;
+    s->widescreenEnabled = false;
+    s->musicVolume = 10;
+    s->sfxVolume = 10;
+    s->vsyncEnabled = true;
     s->displayOffsetX = 0;
     s->displayOffsetY = 0;
     s->displayZoom = 100;
@@ -53,27 +56,30 @@ void VitaSettings_load(VitaSettings* s) {
         if (read > 0) text[read] = '\0';
         s->touchEnabled = strstr(text, "touch=0") == NULL;
         s->ptbrEnabled = strstr(text, "mod=PTBR") != NULL;
-        s->widescreenEnabled = strstr(text, "widescreen=0") == NULL;
-        char* volume = strstr(text, "volume=");
-        if (volume != NULL) {
-            int value = 10;
-            if (sscanf(volume + 7, "%d", &value) == 1) s->volume = value;
-        }
+        s->widescreenEnabled = strstr(text, "widescreen=1") != NULL;
+        s->vsyncEnabled = strstr(text, "vsync=0") == NULL;
+        char* musicVolume = strstr(text, "music_volume=");
+        char* sfxVolume = strstr(text, "sfx_volume=");
+        if (musicVolume != NULL) sscanf(musicVolume + 13, "%d", &s->musicVolume);
+        if (sfxVolume != NULL) sscanf(sfxVolume + 11, "%d", &s->sfxVolume);
         char* offsetX = strstr(text, "offset_x=");
         char* offsetY = strstr(text, "offset_y=");
         char* zoom = strstr(text, "zoom=");
         if (offsetX != NULL) sscanf(offsetX + 9, "%d", &s->displayOffsetX);
         if (offsetY != NULL) sscanf(offsetY + 9, "%d", &s->displayOffsetY);
         if (zoom != NULL) sscanf(zoom + 5, "%d", &s->displayZoom);
-        if (strstr(text, "screen_profile=2") == NULL) {
+        if (strstr(text, "screen_profile=3") == NULL) {
             s->displayOffsetX = 0;
             s->displayOffsetY = 0;
             s->displayZoom = 100;
+            s->widescreenEnabled = false;
             migrateScreenProfile = true;
         }
     }
-    if (s->volume < 0) s->volume = 0;
-    if (s->volume > 10) s->volume = 10;
+    if (s->musicVolume < 0) s->musicVolume = 0;
+    if (s->musicVolume > 10) s->musicVolume = 10;
+    if (s->sfxVolume < 0) s->sfxVolume = 0;
+    if (s->sfxVolume > 10) s->sfxVolume = 10;
     if (s->displayZoom < 50) s->displayZoom = 50;
     if (s->displayZoom > 160) s->displayZoom = 160;
     applyDisplaySettings(s);
@@ -81,7 +87,8 @@ void VitaSettings_load(VitaSettings* s) {
 }
 
 void VitaSettings_applyAudio(VitaSettings* s, AudioSystem* audio) {
-    audio->vtable->setMasterGain(audio, (float)s->volume / 10.0f);
+    audio->vtable->setMasterGain(audio, 1.0f);
+    AlAudioSystem_setCategoryGains((AlAudioSystem*)audio, (float)s->musicVolume / 10.0f, (float)s->sfxVolume / 10.0f);
 }
 
 bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSystem* audio) {
@@ -135,12 +142,15 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
         } else if (s->selected == 3) {
             s->adjustMode = true;
             s->open = false;
-        } else if (s->selected == 4) {
-            if (pressed & SCE_CTRL_LEFT) s->volume--;
-            else s->volume++;
-            if (s->volume < 0) s->volume = 10;
-            if (s->volume > 10) s->volume = 0;
+        } else if (s->selected == 4 || s->selected == 5) {
+            int* value = s->selected == 4 ? &s->sfxVolume : &s->musicVolume;
+            if (pressed & SCE_CTRL_LEFT) (*value)--;
+            else (*value)++;
+            if (*value < 0) *value = 10;
+            if (*value > 10) *value = 0;
             VitaSettings_applyAudio(s, audio);
+        } else if (s->selected == 6) {
+            s->vsyncEnabled = !s->vsyncEnabled;
         } else {
             s->open = false;
             requestRestart = s->restartOnClose;
@@ -174,16 +184,18 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
     const char* touch = s->touchEnabled ? (s->ptbrEnabled ? "Ligado" : "On") : (s->ptbrEnabled ? "Desligado" : "Off");
     const char* mod = s->ptbrEnabled ? "PT-BR" : "Original";
     const char* screen = s->widescreenEnabled ? (s->ptbrEnabled ? "Laterais" : "Side borders") : (s->ptbrEnabled ? "Original" : "Original");
-    char volume[32];
-    snprintf(volume, sizeof(volume), "%d%%", s->volume * 10);
-    const char* labelsPt[SETTINGS_ITEMS] = {"Touch", "Mod / Idioma", "Tela / Bordas", "Ajustar tela", "Volume geral", "Voltar"};
-    const char* labelsEn[SETTINGS_ITEMS] = {"Touch", "Mod / Language", "Screen / Borders", "Adjust Screen", "Master volume", "Back"};
+    char sfxVolume[32], musicVolume[32];
+    snprintf(sfxVolume, sizeof(sfxVolume), "%d%%", s->sfxVolume * 10);
+    snprintf(musicVolume, sizeof(musicVolume), "%d%%", s->musicVolume * 10);
+    const char* labelsPt[SETTINGS_ITEMS] = {"Touch", "Mod / Idioma", "Tela / Bordas", "Ajustar tela", "Efeitos sonoros", "Musica", "VSync / 30 FPS", "Voltar"};
+    const char* labelsEn[SETTINGS_ITEMS] = {"Touch", "Mod / Language", "Screen / Borders", "Adjust Screen", "Sound effects", "Music", "VSync / 30 FPS", "Back"};
     const char** labels = s->ptbrEnabled ? labelsPt : labelsEn;
     char adjustment[64];
     snprintf(adjustment, sizeof(adjustment), "%d,%d  %d%%", s->displayOffsetX, s->displayOffsetY, s->displayZoom);
-    const char* values[SETTINGS_ITEMS] = {touch, mod, screen, adjustment, volume, ""};
+    const char* vsync = s->vsyncEnabled ? (s->ptbrEnabled ? "Ligado" : "On") : (s->ptbrEnabled ? "Desligado" : "Off");
+    const char* values[SETTINGS_ITEMS] = {touch, mod, screen, adjustment, sfxVolume, musicVolume, vsync, ""};
     for (int i = 0; i < SETTINGS_ITEMS; ++i) {
-        float y = 120.0f + i * 55.0f;
+        float y = 112.0f + i * 43.0f;
         drawLabel(r, i == s->selected ? "*" : " ", 180, y, 0xFFFFFF);
         drawLabel(r, labels[i], 225, y, 0xFFFFFF);
         drawLabel(r, values[i], 590, y, i == s->selected ? 0x00FFFF : 0xFFFFFF);

@@ -15,7 +15,9 @@ typedef struct {
     bool widescreenEnabled;
     bool adjustMode;
     bool restartOnClose;
-    int volume;
+    int musicVolume;
+    int sfxVolume;
+    bool vsyncEnabled;
     int displayOffsetX;
     int displayOffsetY;
     int displayZoom;

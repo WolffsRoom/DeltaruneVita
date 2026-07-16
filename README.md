@@ -1,12 +1,24 @@
 # Deltarune Vita
 
+<p align="center">
+  <img src="Assets/DeltaruneVita.png" alt="Deltarune Chapters 1–5 on PS Vita" width="900">
+</p>
+
 Port jogável de **DELTARUNE Chapters 1–5** para PlayStation Vita.
 
 O projeto executa os dados GameMaker da versão Android através de uma adaptação do [Butterscotch](https://github.com/ButterscotchRunner/Butterscotch), com renderização pelo [VitaGL](https://github.com/Rinnegatamante/vitaGL). A proposta é ter um port nativo para o Vita, com seletor de capítulos, controles físicos e touch, áudio, saves e ajustes próprios para a tela e a memória do console.
 
 > Este repositório não contém os dados comerciais de DELTARUNE. É necessário obter os arquivos do jogo legalmente.
 
-![DELTARUNE rodando no Vita](docs/screenshots/2026-07-16-021434-989045.png)
+## Release Status
+
+<p align="center">
+  <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-~85%25-2ea44f?style=for-the-badge">
+  &nbsp;
+  <img alt="Platform" src="https://img.shields.io/badge/PS_Vita-Butterscotch_+_VitaGL-003791?style=for-the-badge&logo=playstation&logoColor=white">
+  &nbsp;
+  <img alt="State" src="https://img.shields.io/badge/State-Playable-brightgreen?style=for-the-badge">
+</p>
 
 ## Estado atual
 
@@ -26,17 +38,29 @@ A versão atual é a **v0.32**. Os capítulos 1 a 5 inicializam e são jogáveis
 
 Ainda podem existir diferenças gráficas, de desempenho ou de compatibilidade em cenas específicas. Relatos acompanhados do log ajudam a localizar esses casos.
 
-## Instalação
+## Installation
 
-1. Instale o VPK da [release mais recente](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
-2. Extraia legalmente os dados da versão Android para `data/extracted-apk/assets`.
-3. Execute:
+### HOW TO APPLY THE PATCH:
+
+> **The APK-based patcher will be available soon.** It will prepare the required Vita files from a legally obtained DELTARUNE Android APK. No commercial game data will be included with the patcher or the VPK.
+
+Quando disponibilizado, o processo será:
+
+1. Baixar o patcher e o VPK na página de [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
+2. Colocar uma cópia legal do APK de DELTARUNE na pasta indicada pelo patcher.
+3. Executar o patcher e aguardar a criação da pasta `butterscotch`.
+4. Instalar o VPK pelo VitaShell ou outro instalador compatível.
+5. Copiar a pasta gerada para `ux0:data/deltarune/`.
+
+### Preparação manual atual
+
+Enquanto o patcher não é publicado, extraia legalmente os dados da versão Android para `data/extracted-apk/assets` e execute:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\prepare-butterscotch-data.ps1
 ```
 
-4. Copie o conteúdo de `data/prepared/deltarune/butterscotch` para:
+Depois copie o conteúdo de `data/prepared/deltarune/butterscotch` para:
 
 ```text
 ux0:data/deltarune/butterscotch/
@@ -46,15 +70,47 @@ A estrutura deve conter `chapter0` até `chapter5`, cada um com seu `game.droid`
 
 ## Controles
 
-- Direcional ou analógico esquerdo: movimento
-- X: confirmar
-- Círculo ou Quadrado: cancelar
-- Triângulo: menu do jogo
-- SELECT: Game Settings
-- L/R: Page Down/Page Up
-- Touch frontal: controles virtuais, quando ativados
+<table>
+  <thead>
+    <tr><th>Controle</th><th>Ação</th><th>Controle</th><th>Ação</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><img src="Assets/SonyButtons/up.png" width="30" alt="Up"> <img src="Assets/SonyButtons/down.png" width="30" alt="Down"> <img src="Assets/SonyButtons/left.png" width="30" alt="D-Pad"> / Analógico esquerdo</td>
+      <td>Movimento</td>
+      <td><img src="Assets/SonyButtons/cross.png" width="30" alt="Cross"></td>
+      <td>Confirmar / Interagir</td>
+    </tr>
+    <tr>
+      <td><img src="Assets/SonyButtons/circle.png" width="30" alt="Circle"> <img src="Assets/SonyButtons/square.png" width="30" alt="Square"></td>
+      <td>Cancelar / Voltar</td>
+      <td><img src="Assets/SonyButtons/triangle.png" width="30" alt="Triangle"></td>
+      <td>Menu do jogo</td>
+    </tr>
+    <tr>
+      <td><strong>SELECT</strong></td>
+      <td>Abrir Game Settings</td>
+      <td><img src="Assets/SonyButtons/analog_l.png" width="30" alt="L"> <img src="Assets/SonyButtons/analog_r.png" width="30" alt="R"></td>
+      <td>Page Down / Page Up</td>
+    </tr>
+    <tr>
+      <td><img src="Assets/SonyButtons/touchpad.png" width="34" alt="Touch screen"></td>
+      <td>Controles virtuais</td>
+      <td>Analógicos em Adjust Screen</td>
+      <td>Esquerdo move; direito ajusta o zoom</td>
+    </tr>
+  </tbody>
+</table>
 
 Em **Adjust Screen**, o analógico esquerdo move a imagem e o analógico direito ajusta o zoom. X salva e Círculo restaura o padrão.
+
+## Screenshots
+
+<p align="center">
+  <img src="Assets/Screenshots/2026-07-16-021434-989045.png" alt="Deltarune Chapter 2 on PS Vita" width="32%">
+  <img src="Assets/Screenshots/2026-07-16-024007-169289.png" alt="Deltarune character creation on PS Vita" width="32%">
+  <img src="Assets/Screenshots/2026-07-16-030301-317266.png" alt="Deltarune chapter selector on PS Vita" width="32%">
+</p>
 
 ## Mods
 

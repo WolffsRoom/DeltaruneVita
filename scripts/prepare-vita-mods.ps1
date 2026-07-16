@@ -8,35 +8,60 @@ $root = Split-Path -Parent $PSScriptRoot
 if (-not $Source) { $Source = Join-Path $root 'mods\PTBR' }
 if (-not $Destination) { $Destination = Join-Path $root 'data\prepared\deltarune\butterscotch\mods\PTBR' }
 
-New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+$sourcePath = [IO.Path]::GetFullPath($Source)
+$destinationPath = [IO.Path]::GetFullPath($Destination)
+$allowedRoot = [IO.Path]::GetFullPath((Join-Path $root 'data\prepared\deltarune\butterscotch\mods'))
+if (-not $destinationPath.StartsWith($allowedRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Destino fora da pasta preparada permitida: $destinationPath"
+}
+if (-not (Test-Path -LiteralPath $sourcePath)) { throw "Traducao ausente: $sourcePath" }
 
-$launcher = Join-Path $Source 'data.win'
+# Recria a arvore para impedir que arquivos de uma traducao anterior continuem ativos.
+if (Test-Path -LiteralPath $destinationPath) {
+    Remove-Item -LiteralPath $destinationPath -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $destinationPath | Out-Null
+
+# O data.win da raiz pertence ao seletor de capitulos (chapter0).
+$launcher = Join-Path $sourcePath 'data.win'
 if (Test-Path -LiteralPath $launcher) {
-    $chapter0 = Join-Path $Destination 'chapter0'
+    $chapter0 = Join-Path $destinationPath 'chapter0'
     New-Item -ItemType Directory -Force -Path $chapter0 | Out-Null
     Copy-Item -Force -LiteralPath $launcher -Destination (Join-Path $chapter0 'game.droid')
+    Write-Host 'PT-BR chapter0 -> game.droid'
 }
 
+# Cada data.win traduzido substitui somente o runner data do capitulo. Lang, vid e
+# outros complementos permanecem como overlay e usam os assets originais como fallback.
 for ($chapter = 1; $chapter -le 5; $chapter++) {
-    $sourceLang = Join-Path $Source "chapter${chapter}_windows\lang"
-    $translation = Get-ChildItem -LiteralPath $sourceLang -File -Filter 'lang_pt*.json' | Select-Object -First 1
-    if ($null -ne $translation) {
-        $targetLang = Join-Path $Destination "chapter$chapter\lang"
-        New-Item -ItemType Directory -Force -Path $targetLang | Out-Null
-        Copy-Item -Force -LiteralPath $translation.FullName -Destination (Join-Path $targetLang 'lang_en.json')
-        Copy-Item -Force -LiteralPath $translation.FullName -Destination (Join-Path $targetLang 'lang_ja.json')
-        Copy-Item -Force -LiteralPath $translation.FullName -Destination (Join-Path $targetLang 'lang_pt.json')
-        Copy-Item -Force -LiteralPath $translation.FullName -Destination (Join-Path $targetLang 'lang_ptbr.json')
-        Write-Host "PT-BR capitulo $chapter -> $targetLang\lang_en.json"
+    $sourceChapter = Join-Path $sourcePath "chapter$chapter"
+    if (-not (Test-Path -LiteralPath $sourceChapter)) {
+        Write-Host "PT-BR chapter$chapter -> nao fornecido; usara os dados originais"
         continue
     }
 
-    $modData = Join-Path $Source "chapter${chapter}_windows\data.win"
-    if (-not (Test-Path -LiteralPath $modData)) { throw "Traducao ausente para o capitulo $chapter" }
-    $targetChapter = Join-Path $Destination "chapter$chapter"
+    $targetChapter = Join-Path $destinationPath "chapter$chapter"
     New-Item -ItemType Directory -Force -Path $targetChapter | Out-Null
-    Copy-Item -Force -LiteralPath $modData -Destination (Join-Path $targetChapter 'game.droid')
-    Write-Host "PT-BR capitulo $chapter -> game.droid alternativo"
+    Copy-Item -Recurse -Force -Path (Join-Path $sourceChapter '*') -Destination $targetChapter
+
+    $translatedData = Join-Path $targetChapter 'data.win'
+    if (Test-Path -LiteralPath $translatedData) {
+        Move-Item -Force -LiteralPath $translatedData -Destination (Join-Path $targetChapter 'game.droid')
+        Write-Host "PT-BR chapter$chapter -> game.droid + overlay"
+    } else {
+        Write-Host "PT-BR chapter$chapter -> overlay sem game.droid"
+    }
 }
 
-Write-Host "Copie a pasta 'mods' junto de ux0:data/deltarune/butterscotch/."
+# Faixas modificadas ficam em uma biblioteca compartilhada do mod. O backend
+# procura aqui antes de retornar para butterscotch/music.
+$musicSource = Join-Path $sourcePath 'mus'
+if (Test-Path -LiteralPath $musicSource) {
+    $musicTarget = Join-Path $destinationPath 'music'
+    New-Item -ItemType Directory -Force -Path $musicTarget | Out-Null
+    Copy-Item -Force -Path (Join-Path $musicSource '*') -Destination $musicTarget
+    Write-Host 'PT-BR music -> biblioteca compartilhada do mod'
+}
+
+Write-Host "Traducao preparada em: $destinationPath"
+Write-Host "Copie a pasta 'mods' para ux0:data/deltarune/butterscotch/."

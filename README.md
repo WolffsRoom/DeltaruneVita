@@ -114,7 +114,9 @@ Em **Adjust Screen**, o analógico esquerdo move a imagem e o analógico direito
 
 ## Mods
 
-Mods de PC precisam ser preparados para a estrutura usada no Vita. Coloque os arquivos-fonte em `mods/PTBR` e execute:
+O suporte PT-BR foi adaptado para usar a tradução comunitária [teiarruma/deltarune-ptbr](https://github.com/teiarruma/deltarune-ptbr), da equipe TEIARRUMA. Atualmente ela cobre os capítulos 1 a 4; consulte o projeto original para downloads, atualizações, instruções e créditos completos.
+
+Os arquivos da tradução **não são distribuídos neste repositório nem nas releases**. Depois de obtê-los diretamente da fonte oficial, coloque-os em `mods/PTBR` e execute:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
@@ -154,6 +156,7 @@ Em caso de crash, anexe também o arquivo `psp2core` gerado pelo Vita.
 - [Port original para Android](https://gamejolt.com/games/deltarunech1-5androidport/1080568), usado como referência para os dados e a divisão dos capítulos.
 - [Butterscotch](https://github.com/ButterscotchRunner/Butterscotch), runner GameMaker de código aberto.
 - [VitaGL](https://github.com/Rinnegatamante/vitaGL) por Rinnegatamante.
+- [Tradução PT-BR de DELTARUNE](https://github.com/teiarruma/deltarune-ptbr) pela equipe TEIARRUMA e seus colaboradores.
 - [VitaSDK](https://vitasdk.org/) e comunidade homebrew do PlayStation Vita.
 - Agradecimento ao [Vita Development Wiki / PSDevWiki](https://www.psdevwiki.com/vita/) pela documentação técnica reunida pela comunidade.
 

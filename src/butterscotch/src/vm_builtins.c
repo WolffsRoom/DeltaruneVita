@@ -9493,11 +9493,25 @@ static RValue builtin_psn_setup_trophies(MAYBE_UNUSED VMContext* ctx, RValue* ar
 }
 
 // Draw functions
+static bool vitaShouldHideMobileControl(Runner* runner, int32_t spriteIndex) {
+#ifdef PLATFORM_VITA
+    extern int g_vitaTouchEnabled;
+    if (g_vitaTouchEnabled || spriteIndex < 0 || (uint32_t)spriteIndex >= runner->dataWin->sprt.count) return false;
+    Sprite* sprite = &runner->dataWin->sprt.sprites[spriteIndex];
+    return sprite->name != nullptr && strcmp(sprite->name, "spr_control_return") == 0;
+#else
+    (void)runner;
+    (void)spriteIndex;
+    return false;
+#endif
+}
+
 static RValue builtin_draw_sprite(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
     if (runner->renderer == nullptr) return RValue_makeUndefined();
 
     int32_t spriteIndex = RValue_toInt32(args[0]);
+    if (vitaShouldHideMobileControl(runner, spriteIndex)) return RValue_makeUndefined();
     int32_t subimg = RValue_toInt32(args[1]);
     float x = (float) RValue_toReal(args[2]);
     float y = (float) RValue_toReal(args[3]);
@@ -9516,6 +9530,7 @@ static RValue builtin_draw_sprite_ext(VMContext* ctx, RValue* args, MAYBE_UNUSED
     if (runner->renderer == nullptr) return RValue_makeUndefined();
 
     int32_t spriteIndex = RValue_toInt32(args[0]);
+    if (vitaShouldHideMobileControl(runner, spriteIndex)) return RValue_makeUndefined();
     int32_t subimg = RValue_toInt32(args[1]);
     float x = (float) RValue_toReal(args[2]);
     float y = (float) RValue_toReal(args[3]);

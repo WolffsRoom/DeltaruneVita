@@ -2,6 +2,16 @@
 
 O desenvolvimento foi feito em ciclos curtos no hardware real. As versões antigas são preservadas como registro técnico e podem estar incompletas ou instáveis.
 
+## v0.33 — enquadramento e navegação
+
+- perfil 113,36 / 115% definido como padrão dos capítulos;
+- seletor inicial permanece centralizado em 0,0 / 100%;
+- resposta visual do joystick touch acelerada e coordenadas touch corrigidas;
+- botão móvel `spr_control_return` ocultado quando Touch está desligado;
+- Chapter Select reconhece `launcher` e retorna ao seletor inicial;
+- fallback de segurança retorna ao seletor para solicitações inválidas de troca;
+- crédito `PSVita port by Woff` adicionado ao rodapé do seletor.
+
 ## v0.32 — tela, idioma e touch
 
 - posição e zoom passam a afetar cenário, HUD, diálogos e bordas dinâmicas juntos;

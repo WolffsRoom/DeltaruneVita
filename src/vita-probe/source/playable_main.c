@@ -98,6 +98,7 @@ static bool restart_into_chapter(int chapter) {
 
 static int chapter_from_request(const char *working_directory) {
     if (working_directory == NULL) return -1;
+    if (strstr(working_directory, "launcher") != NULL) return 0;
     const char *chapter = strstr(working_directory, "chapter");
     if (chapter == NULL) return -1;
     chapter += strlen("chapter");
@@ -113,7 +114,7 @@ int main(void) {
     sceIoRemove(LOG_PATH);
     int active_chapter = consume_next_chapter();
 
-    log_line("Deltarune Butterscotch VitaRenderer runner 00.32");
+    log_line("Deltarune Butterscotch VitaRenderer runner 00.33");
     log_line("MAIN_STACK=4194304");
     char startup_line[96];
     snprintf(startup_line, sizeof(startup_line), "AUDIO=openal ENTRY=chapter%d CONTROLS=vita+touch", active_chapter);
@@ -133,6 +134,7 @@ int main(void) {
 
     VitaSettings settings;
     VitaSettings_load(&settings);
+    VitaSettings_setLauncherMode(active_chapter == 0);
 
     int next_chapter = -1;
     char game_path[192];
@@ -229,14 +231,17 @@ int main(void) {
         int dx = (int)pad.lx - 128, dy = (int)pad.ly - 128;
         SceTouchData touch = {0};
         bool touch_up = false, touch_down = false, touch_left = false, touch_right = false;
+        float touch_axis_x = 0.0f, touch_axis_y = 0.0f;
         bool touch_confirm = false, touch_cancel = false, touch_menu = false;
         if (settings.touchEnabled && !settings.open && sceTouchPeek(SCE_TOUCH_PORT_FRONT, &touch, 1) > 0) {
             for (unsigned i = 0; i < touch.reportNum; ++i) {
                 int tx = touch.report[i].x;
                 int ty = touch.report[i].y;
                 if (tx < 960) {
-                    int tdx = tx - 480;
-                    int tdy = ty - 730;
+                    int tdx = tx - 310;
+                    int tdy = ty - 840;
+                    touch_axis_x = (float)tdx / 210.0f;
+                    touch_axis_y = (float)tdy / 210.0f;
                     if (abs(tdx) > abs(tdy)) {
                         touch_left |= tdx < -90;
                         touch_right |= tdx > 90;
@@ -253,8 +258,8 @@ int main(void) {
                 }
             }
         }
-        float visual_x = dx < -48 || dx > 48 ? (float)dx / 127.0f : (touch_left ? -1.0f : (touch_right ? 1.0f : 0.0f));
-        float visual_y = dy < -48 || dy > 48 ? (float)dy / 127.0f : (touch_up ? -1.0f : (touch_down ? 1.0f : 0.0f));
+        float visual_x = dx < -24 || dx > 24 ? (float)dx / 127.0f : touch_axis_x;
+        float visual_y = dy < -24 || dy > 24 ? (float)dy / 127.0f : touch_axis_y;
         VitaSettings_setTouchVisuals(&settings, visual_x, visual_y,
                                      (pad.buttons & SCE_CTRL_CROSS) || touch_confirm,
                                      (pad.buttons & (SCE_CTRL_CIRCLE | SCE_CTRL_SQUARE)) || touch_cancel,
@@ -294,6 +299,14 @@ int main(void) {
                     sceKernelExitProcess(0);
                 }
                 log_line("GAME_CHANGE=loadexec_failed");
+            } else if (active_chapter > 0) {
+                next_chapter = 0;
+                log_line("GAME_CHANGE=chapter_select_fallback_launcher");
+                if (restart_into_chapter(0)) {
+                    sceKernelDelayThread(500000);
+                    sceKernelExitProcess(0);
+                }
+                log_line("GAME_CHANGE=launcher_loadexec_failed");
             } else log_line("GAME_CHANGE=invalid_chapter");
             exit_requested = true;
             continue;
@@ -333,6 +346,7 @@ int main(void) {
         renderer->vtable->endFrameEnd(renderer);
         Runner_drawGUI(runner, 960, 544, game_w, game_h);
         VitaSettings_drawTouchControls(&settings, renderer);
+        VitaSettings_drawLauncherCredit(&settings, renderer, active_chapter == 0);
         VitaSettings_draw(&settings, renderer);
         VitaSettings_drawCalibration(&settings, renderer);
         if (runner->pendingRoom == -1) vglSwapBuffers(GL_FALSE);

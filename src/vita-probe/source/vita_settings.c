@@ -13,11 +13,14 @@ int g_vitaDisplayOffsetX = 0;
 int g_vitaDisplayOffsetY = 0;
 int g_vitaDisplayZoom = 100;
 int g_vitaPortOverlayFullScreen = 0;
+int g_vitaTouchEnabled = 1;
+static bool g_launcherMode = false;
 
 static void applyDisplaySettings(const VitaSettings* s) {
-    g_vitaDisplayOffsetX = s->displayOffsetX;
-    g_vitaDisplayOffsetY = s->displayOffsetY;
-    g_vitaDisplayZoom = s->displayZoom;
+    g_vitaDisplayOffsetX = g_launcherMode ? 0 : s->displayOffsetX;
+    g_vitaDisplayOffsetY = g_launcherMode ? 0 : s->displayOffsetY;
+    g_vitaDisplayZoom = g_launcherMode ? 100 : s->displayZoom;
+    g_vitaTouchEnabled = s->touchEnabled ? 1 : 0;
 }
 
 static void saveSettings(const VitaSettings* s) {
@@ -38,7 +41,9 @@ void VitaSettings_load(VitaSettings* s) {
     s->touchEnabled = true;
     s->widescreenEnabled = true;
     s->volume = 10;
-    s->displayZoom = 100;
+    s->displayOffsetX = 113;
+    s->displayOffsetY = 36;
+    s->displayZoom = 115;
     char text[256] = {0};
     SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_RDONLY, 0);
     if (fd >= 0) {
@@ -88,9 +93,9 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
         if (ry > 48 && s->displayZoom > 50) s->displayZoom--;
         applyDisplaySettings(s);
         if (pressed & SCE_CTRL_CIRCLE) {
-            s->displayOffsetX = 0;
-            s->displayOffsetY = 0;
-            s->displayZoom = 100;
+            s->displayOffsetX = 113;
+            s->displayOffsetY = 36;
+            s->displayZoom = 115;
             applyDisplaySettings(s);
         }
         if (pressed & (SCE_CTRL_CROSS | SCE_CTRL_SELECT)) {
@@ -248,11 +253,33 @@ void VitaSettings_setTouchVisuals(VitaSettings* s, float stickX, float stickY,
     if (stickX > 1.0f) stickX = 1.0f;
     if (stickY < -1.0f) stickY = -1.0f;
     if (stickY > 1.0f) stickY = 1.0f;
-    s->visualStickX += (stickX - s->visualStickX) * 0.42f;
-    s->visualStickY += (stickY - s->visualStickY) * 0.42f;
+    s->visualStickX += (stickX - s->visualStickX) * 0.82f;
+    s->visualStickY += (stickY - s->visualStickY) * 0.82f;
     if (s->visualStickX > -0.02f && s->visualStickX < 0.02f) s->visualStickX = 0.0f;
     if (s->visualStickY > -0.02f && s->visualStickY < 0.02f) s->visualStickY = 0.0f;
     s->visualConfirm = confirm;
     s->visualCancel = cancel;
     s->visualMenu = menu;
+}
+
+void VitaSettings_setLauncherMode(bool launcherMode) {
+    g_launcherMode = launcherMode;
+    if (launcherMode) {
+        g_vitaDisplayOffsetX = 0;
+        g_vitaDisplayOffsetY = 0;
+        g_vitaDisplayZoom = 100;
+    }
+}
+
+void VitaSettings_drawLauncherCredit(VitaSettings* s, Renderer* r, bool launcher) {
+    if (!launcher || s->open || s->adjustMode) return;
+    int oldFont = r->drawFont;
+    if (r->drawFont < 0 || (uint32_t)r->drawFont >= r->dataWin->font.count) r->drawFont = 0;
+    g_vitaPortOverlayFullScreen = 1;
+    r->vtable->beginGUI(r, 960, 544, 0, 0, 960, 544, RENDER_TARGET_HOST_FRAMEBUFFER);
+    r->vtable->drawTextColor(r, "PSVita port by Woff", 730.0f, 512.0f, 0.72f, 0.72f, 0.0f,
+                             0x808080, 0x808080, 0x808080, 0x808080, 1.0f, -1.0f);
+    r->vtable->endGUI(r);
+    g_vitaPortOverlayFullScreen = 0;
+    r->drawFont = oldFont;
 }

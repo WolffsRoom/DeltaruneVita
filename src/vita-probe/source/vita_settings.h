@@ -36,5 +36,7 @@ void VitaSettings_drawTouchControls(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_drawCalibration(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_setTouchVisuals(VitaSettings* settings, float stickX, float stickY,
                                   bool confirm, bool cancel, bool menu);
+void VitaSettings_setLauncherMode(bool launcherMode);
+void VitaSettings_drawLauncherCredit(VitaSettings* settings, Renderer* renderer, bool launcher);
 
 #endif

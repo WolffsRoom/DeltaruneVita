@@ -1,0 +1,321 @@
+#ifndef _BS_PS3GL_INTERNAL_H_
+#define _BS_PS3GL_INTERNAL_H_
+
+#include "GL/gl.h"
+#include <vectormath/c/vectormath_aos.h>
+
+// TODO: Drop need to link to librsx eventually
+#include <rsx/rsx.h>
+#include <ppu-types.h>
+
+#include <string.h>
+#include <malloc.h>
+#include <math.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
+
+#include <ppu-asm.h>
+
+#define MAX_TEXTURES 1024
+#define MAX_FRAMEBUFFERS 1024
+#define MAX_PROJ_STACK 4
+#define MAX_MODV_STACK 16
+#define MAX_SHADERS 64
+#define MAX_PROGRAMS 32
+#define MAX_PROGRAM_UNIFORMS 64
+#define MAX_PROGRAM_ATTRIBS 16
+#define MAX_TEX_UNITS 4
+
+// Pack uniform location: stage in high 8 bits, program-local index in low 24
+#define PS3GL_LOC_STAGE_VP 1
+#define PS3GL_LOC_STAGE_FP 2
+#define PS3GL_LOC_PACK(stage, idx) (((stage) << 24) | ((idx) & 0xFFFFFF))
+#define PS3GL_LOC_STAGE(loc)       (((loc) >> 24) & 0xFF)
+#define PS3GL_LOC_INDEX(loc)       ((loc) & 0xFFFFFF)
+
+// Aliases for simplicity
+#define GCM_TEXTURE_CONVOLUTION_NONE 0
+#define GCM_TEXTURE_CLAMP_TO_BORDER GCM_TEXTURE_BORDER
+
+
+enum _ps3gl_rsx_constants
+{
+	// Vertex Uniforms
+	PS3GL_Uniform_ModelViewMatrix,
+	PS3GL_Uniform_ProjectionMatrix,
+
+	// Fragment Uniforms
+	PS3GL_Uniform_TextureEnabled,
+	PS3GL_Uniform_TextureMode,
+	PS3GL_Uniform_FogEnabled,
+	PS3GL_Uniform_FogColor,
+
+	// Num
+	PS3GL_Uniform_Count,
+};
+
+enum _ps3gl_texenv_modes
+{
+	PS3GL_TEXENV_BLEND = 0,
+	PS3GL_TEXENV_MODULATE = 1,
+	PS3GL_TEXENV_REPLACE = 2,
+};
+
+// Shader/program objects
+
+struct ps3gl_shader {
+	GLboolean allocated;
+	GLenum type; // GL_VERTEX_SHADER or GL_FRAGMENT_SHADER
+	void *blob;  // owned copy of the .vpo/.fpo bytes
+	GLsizei blobSize;
+	// For VP: ucode pointer comes from rsxVertexProgramGetUCode, no extra alloc
+	// For FP: ucode must live in RSX-visible memory; we allocate it here
+	void *fpUcode;     // rsxMemalign'd buffer (FP only)
+	uint32_t fpOffset;      // RSX offset for FP (FP only)
+};
+
+struct ps3gl_program_uniform {
+	char name[64];
+	GLubyte stage; // PS3GL_LOC_STAGE_VP or _FP
+	// For VP uniforms, we cache the rsxProgramConst*; for FP, we cache it too
+	// plus the precomputed offset table for fast inline transfers.
+	rsxProgramConst *constHandle;
+	// Sampler binding: if this uniform is a sampler, samplerUnit is the
+	// texture unit it's been bound to via glUniform1i. Otherwise -1.
+	GLint samplerUnit;
+	// For FP samplers we also need the attrib handle (texture unit slot)
+	rsxProgramAttrib *samplerAttrib;
+};
+
+struct ps3gl_program {
+	GLboolean allocated;
+	GLboolean linked;
+	GLuint vertexShader;   // shader id (0 = none)
+	GLuint fragmentShader; // shader id (0 = none)
+	// Cached reflection after glLinkProgram
+	struct ps3gl_program_uniform uniforms[MAX_PROGRAM_UNIFORMS];
+	GLuint uniformCount;
+};
+
+#ifndef PLATFORM_PS3
+#define GCM_MAX_MRT_COUNT							4
+typedef struct _gcmSurface
+{
+	uint8_t type;
+	uint8_t antiAlias;
+	uint8_t colorFormat;
+	uint8_t colorTarget;
+	uint8_t colorLocation[GCM_MAX_MRT_COUNT];
+	uint32_t colorOffset[GCM_MAX_MRT_COUNT];
+	uint32_t colorPitch[GCM_MAX_MRT_COUNT];
+	uint8_t depthFormat;
+	uint8_t depthLocation;
+	uint8_t _pad[2];
+	uint32_t depthOffset;
+	uint32_t depthPitch;
+	uint16_t width;
+	uint16_t height;
+	uint16_t x;
+	uint16_t y;
+} gcmSurface;
+
+/*! \brief RSX Texture data structure. */
+typedef struct _gcmTexture {
+	uint8_t format;
+	uint8_t mipmap;
+	uint8_t dimension;
+	uint8_t cubemap;
+	uint32_t remap;
+	uint16_t width;
+	uint16_t height;
+	uint16_t depth;
+	uint8_t location;
+	uint8_t _pad;
+	uint32_t pitch;
+	uint32_t offset;
+} gcmTexture;
+#endif
+
+struct ps3gl_texture {
+	GLuint id, target;
+	GLboolean allocated;
+	GLubyte* data;
+	GLint minFilter, magFilter;
+	GLint wrapS, wrapR, wrapT;
+	bool fboTex;
+	gcmTexture gcmTexture;
+};
+
+struct ps3gl_framebuffer {
+	GLuint id, target;
+	GLboolean allocated;
+	GLint minFilter, magFilter;
+	GLint wrapS, wrapR, wrapT;
+	struct ps3gl_texture *fbTexture;
+	gcmSurface gcmSurface;
+	// Per-FBO depth buffer in RSX-local memory. Sized to match the bound color attachment.
+	void* depthData;
+	uint32_t depthSize;
+};
+
+struct ps3gl_opengl_state
+{
+	// Color
+	GLuint clear_color;
+	GLuint color_mask;
+
+	struct {
+		GLushort x,y,w,h;
+		GLfloat scale[4], offset[4];
+	} viewport;
+
+	struct {
+		GLboolean enabled;
+		GLushort x,y,w,h;
+	} scissor;
+
+	// Depth
+	GLdouble clear_depth;
+	GLfloat depth_near;
+	GLfloat depth_far;
+	GLboolean depth_mask;
+	GLboolean depth_test;
+	GLuint depth_func;
+
+	// Stenciling
+	GLuint clear_stencil;
+
+	// Alpha
+	GLboolean alpha_test_enabled;
+	GLenum alpha_func;
+	GLuint alpha_func_ref;
+
+	// Blend
+	GLboolean blend_enabled;
+	GLenum blend_equation;
+	GLenum blend_func_sfactor;
+	GLenum blend_func_dfactor;
+	GLenum blend_func_sfactor_alpha;
+	GLenum blend_func_dfactor_alpha;
+
+	// Matrices
+	GLuint matrix_mode;
+	
+	int cur_modv_mat;
+	VmathMatrix4 modelview_matrix;
+	VmathMatrix4 modelview_stack[MAX_MODV_STACK];
+	
+	int cur_proj_mat;
+    VmathMatrix4 projection_matrix;
+    VmathMatrix4 projection_stack[MAX_PROJ_STACK];
+
+    VmathMatrix4 *curr_mtx;
+
+	// Textures
+	rsxProgramAttrib* ffp_tex_unit;     // FFP fragment shader's sampler attrib (resolved at init)
+	GLuint blend_color_rsx;
+	GLfloat texEnvMode;
+	struct ps3gl_texture textures[MAX_TEXTURES];
+	struct ps3gl_texture *bound_textures[MAX_TEX_UNITS];
+	struct ps3gl_framebuffer framebuffers[MAX_TEXTURES];
+	struct ps3gl_framebuffer *bound_read_framebuffer;
+	struct ps3gl_framebuffer *bound_draw_framebuffer;
+	GLboolean texture_unit_enabled[MAX_TEX_UNITS];
+	GLuint active_texture_unit;         // index into bound_textures[]
+	GLuint nextTextureID;
+	GLuint nextFramebufferID;
+
+	// Lighting
+	GLuint shade_model;
+
+	// Fog
+	GLboolean fog_enabled;
+	GLint fog_mode;
+	GLfloat fog_start, fog_end, fog_density;
+	GLfloat fog_color[4];
+
+	// FFP Shader Consts
+	rsxProgramConst *prog_consts[PS3GL_Uniform_Count];
+
+	// User shader/program objects
+	struct ps3gl_shader shaders[MAX_SHADERS];
+	GLuint nextShaderID;
+	struct ps3gl_program programs[MAX_PROGRAMS];
+	GLuint nextProgramID;
+	GLuint active_program; // 0 = use FFP path
+
+	// Misc
+	GLenum front_face;
+	GLfloat point_size;
+	GLenum polygon_mode_face;
+	GLenum polygon_mode;
+
+	GLboolean logic_op_enabled;
+	GLenum logic_op;
+	GLboolean cull_face_enabled;
+	GLenum cull_face;
+};
+
+// Helper functions for PS3GL, these are internal only!
+
+// From PSL1GHT, can't use it since it's RSX_INTERNAL
+static inline GLfloat swapF32_16(GLfloat v)
+{
+	ieee32 d;
+	d.f = v;
+	d.u = ( ( ( d.u >> 16 ) & 0xffff ) << 0 ) | ( ( ( d.u >> 0 ) & 0xffff ) << 16 );
+	return d.f;
+}
+
+static inline void rsxSetFragmentProgramParameterBool(gcmContextData *context,const rsxFragmentProgram *program,const rsxProgramConst *param,GLboolean value,GLuint offset,GLuint location)
+{
+	GLfloat params[4] = {0.0f,0.0f,0.0f,0.0f};
+	params[0] = swapF32_16((float)value);
+	rsxConstOffsetTable *co_table = rsxFragmentProgramGetConstOffsetTable(program, param->index);
+	for(int i = 0; i < co_table->num; ++i)
+	{
+		rsxInlineTransfer(context,
+			offset + co_table->offset[i],
+			params,
+			1,
+			location);
+	}
+}
+
+static inline void rsxSetFragmentProgramParameterF32(gcmContextData *context,const rsxFragmentProgram *program,const rsxProgramConst *param,float value,GLuint offset,GLuint location)
+{
+	GLfloat params[4] = {0.0f,0.0f,0.0f,0.0f};
+	params[0] = swapF32_16(value);
+	rsxConstOffsetTable *co_table = rsxFragmentProgramGetConstOffsetTable(program, param->index);
+	for(int i = 0; i < co_table->num; ++i)
+	{
+		rsxInlineTransfer(context,
+			offset + co_table->offset[i],
+			params,
+			1,
+			location);
+	}
+}
+
+static inline void rsxSetFragmentProgramParameterF32Vec4(gcmContextData *context,const rsxFragmentProgram *program,const rsxProgramConst *param,float *value,GLuint offset,GLuint location)
+{
+	GLfloat params[4] = {0.0f,0.0f,0.0f,0.0f};
+	params[0] = swapF32_16(value[0]);
+	params[1] = swapF32_16(value[1]);
+	params[2] = swapF32_16(value[2]);
+	params[3] = swapF32_16(value[3]);
+	rsxConstOffsetTable *co_table = rsxFragmentProgramGetConstOffsetTable(program,
+		param->index);
+	for(int i = 0; i < co_table->num; ++i)
+	{
+		rsxInlineTransfer(context,
+			offset + co_table->offset[i],
+			params,
+			4,
+			GCM_LOCATION_RSX);
+	}
+}
+
+#endif /* _BS_PS3GL_INTERNAL_H_ */

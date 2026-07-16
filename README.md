@@ -1,164 +1,94 @@
-# DELTARUNE Vita
+# Deltarune Vita
 
-Experimental PlayStation Vita compatibility project for an Android GameMaker
-port of **DELTARUNE Chapters 1–5**.
+Port experimental de DELTARUNE Chapters 1–5 para PlayStation Vita.
 
-> [!IMPORTANT]
-> This project is currently **awaiting testing on real PS Vita hardware**. The
-> available work is a test baseline, not a confirmed playable release.
+O projeto usa o [Butterscotch](https://github.com/ButterscotchRunner/Butterscotch) para interpretar os arquivos do GameMaker e o VitaGL como backend gráfico. O objetivo atual é carregar o seletor de capítulos, iniciar cada jogo e adaptar os recursos necessários ao hardware do Vita.
 
-## Current status
+## Estado atual
 
-`IMPLEMENTED — AWAITING HARDWARE TEST`
+A versão mais recente é a `00.18`.
 
-Static analysis of the target Android package confirmed:
+Confirmado no Vita real:
 
-- a 32-bit ARMv7 `libyoyo.so`;
-- ELF32, ARM EABI5, soft-float ABI;
-- GameMaker bytecode in `assets/game.droid`;
-- game data split across `chapter0.wad` through `chapter5.wad`;
-- standard YoYo Runner JNI entry points;
-- separate OGG music and MP4 video assets.
+- carregamento do `chapter0`;
+- menu de capítulos funcionando;
+- controles do Vita;
+- primeiro quadro e texturas renderizados;
+- renderer convertido de `glBegin/glEnd` para arrays;
+- solicitação de troca de capítulo identificada.
 
-These properties make the package structurally suitable for
-[YoYo Loader Vita](https://github.com/Rinnegatamante/yoyoloader_vita). YoYo
-Loader already contains a DELTARUNE keymap and a DELTARUNE-specific
-`glReadPixels` workaround.
+A versão `00.18` implementa a troca para `chapter1` até `chapter5` por reinício limpo do eboot. Esta parte ainda precisa de validação no hardware. O áudio continua desativado enquanto o carregamento e a renderização são estabilizados.
 
-This does **not** yet prove that all chapters, audio, video, saving, or controls
-work correctly on the Vita.
+## Controles
 
-## Project files
+- Direcional ou analógico esquerdo: movimento
+- X ou O: confirmar
+- Quadrado: cancelar
+- Triângulo ou START: menu
+- L e R: Page Down e Page Up
+- SELECT: sair
 
-- [YoYo Loader Nightly VPK](downloads/YoYoLoader-Nightly.vpk) — prebuilt
-  baseline used for the first hardware test;
-- [YoYo Loader builder](downloads/yoyoloader-builder.zip) — upstream standalone
-  launcher builder and binaries;
-- [DLTVITA-0001 source package](downloads/yoyoloader-deltarune-DLTVITA-0001-source.zip)
-  — instrumented source awaiting a VitaSDK-softfp build;
-- [Baseline test instructions](BASELINE-INSTRUCTIONS.md);
-- [DLTVITA-0001 technical report](DLTVITA-0001-REPORT.md);
-- [Portuguese installation note](downloads/INSTALL-PT-BR.txt).
+## Preparação dos dados
 
-The APK and game assets are intentionally not included. After downloading the
-project files, supply your own compatible APK and rename it to `game.apk` as
-described below.
+Os arquivos do jogo não fazem parte deste repositório.
 
-## Installation layout
+Extraia legalmente `chapter0.wad` até `chapter5.wad` para `data/extracted-apk/assets` e execute:
 
-Install the official YoYo Loader VPK, then place your legally obtained Android
-package on the Vita using this layout:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\prepare-butterscotch-data.ps1
+```
+
+Copie o resultado para:
 
 ```text
-ux0:data/gms/deltarune/
-├── game.apk
-└── yyl.cfg
+ux0:data/deltarune/butterscotch/
 ```
 
-Recommended baseline `yyl.cfg`:
-
-```ini
-forceGLES1=0
-forceBilinear=0
-platTarget=0
-debugShaders=0
-debugMode=1
-noSplash=0
-maximizeMem=0
-netSupport=0
-squeezeMem=0
-disableAudio=0
-uncachedMem=0
-doubleBuffering=0
-```
-
-For the first run, do not optimize the APK or externalize its assets. A clean
-baseline makes crashes and loading failures easier to diagnose.
-
-## Requirements
-
-- A homebrew-enabled PlayStation Vita;
-- [YoYo Loader Vita](https://github.com/Rinnegatamante/yoyoloader_vita);
-- `kubridge.skprx`;
-- `fd_fix.skprx`, unless rePatch is installed;
-- `libshacccg.suprx`;
-- a legally obtained compatible Android package.
-
-Follow the upstream YoYo Loader documentation when installing its plugins and
-runtime dependencies.
-
-## Testing and logs
-
-After one test run, retrieve:
+A estrutura no Vita deve ficar assim:
 
 ```text
-ux0:data/gms/shared/yyl.log
+ux0:data/deltarune/butterscotch/chapter0/game.droid
+ux0:data/deltarune/butterscotch/chapter1/game.droid
+ux0:data/deltarune/butterscotch/chapter2/game.droid
+ux0:data/deltarune/butterscotch/chapter3/game.droid
+ux0:data/deltarune/butterscotch/chapter4/game.droid
+ux0:data/deltarune/butterscotch/chapter5/game.droid
 ```
 
-If the application crashes, also preserve the `psp2core` dump from that same
-run. Do not mix a log from one build with a core dump from another.
+Depois instale o VPK e abra `Deltarune` pela LiveArea.
 
-Useful expected log markers are:
+## Compilação
+
+Com Docker instalado:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-butterscotch-probe.ps1
+```
+
+O VPK será criado em `artifacts/current/Deltarune.vpk`.
+
+O build usa:
+
+- Title ID `DLTVITA01`;
+- nome `Deltarune`;
+- `ATTRIBUTE2=12` para o perfil ampliado de memória;
+- stack principal de 4 MiB;
+- pool de 64 MiB para o VitaGL.
+
+## Log
+
+O arquivo de diagnóstico fica em:
 
 ```text
-Detected DELTARUNE as Game ID
-Enabling Deltarune specific gamehack!
-Startup ended
+ux0:data/deltarune/butterscotch/butterscotch-probe.log
 ```
 
-When reporting a result, include:
+Em caso de crash, envie também o `psp2core` gerado pelo sistema.
 
-- Vita model and firmware;
-- YoYo Loader build/version;
-- the last relevant lines of `yyl.log`;
-- whether the menu, gameplay, audio, video, controls, and saving worked;
-- the chapter tested;
-- the matching core dump when applicable.
+## Histórico
 
-## Known risks
+O caminho percorrido até a versão atual está em [docs/PROGRESS.md](docs/PROGRESS.md).
 
-- The Android package uses custom `WADLoader` and data-provider Java classes.
-  YoYo Loader may need a native replacement for specific methods.
-- The combined game data is roughly 700 MiB. Storage size alone is acceptable,
-  but loading large WADs may exceed available memory.
-- MP4 playback may need additional work or chapter-specific bypasses.
-- A newer GameMaker runner can require JNI, shader, or import compatibility
-  changes.
+## Aviso
 
-## Development
-
-Game-specific loader changes require a **VitaSDK-softfp** environment. The
-upstream project builds through the `atamanenko/vitasdk-softfp` container and
-also compiles soft-float versions of VitaGL, OpenAL Soft, OpenSL ES,
-SceShaccCgExt, and VitaShaRK.
-
-The proprietary Sony SDK is not a replacement for VitaSDK-softfp and is not
-used by this project.
-
-Development follows evidence-based revision rules:
-
-1. Use an explicit Build ID for every test build.
-2. Make one small change per revision.
-3. Preserve a new log for every run.
-4. Match logs and core dumps from the same test.
-5. Do not add generic JNI or native stubs without understanding their ABI and
-   side effects.
-6. Do not claim a fix works until it is confirmed on hardware.
-
-## Legal notice
-
-This repository does not provide DELTARUNE, an APK, `libyoyo.so`, WAD files,
-music, videos, or other proprietary game data. Users must supply their own
-legally obtained files.
-
-DELTARUNE is created by Toby Fox. This is an unofficial, fan-made compatibility
-project and is not affiliated with or endorsed by Toby Fox, 8-4, GameMaker,
-Sony Interactive Entertainment, or the YoYo Loader developers.
-
-## Credits
-
-- [Rinnegatamante](https://github.com/Rinnegatamante) and the YoYo Loader Vita
-  contributors;
-- [TheFloW](https://github.com/TheOfficialFloW) for the original Android `.so`
-  loading work used by many Vita ports;
-- the VitaSDK, VitaGL, VitaShaRK, and Vita Nuova communities.
+Este repositório não inclui APK, WAD, `game.droid`, áudio ou outros dados comerciais de DELTARUNE. Use somente arquivos obtidos legalmente.

@@ -1,0 +1,25 @@
+# Proprietary game data
+/data/apk/
+/data/extracted-apk/
+/data/game.apk
+/data/prepared/
+
+# Generated builds and diagnostic output
+/artifacts/
+/artifacts/publish-repo/
+/logs/
+**/build/
+**/build-*/
+
+# Local tooling and downloaded binaries
+/third_party/downloads/
+/tools/yoyoloader-builder/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+*.user
+*.suo
+*.psp2dmp
+butterscotch-probe.log
+libc++_shared.so

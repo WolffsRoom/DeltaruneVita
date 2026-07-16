@@ -424,9 +424,24 @@ static void glBeginGUI(Renderer* renderer, int32_t guiW, int32_t guiH, int32_t p
 
     if (targetSurfaceId == RENDER_TARGET_HOST_FRAMEBUFFER) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+#ifdef PLATFORM_VITA
+        extern int g_vitaPortOverlayFullScreen;
+        if (!g_vitaPortOverlayFullScreen) {
+            int32_t sx, sy, ex, ey;
+            GLCommon_computeLetterbox(gl->gameW, gl->gameH, gl->windowW, gl->windowH, &sx, &sy, &ex, &ey);
+            glViewport(sx, gl->windowH - ey, ex - sx, ey - sy);
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(sx, gl->windowH - ey, ex - sx, ey - sy);
+        } else {
+            glViewport(0, 0, portW, portH);
+            glEnable(GL_SCISSOR_TEST);
+            glScissor(0, 0, portW, portH);
+        }
+#else
         glViewport(0, 0, portW, portH);
         glEnable(GL_SCISSOR_TEST);
         glScissor(0, 0, portW, portH);
+#endif
     } else {
         require(targetSurfaceId >= 0 && (uint32_t) targetSurfaceId < gl->surfaceCount);
         require(gl->surfaces[targetSurfaceId] != 0);

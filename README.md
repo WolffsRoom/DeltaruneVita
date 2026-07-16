@@ -10,7 +10,7 @@ O projeto executa os dados GameMaker da versão Android através de uma adaptaç
 
 ## Estado atual
 
-A versão atual é a **v0.31**. Os capítulos 1 a 5 inicializam e são jogáveis no hardware real.
+A versão atual é a **v0.32**. Os capítulos 1 a 5 inicializam e são jogáveis no hardware real.
 
 - seletor e troca de capítulos;
 - renderização VitaGL adaptada ao renderer legado do Butterscotch;

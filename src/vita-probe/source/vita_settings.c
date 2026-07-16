@@ -12,6 +12,7 @@
 int g_vitaDisplayOffsetX = 0;
 int g_vitaDisplayOffsetY = 0;
 int g_vitaDisplayZoom = 100;
+int g_vitaPortOverlayFullScreen = 0;
 
 static void applyDisplaySettings(const VitaSettings* s) {
     g_vitaDisplayOffsetX = s->displayOffsetX;
@@ -113,7 +114,9 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
         if (s->selected == 0) s->touchEnabled = !s->touchEnabled;
         else if (s->selected == 1) {
             s->ptbrEnabled = !s->ptbrEnabled;
-            s->restartOnClose = true;
+            s->restartOnClose = false;
+            s->open = false;
+            requestRestart = true;
         } else if (s->selected == 2) {
             s->widescreenEnabled = !s->widescreenEnabled;
         } else if (s->selected == 3) {
@@ -148,6 +151,7 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
     int oldFont = r->drawFont;
     if (r->drawFont < 0 || (uint32_t)r->drawFont >= r->dataWin->font.count) r->drawFont = 0;
 
+    g_vitaPortOverlayFullScreen = 1;
     r->vtable->beginGUI(r, 960, 544, 0, 0, 960, 544, RENDER_TARGET_HOST_FRAMEBUFFER);
     r->vtable->drawRectangle(r, 145, 55, 815, 489, 0x000000, 0.94f, false);
     r->vtable->drawRectangle(r, 145, 55, 815, 489, 0xFFFFFF, 1.0f, true);
@@ -173,6 +177,7 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
     }
     drawLabel(r, s->ptbrEnabled ? "X: alterar   O: voltar" : "X: change   O: back", 280, 450, 0x808080);
     r->vtable->endGUI(r);
+    g_vitaPortOverlayFullScreen = 0;
     r->drawFont = oldFont;
 }
 
@@ -199,13 +204,16 @@ void VitaSettings_drawTouchControls(VitaSettings* s, Renderer* r) {
     if (!s->touchEnabled || s->open || s->adjustMode) return;
     int oldFont = r->drawFont;
     if (r->drawFont < 0 || (uint32_t)r->drawFont >= r->dataWin->font.count) r->drawFont = 0;
+    g_vitaPortOverlayFullScreen = 1;
     r->vtable->beginGUI(r, 960, 544, 0, 0, 960, 544, RENDER_TARGET_HOST_FRAMEBUFFER);
     drawGameControl(r, "spr_joybase", 155, 420, 205, 0.48f);
-    drawGameControl(r, "spr_joystick", 155, 420, 125, 0.62f);
-    drawGameControl(r, "spr_control_zkey", 850, 385, 92, 0.58f);
-    drawGameControl(r, "spr_control_xkey", 755, 455, 92, 0.58f);
-    drawGameControl(r, "spr_control_ckey", 755, 340, 92, 0.58f);
+    drawGameControl(r, "spr_joystick", 155 + s->visualStickX * 38.0f, 420 + s->visualStickY * 38.0f,
+                    125 + (s->visualStickX != 0.0f || s->visualStickY != 0.0f ? 8 : 0), 0.68f);
+    drawGameControl(r, "spr_control_zkey", 850, 385 + (s->visualConfirm ? 4 : 0), s->visualConfirm ? 108 : 92, s->visualConfirm ? 0.92f : 0.58f);
+    drawGameControl(r, "spr_control_xkey", 755, 455 + (s->visualCancel ? 4 : 0), s->visualCancel ? 108 : 92, s->visualCancel ? 0.92f : 0.58f);
+    drawGameControl(r, "spr_control_ckey", 755, 340 + (s->visualMenu ? 4 : 0), s->visualMenu ? 108 : 92, s->visualMenu ? 0.92f : 0.58f);
     r->vtable->endGUI(r);
+    g_vitaPortOverlayFullScreen = 0;
     r->drawFont = oldFont;
 }
 
@@ -226,8 +234,25 @@ void VitaSettings_drawCalibration(VitaSettings* s, Renderer* r) {
     height = height * s->displayZoom / 100;
     int x = (960 - width) / 2 + s->displayOffsetX;
     int y = (544 - height) / 2 + s->displayOffsetY;
+    g_vitaPortOverlayFullScreen = 1;
     r->vtable->beginGUI(r, 960, 544, 0, 0, 960, 544, RENDER_TARGET_HOST_FRAMEBUFFER);
     r->vtable->drawRectangle(r, (float)x, (float)y, (float)(x + width - 1), (float)(y + height - 1), 0xFFFFFF, 1.0f, true);
     drawLabel(r, s->ptbrEnabled ? "ESQ: MOVER  DIR: ZOOM  X: SALVAR  O: RESET" : "LEFT: MOVE  RIGHT: ZOOM  X: SAVE  O: RESET", 125, 18, 0xFFFFFF);
     r->vtable->endGUI(r);
+    g_vitaPortOverlayFullScreen = 0;
+}
+
+void VitaSettings_setTouchVisuals(VitaSettings* s, float stickX, float stickY,
+                                  bool confirm, bool cancel, bool menu) {
+    if (stickX < -1.0f) stickX = -1.0f;
+    if (stickX > 1.0f) stickX = 1.0f;
+    if (stickY < -1.0f) stickY = -1.0f;
+    if (stickY > 1.0f) stickY = 1.0f;
+    s->visualStickX += (stickX - s->visualStickX) * 0.42f;
+    s->visualStickY += (stickY - s->visualStickY) * 0.42f;
+    if (s->visualStickX > -0.02f && s->visualStickX < 0.02f) s->visualStickX = 0.0f;
+    if (s->visualStickY > -0.02f && s->visualStickY < 0.02f) s->visualStickY = 0.0f;
+    s->visualConfirm = confirm;
+    s->visualCancel = cancel;
+    s->visualMenu = menu;
 }

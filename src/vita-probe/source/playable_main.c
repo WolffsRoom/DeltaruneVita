@@ -113,7 +113,7 @@ int main(void) {
     sceIoRemove(LOG_PATH);
     int active_chapter = consume_next_chapter();
 
-    log_line("Deltarune Butterscotch VitaRenderer runner 00.31");
+    log_line("Deltarune Butterscotch VitaRenderer runner 00.32");
     log_line("MAIN_STACK=4194304");
     char startup_line[96];
     snprintf(startup_line, sizeof(startup_line), "AUDIO=openal ENTRY=chapter%d CONTROLS=vita+touch", active_chapter);
@@ -253,6 +253,12 @@ int main(void) {
                 }
             }
         }
+        float visual_x = dx < -48 || dx > 48 ? (float)dx / 127.0f : (touch_left ? -1.0f : (touch_right ? 1.0f : 0.0f));
+        float visual_y = dy < -48 || dy > 48 ? (float)dy / 127.0f : (touch_up ? -1.0f : (touch_down ? 1.0f : 0.0f));
+        VitaSettings_setTouchVisuals(&settings, visual_x, visual_y,
+                                     (pad.buttons & SCE_CTRL_CROSS) || touch_confirm,
+                                     (pad.buttons & (SCE_CTRL_CIRCLE | SCE_CTRL_SQUARE)) || touch_cancel,
+                                     (pad.buttons & SCE_CTRL_TRIANGLE) || touch_menu);
 
         bool controls_enabled = !settings.open && !settings.adjustMode;
         set_key(runner->keyboard, VK_UP, controls_enabled && ((pad.buttons & SCE_CTRL_UP) || dy < -48 || touch_up), &previous[0]);

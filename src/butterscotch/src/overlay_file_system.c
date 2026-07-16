@@ -74,12 +74,6 @@ static char* resolveForRead(OverlayFileSystem* ofs, const char* relativePath) {
     if (strncmp(normalized, ofs->bundlePath, strlen(ofs->bundlePath)) == 0) return normalized;
     if (ofs->modPath != nullptr && strncmp(normalized, ofs->modPath, strlen(ofs->modPath)) == 0) return normalized;
 
-    char* saveFull = joinPath(ofs->savePath, normalized);
-    if (pathExists(saveFull)) {
-        free(normalized);
-        return saveFull;
-    }
-    free(saveFull);
     if (ofs->modPath != nullptr) {
         char* modFull = joinPath(ofs->modPath, normalized);
         if (pathExists(modFull)) {
@@ -88,6 +82,12 @@ static char* resolveForRead(OverlayFileSystem* ofs, const char* relativePath) {
         }
         free(modFull);
     }
+    char* saveFull = joinPath(ofs->savePath, normalized);
+    if (pathExists(saveFull)) {
+        free(normalized);
+        return saveFull;
+    }
+    free(saveFull);
     char* bundleFull = joinPath(ofs->bundlePath, normalized);
     free(normalized);
     return bundleFull;

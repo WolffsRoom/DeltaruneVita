@@ -2,6 +2,15 @@
 
 O desenvolvimento foi feito em ciclos curtos no hardware real. As versões antigas são preservadas como registro técnico e podem estar incompletas ou instáveis.
 
+## v0.32 — tela, idioma e touch
+
+- posição e zoom passam a afetar cenário, HUD, diálogos e bordas dinâmicas juntos;
+- Game Settings e controles touch permanecem fixos na tela física;
+- troca PT-BR/Original aplica imediatamente e reinicia o capítulo aberto;
+- arquivos do mod recebem prioridade sobre arquivos equivalentes do save;
+- analógico virtual acompanha o movimento com interpolação;
+- botões touch aumentam, acendem e afundam quando pressionados.
+
 ## v0.31 — jogável
 
 - ajuste manual de posição e zoom da imagem;

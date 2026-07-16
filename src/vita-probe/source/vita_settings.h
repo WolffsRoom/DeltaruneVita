@@ -19,6 +19,11 @@ typedef struct {
     int displayOffsetX;
     int displayOffsetY;
     int displayZoom;
+    float visualStickX;
+    float visualStickY;
+    bool visualConfirm;
+    bool visualCancel;
+    bool visualMenu;
     int selected;
     uint32_t previousButtons;
 } VitaSettings;
@@ -29,5 +34,7 @@ bool VitaSettings_handleInput(VitaSettings* settings, const SceCtrlData* pad, Au
 void VitaSettings_draw(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_drawTouchControls(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_drawCalibration(VitaSettings* settings, Renderer* renderer);
+void VitaSettings_setTouchVisuals(VitaSettings* settings, float stickX, float stickY,
+                                  bool confirm, bool cancel, bool menu);
 
 #endif

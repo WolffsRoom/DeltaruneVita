@@ -1,9 +1,8 @@
 <p align="center">
-  <img src="Assets/LogoDeltaruneVita.png" alt="Logo Deltarune PSVita Edition" width="500">
+  <a href="#">
+    <img src="Assets/LogoDeltaruneVita.png" alt="Logo Deltarune PSVita Edition" width="500" style="background: transparent; -webkit-filter: drop-shadow(5px 5px 5px #222); filter: drop-shadow(5px 5px 5px #222);">
+  </a>
 </p>
-
----
-
 <p align="center">
   <img src="Assets/DeltaruneVita.png" alt="Deltarune Chapters 1–5 on PS Vita" width="900">
 </p>
@@ -14,8 +13,7 @@ A partir da v0.36, o projeto passou a executar diretamente os dados GameMaker da
 
 > Este repositório e suas releases não incluem arquivos comerciais de DELTARUNE. Compre e obtenha o jogo oficial em [deltarune.com](https://deltarune.com/).
 
-
-## Release status
+## Project Status
 
 <p align="center">
   <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-80%25-2ea44f?style=for-the-badge">
@@ -24,47 +22,17 @@ A partir da v0.36, o projeto passou a executar diretamente os dados GameMaker da
   &nbsp;
   <img alt="State" src="https://img.shields.io/badge/State-Playable-brightgreen?style=for-the-badge">
 </p>
-
-A versão atual é a **v0.49**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora ainda possam ocorrer bugs, travamentos e quedas de desempenho.
+<div align="center">
+  <img src="https://img.shields.io/badge/Please%2C%20support%20this%20and%20others%20projects-black?style=for-the-badge&labelColor=black&color=yellow&logoWidth=0" alt="Please, support this and others projects" style="font-family: 'Press Start 2P', monospace; height: 35px;">
+  <br><br>
+  <a href="https://www.buymeacoffee.com/5rsrt7j4z8f" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important; width: 217px !important;">
+  </a>
+</div>
 
 ---
 
-## <img src="https://i.redd.it/pzi6lj5np5je1.gif" height="30" align="absmiddle"> O que já funciona
-
-- seletor e troca dos cinco capítulos;
-- retorno ao Chapter Select pelo menu do jogo;
-- leitura direta dos arquivos Windows/Steam;
-- renderer VitaGL adaptado ao backend legado do Butterscotch;
-- controles físicos do Vita;
-- controles touch opcionais;
-- menu Game Settings em inglês e português;
-- volumes separados para música e efeitos;
-- posição e zoom da tela configuráveis;
-- bordas da versão de console selecionadas dinamicamente pelo capítulo e cenário;
-- carregamento sob demanda e cache de texturas para os capítulos maiores;
-- saves, mods por capítulo e preparação de PT-BR;
-- logs persistentes para diagnóstico.
----
-
-## <img src="https://64.media.tumblr.com/206eb01413bd79835a78db784da8bb92/f7b0141948b8aff0-22/s1280x1920/d4ab67a73fb9d77c5feca21425075717411ac77d.gif" height="30" align="absmiddle"> Mudança de direção
-
-O trabalho começou estudando ports Android e o carregamento por YoYo Loader/SoLoader. Essa etapa permitiu entender a divisão dos capítulos, os arquivos externos, a inicialização do runner e os controles touch.
-
-Depois dos primeiros testes com Butterscotch e VitaGL, o port passou a carregar os dados oficiais da versão Windows. Isso remove a dependência do APK e evita manter os problemas específicos do runner Android.
-
-O fluxo atual é:
-
-```text
-Arquivos oficiais PC/Steam
-        ↓
-Preparação dos dados por capítulo
-        ↓
-Butterscotch adaptado ao Vita
-        ↓
-VitaGL + OpenAL + controles Vita
-```
-
-## Guia de instalação
+## Installation Guide
 
 To install the game correctly, follow these steps:
 
@@ -81,6 +49,8 @@ To install the game correctly, follow these steps:
 - **Optional:** Install [PSVshell](https://github.com/Electry/PSVshell/releases) to overclock your device.
 - Install `libshacccg.suprx`, if it is not already installed, by following [this guide](https://samilops2.gitbook.io/vita-troubleshooting-guide/shader-compiler/extract-libshacccg.suprx).
 - Legally obtain o jogo oficial em [deltarune.com](https://deltarune.com/).
+
+---
 
 ### HOW TO APPLY THE PATCH:
 
@@ -141,6 +111,8 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
   </tbody>
 </table>
 
+---
+
 ## Screenshots
 
 <p align="center">
@@ -166,6 +138,43 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
   <br>
   <sup><em>Clique na imagem para assistir ao vídeo completo no YouTube</em></sup>
 </div>
+
+
+## <img src="https://i.redd.it/pzi6lj5np5je1.gif" height="30" align="absmiddle"> O que já funciona
+
+- seletor e troca dos cinco capítulos;
+- retorno ao Chapter Select pelo menu do jogo;
+- leitura direta dos arquivos Windows/Steam;
+- renderer VitaGL adaptado ao backend legado do Butterscotch;
+- controles físicos do Vita;
+- controles touch opcionais;
+- menu Game Settings em inglês e português;
+- volumes separados para música e efeitos;
+- posição e zoom da tela configuráveis;
+- bordas da versão de console selecionadas dinamicamente pelo capítulo e cenário;
+- carregamento sob demanda e cache de texturas para os capítulos maiores;
+- saves, mods por capítulo e preparação de PT-BR;
+- logs persistentes para diagnóstico.
+
+---
+
+## <img src="https://64.media.tumblr.com/206eb01413bd79835a78db784da8bb92/f7b0141948b8aff0-22/s1280x1920/d4ab67a73fb9d77c5feca21425075717411ac77d.gif" height="30" align="absmiddle"> Mudança de direção
+
+O trabalho começou estudando ports Android e o carregamento por YoYo Loader/SoLoader. Essa etapa permitiu entender a divisão dos capítulos, os arquivos externos, a inicialização do runner e os controles touch.
+
+Depois dos primeiros testes com Butterscotch e VitaGL, o port passou a carregar os dados oficiais da versão Windows. Isso remove a dependência do APK e evita manter os problemas específicos do runner Android.
+
+O fluxo atual é:
+
+```text
+Arquivos oficiais PC/Steam
+        ↓
+Preparação dos dados por capítulo
+        ↓
+Butterscotch adaptado ao Vita
+        ↓
+VitaGL + OpenAL + controles Vita
+```
 
 ---
 

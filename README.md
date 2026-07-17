@@ -1,5 +1,5 @@
 
-  <img src="Assets/LogoDeltaruneVita" alt="Logo Deltarune PSVita Edition" width="900">
+  <img src="Assets/LogoDeltaruneVita.png" alt="Logo Deltarune PSVita Edition" width="900">
 
 <p align="center">
   <img src="Assets/DeltaruneVita.png" alt="Deltarune Chapters 1–5 on PS Vita" width="900">

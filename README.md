@@ -85,6 +85,7 @@ To install the game correctly, follow these steps:
 ### HOW TO APPLY THE PATCH:
 
 O patcher v0.49 prepara os dados necessários a partir de uma instalação oficial do jogo. A versão Steam compatível é **v0.0.247 Patch**.
+_A seleção de idioma do patcher altera somente a interface do programa e não o idioma do jogo._
 
 1. Comprar e instalar [DELTARUNE para PC](https://deltarune.com/) pela Steam.
 2. Confirmar que a instalação está na versão **v0.0.247 Patch** e sem arquivos modificados.
@@ -96,7 +97,7 @@ O patcher v0.49 prepara os dados necessários a partir de uma instalação ofici
 
 O resultado final deve conter `ux0:data/deltarune/deltarunevita/...`. 
 
-A seleção de idioma do patcher altera somente a interface do programa e não o idioma do jogo.
+As bordas devem ser adicionadas manualmente. Basta baixar [aqui](https://www.spriters-resource.com/pc_computer/deltarune/asset/115841/) e colocá-las na pasta 'borders' in 'ux0:data/deltarune/deltarunevita'.
 
 Em caso de erro, abra uma ocorrência em [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues) e anexe o arquivo:
 

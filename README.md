@@ -97,7 +97,7 @@ _A seleção de idioma do patcher altera somente a interface do programa e não 
 
 O resultado final deve conter `ux0:data/deltarune/deltarunevita/...`. 
 
-As bordas devem ser adicionadas manualmente. Basta baixar [aqui](https://www.spriters-resource.com/pc_computer/deltarune/asset/115841/) e colocá-las na pasta 'borders' in 'ux0:data/deltarune/deltarunevita'.
+As bordas devem ser adicionadas manualmente. Basta baixar [aqui](https://www.spriters-resource.com/pc_computer/deltarune/asset/115841/) e colocá-las na pasta `borders` in `ux0:data/deltarune/deltarunevita\...`.
 
 Em caso de erro, abra uma ocorrência em [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues) e anexe o arquivo:
 

@@ -25,7 +25,7 @@ A partir da v0.36, o projeto passou a executar diretamente os dados GameMaker da
   <img alt="State" src="https://img.shields.io/badge/State-Playable-brightgreen?style=for-the-badge">
 </p>
 
-A versão atual é a **v0.40**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora algumas cenas e efeitos ainda estejam em validação.
+A versão atual é a **v0.43**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora algumas cenas, efeitos e a sincronização de áudio ainda estejam em validação.
 
 ---
 
@@ -40,7 +40,7 @@ A versão atual é a **v0.40**. Os cinco capítulos inicializam e são jogáveis
 - menu Game Settings em inglês e português;
 - volumes separados para música e efeitos;
 - posição e zoom da tela configuráveis;
-- bordas da versão de console selecionadas por capítulo;
+- bordas da versão de console selecionadas dinamicamente pelo capítulo e cenário;
 - carregamento sob demanda e cache de texturas para os capítulos maiores;
 - saves, mods por capítulo e preparação de PT-BR;
 - logs persistentes para diagnóstico.
@@ -140,9 +140,17 @@ ux0:data/deltarune/deltarunevita/borders/
 ## Screenshots
 
 <p align="center">
-  <img src="Assets/Screenshots/2026-07-16-021434-989045.png" alt="Deltarune Chapter 2 on PS Vita" width="32%">
-  <img src="Assets/Screenshots/2026-07-16-024007-169289.png" alt="Deltarune character creation on PS Vita" width="32%">
-  <img src="Assets/Screenshots/2026-07-16-030301-317266.png" alt="Deltarune chapter selector on PS Vita" width="32%">
+  <img src="Assets/Screenshots/2026-07-17-003602-288879.png" alt="Deltarune Vita" width="32%">
+  <img src="Assets/Screenshots/2026-07-17-003606-442387.png" alt="Deltarune Vita chapter" width="32%">
+  <img src="Assets/Screenshots/2026-07-17-003701-130278.png" alt="Deltarune running on PS Vita" width="32%">
+</p>
+<p align="center">
+  <img src="Assets/Screenshots/2026-07-17-003704-049821.png" alt="Deltarune gameplay on PS Vita" width="32%">
+  <img src="Assets/Screenshots/2026-07-17-003816-839271.png" alt="Deltarune scene on PS Vita" width="32%">
+  <img src="Assets/Screenshots/2026-07-17-003828-635093.png" alt="Deltarune interface on PS Vita" width="32%">
+</p>
+<p align="center">
+  <img src="Assets/Screenshots/2026-07-17-004312-951699.png" alt="Deltarune Chapter 5 on PS Vita" width="32%">
 </p>
 
 ## Official Vídeo 
@@ -202,6 +210,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
 | v0.38 | Retorno à biblioteca VitaGL estável e diagnóstico do primeiro frame. |
 | v0.39 | Correção do crash causado pelo overlay dos controles touch. |
 | v0.40 | Música externa, novo Game Settings, Chapter Select, cache de texturas e bordas de console. |
+| v0.41 | Streaming de músicas, bordas ligadas ao cenário e registros de quedas de desempenho. |
+| v0.42 | Correção dos caminhos de áudio e redução do recarregamento de texturas no Chapter 2. |
+| v0.43 | Acesso direto à biblioteca de músicas no Vita e correção da faixa sincronizada do logo do Chapter 5. |
 
 As versões anteriores documentam a fase de pesquisa com Android, os probes gráficos e a evolução inicial do runner.
 

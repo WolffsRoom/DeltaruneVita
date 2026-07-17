@@ -15,6 +15,22 @@
 #include <string.h>
 #include "stb_ds.h"
 
+#ifdef PLATFORM_VITA
+#include <psp2/io/fcntl.h>
+#include <psp2/io/stat.h>
+static void vitaAudioLog(const char* phase, const char* requested, const char* resolved) {
+    char line[640];
+    int length = snprintf(line, sizeof(line), "AUDIO_STREAM=%s requested=%s resolved=%s\n",
+                          phase, requested != nullptr ? requested : "-", resolved != nullptr ? resolved : "-");
+    SceUID fd = sceIoOpen("ux0:data/deltarune/deltarunevita/butterscotch-probe.log",
+                          SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
+    if (fd >= 0) {
+        sceIoWrite(fd, line, (SceSize) length);
+        sceIoClose(fd);
+    }
+}
+#endif
+
 // ===[ Helpers ]===
 
 static bool alSourceIsPlaying(ALuint source) {
@@ -141,13 +157,52 @@ static SoundInstance* findInstanceById(AlAudioSystem* ma, int32_t instanceId) {
     return inst;
 }
 
+static char* resolveSharedMusicPath(FileSystem* fs, const char* filename) {
+    const char* relative = filename;
+    // GML may pass a path already expanded by the overlay (including ux0: and
+    // a mod directory). The shared music library is flat, so recover the final
+    // filename before trying deltarunevita/music.
+    const char* lastSlash = strrchr(relative, '/');
+    const char* lastBackslash = strrchr(relative, '\\');
+    if (lastBackslash != nullptr && (lastSlash == nullptr || lastBackslash > lastSlash)) lastSlash = lastBackslash;
+    if (lastSlash != nullptr && (strstr(relative, "ux0:") == relative || strstr(relative, "mods/") != nullptr)) {
+        relative = lastSlash + 1;
+    }
+    while (strncmp(relative, "../", 3) == 0 || strncmp(relative, "./", 2) == 0) {
+        relative += relative[1] == '.' ? 3 : 2;
+    }
+    if (strncmp(relative, "mus/", 4) == 0) relative += 4;
+    else if (strncmp(relative, "music/", 6) == 0) relative += 6;
+
+#ifdef PLATFORM_VITA
+    // Avoid routing an already absolute Vita path back through OverlayFileSystem.
+    // This is also the reliable fallback used by Chapter 5's synchronized logo.
+    char vitaPath[640];
+    SceIoStat st;
+    snprintf(vitaPath, sizeof(vitaPath), "ux0:data/deltarune/deltarunevita/mods/PTBR/music/%s", relative);
+    if (sceIoGetstat(vitaPath, &st) >= 0) return safeStrdup(vitaPath);
+    snprintf(vitaPath, sizeof(vitaPath), "ux0:data/deltarune/deltarunevita/music/%s", relative);
+    if (sceIoGetstat(vitaPath, &st) >= 0) return safeStrdup(vitaPath);
+#endif
+
+    char shared[560];
+    snprintf(shared, sizeof(shared), "../music/%s", relative);
+    char* resolved = fs->vtable->resolvePath(fs, shared);
+    if (resolved != nullptr && fs->vtable->fileExists(fs, resolved)) return resolved;
+    free(resolved);
+    return nullptr;
+}
+
 // Helper: resolve external audio file path from Sound entry
 static char* resolveExternalPath(AlAudioSystem* ma, Sound* sound) {
     const char* file = sound->file;
     if (file == nullptr || file[0] == '\0') return nullptr;
 
-    // If the filename has no extension, append ".ogg"
-    bool hasExtension = (strchr(file, '.') != nullptr);
+    // Check only the basename. Paths such as "../mus/field_of_hopes" contain
+    // dots in "../" but still need the .ogg suffix.
+    const char* basename = strrchr(file, '/');
+    basename = basename != nullptr ? basename + 1 : file;
+    bool hasExtension = (strchr(basename, '.') != nullptr);
 
     char filename[512];
     if (hasExtension) {
@@ -159,9 +214,7 @@ static char* resolveExternalPath(AlAudioSystem* ma, Sound* sound) {
     char* resolved = ma->fileSystem->vtable->resolvePath(ma->fileSystem, filename);
     if (resolved != nullptr && ma->fileSystem->vtable->fileExists(ma->fileSystem, resolved)) return resolved;
     free(resolved);
-    char shared[560];
-    snprintf(shared, sizeof(shared), "../music/%s", filename);
-    return ma->fileSystem->vtable->resolvePath(ma->fileSystem, shared);
+    return resolveSharedMusicPath(ma->fileSystem, filename);
 }
 
 static float instanceCategoryGain(AlAudioSystem* ma, SoundInstance* inst) {
@@ -410,53 +463,84 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
                 fprintf(stderr, "Audio: Missing AUDO data for sound '%s'\n", sound->name);
                 return -1;
             }
-            WAVFile wav = WAV_ParseFileData(audioData);
-
-            uint32_t format;
-            if (wav.header.number_of_channels == 1)
-            {
-                if (wav.header.bits_per_sample == 8)
-                    format = AL_FORMAT_MONO8;
-                else 
-                    format = AL_FORMAT_MONO16;
-            }
-            else {
-                if (wav.header.bits_per_sample == 8)
-                    format = AL_FORMAT_STEREO8;
+            if (entry->dataSize >= 4 && memcmp(audioData, "OggS", 4) == 0) {
+                int channels = 0, sampleRate = 0;
+                short* pcm = nullptr;
+                int samples = stb_vorbis_decode_memory(audioData, (int)entry->dataSize, &channels, &sampleRate, &pcm);
+                if (0 >= samples || pcm == nullptr) {
+                    free(transientData);
+                    fprintf(stderr, "Audio: Failed embedded OGG decode for sound '%s'\n", sound->name);
+                    return -1;
+                }
+                alBufferData(slot->alBuffer, channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16,
+                             pcm, samples * channels * (int)sizeof(short), sampleRate);
+                free(pcm);
+            } else {
+                WAVFile wav = WAV_ParseFileData(audioData);
+                uint32_t format;
+                if (wav.header.number_of_channels == 1)
+                    format = wav.header.bits_per_sample == 8 ? AL_FORMAT_MONO8 : AL_FORMAT_MONO16;
                 else
-                    format = AL_FORMAT_STEREO16;
+                    format = wav.header.bits_per_sample == 8 ? AL_FORMAT_STEREO8 : AL_FORMAT_STEREO16;
+                alBufferData(slot->alBuffer, format, wav.data, wav.data_length, wav.header.sample_rate);
+                if (wav.data != nullptr) free(wav.data);
             }
-            alBufferData(
-                slot->alBuffer, 
-                format, 
-                wav.data, 
-                wav.data_length, 
-                wav.header.sample_rate
-            );
             alSourcei(slot->alSource, AL_BUFFER, slot->alBuffer);
-            if(wav.data != NULL) free(wav.data);
             free(transientData);
         } else {
-            // External audio: load from file
+            // External OGG music is streamed on Vita. Decoding an entire track on the
+            // main thread caused long stalls at room transitions and consumed a large
+            // temporary PCM buffer.
             char* path = resolveExternalPath(ma, sound);
             if (path == nullptr) {
+#ifdef PLATFORM_VITA
+                vitaAudioLog("external_resolve_failed", sound->file, nullptr);
+#endif
                 fprintf(stderr, "Audio: Could not resolve path for sound '%s'\n", sound->name);
                 return -1;
             }
-
-            int channels;
-            int sample_rate;
-            short* data = NULL;
-            int len = stb_vorbis_decode_filename(path, &channels, &sample_rate, &data);
-            alBufferData(
-                slot->alBuffer, 
-                (channels == 2) ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16, 
-                (void*)data, 
-                len*channels*sizeof(uint16_t), 
-                sample_rate
-            );
-            alSourcei(slot->alSource, AL_BUFFER, slot->alBuffer);
-            if(data != NULL) free(data);
+#ifdef PLATFORM_VITA
+            vitaAudioLog("external_resolved", sound->file, path);
+#endif
+            int err = 0;
+            stb_vorbis* v = stb_vorbis_open_filename(path, &err, nullptr);
+            if (v == nullptr) {
+#ifdef PLATFORM_VITA
+                vitaAudioLog("external_decode_failed", sound->file, path);
+#endif
+                alDeleteBuffers(1, &slot->alBuffer);
+                alDeleteSources(1, &slot->alSource);
+                free(path);
+                return -1;
+            }
+            stb_vorbis_info info = stb_vorbis_get_info(v);
+            alDeleteBuffers(1, &slot->alBuffer);
+            slot->streaming = true;
+            slot->loop = loop;
+            slot->vorbis = v;
+            slot->streamChannels = info.channels;
+            slot->streamSampleRate = (int)info.sample_rate;
+            slot->streamFormat = info.channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
+            slot->streamLengthSeconds = stb_vorbis_stream_length_in_seconds(v);
+            slot->decodeScratch = (int16_t*)safeMalloc(AL_STREAM_BUFFER_SAMPLES * info.channels * sizeof(int16_t));
+            alGenBuffers(AL_STREAM_BUFFER_COUNT, slot->streamBuffers);
+            int primed = 0;
+            for (int i = 0; i < AL_STREAM_BUFFER_COUNT; ++i) {
+                if (!streamFillBuffer(slot, slot->streamBuffers[i])) break;
+                alSourceQueueBuffers(slot->alSource, 1, &slot->streamBuffers[i]);
+                primed++;
+            }
+            if (primed == 0) {
+                alDeleteSources(1, &slot->alSource);
+                alDeleteBuffers(AL_STREAM_BUFFER_COUNT, slot->streamBuffers);
+                stb_vorbis_close(v);
+                free(slot->decodeScratch);
+                slot->streaming = false;
+                slot->vorbis = nullptr;
+                slot->decodeScratch = nullptr;
+                free(path);
+                return -1;
+            }
             free(path);
         }
     }
@@ -471,7 +555,7 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
     }
     // AL_LOOPING on a streaming source only loops the currently-playing buffer, not the whole queue,
     // so streaming looping is handled by streamFillBuffer calling stb_vorbis_seek_start when the decoder runs out.
-    if (!isStream)
+    if (!slot->streaming)
         alSourcei(slot->alSource, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
 
     // Set up instance tracking
@@ -489,6 +573,13 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
     ma->nextInstanceCounter++;
 
     alSourcePlay(slot->alSource);
+
+#ifdef PLATFORM_VITA
+    if (slot->streaming) {
+        const char* requested = isStream ? streamPath : (sound != nullptr ? sound->file : nullptr);
+        vitaAudioLog("play_started", requested, slot->music ? "music" : "sfx");
+    }
+#endif
 
     return slot->instanceId;
 }
@@ -811,11 +902,35 @@ static float maGetSoundLength(AudioSystem* audio, int32_t soundOrInstance) {
     bool inAudo = !isRegular || isEmbedded || isCompressed;
     if (inAudo) {
         if (0 > sound->audioFile || (uint32_t) sound->audioFile >= ma->base.audioGroups[sound->audioGroup]->audo.count) return 0.0f;
-        AudioEntry* entry = &ma->base.audioGroups[sound->audioGroup]->audo.entries[sound->audioFile];
-        WAVFile wav = WAV_ParseFileData(entry->data);
+        DataWin* audioDw = ma->base.audioGroups[sound->audioGroup];
+        AudioEntry* entry = &audioDw->audo.entries[sound->audioFile];
+        uint8_t* transientData = nullptr;
+        const uint8_t* audioData = entry->data;
+        if (audioData == nullptr && entry->dataSize > 0 && audioDw->lazyLoadFile != nullptr) {
+            transientData = (uint8_t*)safeMalloc(entry->dataSize);
+            long previous = ftell(audioDw->lazyLoadFile);
+            fseek(audioDw->lazyLoadFile, (long)entry->dataOffset, SEEK_SET);
+            size_t got = fread(transientData, 1, entry->dataSize, audioDw->lazyLoadFile);
+            fseek(audioDw->lazyLoadFile, previous, SEEK_SET);
+            if (got != entry->dataSize) { free(transientData); return 0.0f; }
+            audioData = transientData;
+        }
+        if (audioData == nullptr) return 0.0f;
+
         float seconds = 0.0f;
-        if (wav.header.byte_rate > 0) seconds = (float) wav.header.data_size / (float) wav.header.byte_rate;
-        if (wav.data != nullptr) free(wav.data);
+        if (entry->dataSize >= 4 && memcmp(audioData, "OggS", 4) == 0) {
+            int err = 0;
+            stb_vorbis* v = stb_vorbis_open_memory(audioData, (int)entry->dataSize, &err, nullptr);
+            if (v != nullptr) {
+                seconds = stb_vorbis_stream_length_in_seconds(v);
+                stb_vorbis_close(v);
+            }
+        } else {
+            WAVFile wav = WAV_ParseFileData(audioData);
+            if (wav.header.byte_rate > 0) seconds = (float)wav.header.data_size / (float)wav.header.byte_rate;
+            if (wav.data != nullptr) free(wav.data);
+        }
+        free(transientData);
         return seconds;
     }
 
@@ -893,13 +1008,14 @@ static int32_t maCreateStream(AudioSystem* audio, const char* filename) {
     }
 
     char* resolved = ma->fileSystem->vtable->resolvePath(ma->fileSystem, filename);
-    if (resolved != nullptr && !ma->fileSystem->vtable->fileExists(ma->fileSystem, resolved)) {
+    if (resolved == nullptr || !ma->fileSystem->vtable->fileExists(ma->fileSystem, resolved)) {
         free(resolved);
-        char shared[560];
-        snprintf(shared, sizeof(shared), "../music/%s", filename);
-        resolved = ma->fileSystem->vtable->resolvePath(ma->fileSystem, shared);
+        resolved = resolveSharedMusicPath(ma->fileSystem, filename);
     }
     if (resolved == nullptr) {
+#ifdef PLATFORM_VITA
+        vitaAudioLog("resolve_failed", filename, nullptr);
+#endif
         fprintf(stderr, "Audio: Could not resolve path for stream '%s'\n", filename);
         return -1;
     }
@@ -908,6 +1024,9 @@ static int32_t maCreateStream(AudioSystem* audio, const char* filename) {
     ma->streams[freeSlot].filePath = resolved;
 
     int32_t streamIndex = AUDIO_STREAM_INDEX_BASE + freeSlot;
+#ifdef PLATFORM_VITA
+    vitaAudioLog("resolved", filename, resolved);
+#endif
     fprintf(stderr, "Audio: Created stream %d for '%s' -> '%s'\n", streamIndex, filename, resolved);
     return streamIndex;
 }

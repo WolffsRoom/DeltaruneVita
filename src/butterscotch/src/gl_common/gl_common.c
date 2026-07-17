@@ -16,6 +16,7 @@
 extern int g_vitaDisplayOffsetX;
 extern int g_vitaDisplayOffsetY;
 extern int g_vitaDisplayZoom;
+extern void VitaBorders_draw(int windowW, int windowH);
 #endif
 
 void GLCommon_computeLetterbox(int32_t gameW, int32_t gameH, int32_t windowW, int32_t windowH, int32_t* outStartX, int32_t* outStartY, int32_t* outEndX, int32_t* outEndY) {
@@ -50,9 +51,18 @@ void GLCommon_beginLetterboxBlit(GLuint fbo, GLuint hostFbo) {
 
 void GLCommon_endLetterboxBlit(int32_t fboWidth, int32_t fboHeight, int32_t gameW, int32_t gameH, int32_t windowW, int32_t windowH, GLuint hostFbo) {
     int32_t sx, sy, ex, ey;
+#ifdef PLATFORM_VITA
+    GLint sourceReadFbo = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &sourceReadFbo);
+#endif
     glClearColor(0.0, 0.0, 0.0, 1.0); //please remove if it breaks something like borders, it was just my quick-fix for the color to not be randomly changed
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hostFbo);
     glClear(GL_COLOR_BUFFER_BIT);
+#ifdef PLATFORM_VITA
+    VitaBorders_draw(windowW, windowH);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)sourceReadFbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hostFbo);
+#endif
     GLCommon_computeLetterbox(gameW, gameH, windowW, windowH, &sx, &sy, &ex, &ey);
     glBlitFramebuffer(0, 0, fboWidth, fboHeight, sx, ey, ex, sy, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     glBindFramebuffer(GL_FRAMEBUFFER, hostFbo);

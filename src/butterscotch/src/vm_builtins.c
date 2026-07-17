@@ -9835,10 +9835,47 @@ static RValue builtin_draw_set_alpha(VMContext* ctx, RValue* args, MAYBE_UNUSED 
     return RValue_makeUndefined();
 }
 
-static RValue builtin_draw_set_font(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
+// Avoid a double-word VFP load from the builtin argument stack on Vita. Some
+// Windows data.win call sites pass font asset IDs as REAL values and the VM's
+// builtin stack can be only word-aligned at this point.
+static int32_t fontIndexFromRValue(const RValue* value) {
+    if (value == nullptr) return -1;
+    switch (value->type) {
+        case RVALUE_INT32:
+        case RVALUE_BOOL:
+        case RVALUE_ASSETREF:
+            return value->int32;
+#ifndef NO_RVALUE_INT64
+        case RVALUE_INT64:
+            return (int32_t)value->int64;
+#endif
+        case RVALUE_STRING:
+            return value->string != nullptr ? (int32_t)strtol(value->string, nullptr, 10) : -1;
+        case RVALUE_REAL: {
+            uint64_t bits = 0;
+            memcpy(&bits, &value->real, sizeof(bits));
+            bool negative = (bits >> 63) != 0;
+            uint32_t exponent = (uint32_t)((bits >> 52) & 0x7FFu);
+            uint64_t fraction = bits & 0xFFFFFFFFFFFFFu;
+            if (exponent == 0 || exponent == 0x7FFu) return -1;
+            int32_t shift = (int32_t)exponent - 1023;
+            if (shift < 0) return 0;
+            if (shift > 30) return -1;
+            uint64_t mantissa = (1ULL << 52) | fraction;
+            uint64_t magnitude = mantissa >> (52 - shift);
+            return negative ? -(int32_t)magnitude : (int32_t)magnitude;
+        }
+        default:
+            return -1;
+    }
+}
+
+static RValue builtin_draw_set_font(VMContext* ctx, RValue* args, int32_t argCount) {
     Runner* runner = ctx->runner;
-    if (runner->renderer != nullptr) {
-        runner->renderer->drawFont = RValue_toInt32(args[0]);
+    if (runner->renderer != nullptr && argCount > 0 && args != nullptr) {
+        int32_t font = fontIndexFromRValue(&args[0]);
+        if (font < -1 || (font >= 0 && (uint32_t)font >= runner->dataWin->font.count)) font = -1;
+        runner->renderer->drawFont = font;
     }
     return RValue_makeUndefined();
 }
@@ -9859,18 +9896,6 @@ static RValue builtin_draw_set_valign(VMContext* ctx, RValue* args, MAYBE_UNUSED
     return RValue_makeUndefined();
 }
 
-#ifdef PLATFORM_VITA
-static bool vitaIsVersionLabel(const char* str) {
-    return str != nullptr && strstr(str, "DELTARUNE v") != nullptr;
-}
-
-static void vitaDrawPortCredit(Runner* runner, const char* str, float x, float y, float xscale, float yscale, float angle) {
-    if (vitaIsVersionLabel(str)) {
-        runner->renderer->vtable->drawText(runner->renderer, " - Port to PSVita by Wolff", x + 150.0f * xscale, y, xscale, yscale, angle, -1.0f);
-    }
-}
-#endif
-
 static RValue builtin_draw_text(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
     if (runner->renderer == nullptr) return RValue_makeUndefined();
@@ -9879,9 +9904,6 @@ static RValue builtin_draw_text(VMContext* ctx, RValue* args, MAYBE_UNUSED int32
     float y = (float) RValue_toReal(args[1]);
     char* str = RValue_toString(args[2]);
 
-#ifdef PLATFORM_VITA
-    vitaDrawPortCredit(runner, str, x, y, 1.0f, 1.0f, 0.0f);
-#endif
     PreprocessedText processedText = TextUtils_preprocessGmlTextIfNeeded(runner, str);
     runner->renderer->vtable->drawText(runner->renderer, processedText.text, x, y, 1.0f, 1.0f, 0.0f, -1.0f);
     PreprocessedText_free(processedText);
@@ -9926,9 +9948,6 @@ static void drawTextExtCommonColor(Runner* runner, const char* str, float x, flo
     PreprocessedText_free(processedText);
 }
 static void drawTextExtCommon(Runner* runner, const char* str, float x, float y, float xscale, float yscale, float angle, int32_t separation, int32_t width) {
-#ifdef PLATFORM_VITA
-    vitaDrawPortCredit(runner, str, x, y, xscale, yscale, angle);
-#endif
     uint32_t fill = runner->renderer->drawColor;
     drawTextExtCommonColor(runner, str, x, y, xscale, yscale, angle, separation, width, fill, fill, fill, fill);
 }
@@ -9980,9 +9999,6 @@ static RValue builtin_draw_text_color(VMContext* ctx, RValue* args, MAYBE_UNUSED
     int32_t c4 = RValue_toInt32(args[6]);
     float alpha = (float) RValue_toReal(args[7]);
 
-#ifdef PLATFORM_VITA
-    vitaDrawPortCredit(runner, str, x, y, 1.0f, 1.0f, 0.0f);
-#endif
     PreprocessedText processedText = TextUtils_preprocessGmlTextIfNeeded(runner, str);
     runner->renderer->vtable->drawTextColor(runner->renderer, processedText.text, x, y, 1.0f, 1.0f, 0.0f, c1, c2, c3, c4, alpha, -1.0f);
     PreprocessedText_free(processedText);
@@ -10006,9 +10022,6 @@ static RValue builtin_draw_text_color_transformed(VMContext* ctx, RValue* args, 
     int32_t c4 = RValue_toInt32(args[9]);
     float alpha = (float) RValue_toReal(args[10]);
 
-#ifdef PLATFORM_VITA
-    vitaDrawPortCredit(runner, str, x, y, xscale, yscale, angle);
-#endif
     PreprocessedText processedText = TextUtils_preprocessGmlTextIfNeeded(runner, str);
     runner->renderer->vtable->drawTextColor(runner->renderer, processedText.text, x, y, xscale, yscale, angle, c1, c2, c3, c4, alpha, -1.0f);
     PreprocessedText_free(processedText);
@@ -10018,9 +10031,6 @@ static RValue builtin_draw_text_color_transformed(VMContext* ctx, RValue* args, 
 
 // Drives draw_text_color_ext / draw_text_color_ext_transformed by wrapping the (preprocessed) text and forwarding to drawTextColor.
 static void drawTextColorExtCommon(Runner* runner, const char* str, float x, float y, float xscale, float yscale, float angle, int32_t separation, int32_t width, int32_t c1, int32_t c2, int32_t c3, int32_t c4, float alpha) {
-#ifdef PLATFORM_VITA
-    vitaDrawPortCredit(runner, str, x, y, xscale, yscale, angle);
-#endif
     int32_t fontIndex = runner->renderer->drawFont;
     if (0 > fontIndex || runner->dataWin->font.count <= (uint32_t) fontIndex) return;
     Font* font = &runner->dataWin->font.fonts[fontIndex];

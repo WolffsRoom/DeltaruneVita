@@ -22,9 +22,10 @@
 #include "runner_keyboard.h"
 #include "runner_mouse.h"
 #include "vita_settings.h"
+#include "vita_borders.h"
 #include "vm.h"
 
-#define DATA_ROOT "ux0:data/deltarune/butterscotch/"
+#define DATA_ROOT "ux0:data/deltarune/deltarunevita/"
 #define SAVE_PATH "ux0:data/deltarune/save/"
 #define LOG_PATH DATA_ROOT "butterscotch-probe.log"
 #define NEXT_CHAPTER_PATH DATA_ROOT "next-chapter.txt"
@@ -114,7 +115,7 @@ int main(void) {
     sceIoRemove(LOG_PATH);
     int active_chapter = consume_next_chapter();
 
-    log_line("Deltarune Butterscotch VitaRenderer runner 00.35");
+    log_line("Deltarune Windows data + Butterscotch VitaRenderer runner 00.47");
     log_line("MAIN_STACK=4194304");
     char startup_line[96];
     snprintf(startup_line, sizeof(startup_line), "AUDIO=openal ENTRY=chapter%d CONTROLS=vita+touch", active_chapter);
@@ -135,6 +136,7 @@ int main(void) {
     VitaSettings settings;
     VitaSettings_load(&settings);
     VitaSettings_setLauncherMode(active_chapter == 0);
+    VitaBorders_init(active_chapter);
 
     int next_chapter = -1;
     char game_path[192];
@@ -186,6 +188,10 @@ int main(void) {
     log_line("SUBSYSTEMS=create_complete");
 
     Runner *runner = Runner_create(dw, vm, renderer, (FileSystem *)fs, audio);
+    // The Steam launcher requires the Windows branch to emit game_change for
+    // chapter selection. Reporting os_psvita leaves it in PLACE_CHAPTER_SELECT.
+    runner->osType = OS_WINDOWS;
+    log_line("PLATFORM=os_windows steam_launcher_compatible");
     VitaSettings_applyAudio(&settings, audio);
     char *launcher_args[] = {"eboot.bin", "-game", "data.win"};
     char *chapter_args[] = {"eboot.bin", "-game", "data.win", "launcher", "switch_-1", "returning_0"};
@@ -213,6 +219,14 @@ int main(void) {
     bool exit_requested = false;
     int logged_game_w = -1;
     int logged_game_h = -1;
+    int logged_room_index = -999;
+    uint64_t perf_window_start = last_time;
+    uint64_t perf_total_us = 0, perf_max_us = 0;
+    uint32_t perf_frames = 0, perf_drops = 0, perf_severe = 0;
+    uint64_t last_slow_log = 0;
+    bool save_load_fade = false;
+    uint64_t save_load_fade_start = 0;
+    const uint64_t save_load_fade_duration = 1000000ULL;
 
     while (!exit_requested && !runner->shouldExit) {
         RunnerKeyboard_beginFrame(runner->keyboard);
@@ -222,8 +236,9 @@ int main(void) {
         sceCtrlPeekBufferPositive(0, &pad, 1);
         bool restart_for_settings = VitaSettings_handleInput(&settings, &pad, audio);
         if (restart_for_settings) {
-            log_line("SETTINGS=restart_for_mod");
-            if (restart_into_chapter(active_chapter)) {
+            int settings_target = settings.returnToChapterSelect ? 0 : active_chapter;
+            log_line(settings.returnToChapterSelect ? "SETTINGS=return_to_chapter_select" : "SETTINGS=restart_for_mod");
+            if (restart_into_chapter(settings_target)) {
                 sceKernelDelayThread(500000);
                 sceKernelExitProcess(0);
             }
@@ -273,7 +288,7 @@ int main(void) {
             }
         }
 
-        bool controls_enabled = !settings.open && !settings.adjustMode;
+        bool controls_enabled = !settings.open && !settings.adjustMode && settings.inputCooldown == 0;
         set_key(runner->keyboard, VK_UP, controls_enabled && ((pad.buttons & SCE_CTRL_UP) || dy < -48 || touch_up), &previous[0]);
         set_key(runner->keyboard, VK_DOWN, controls_enabled && ((pad.buttons & SCE_CTRL_DOWN) || dy > 48 || touch_down), &previous[1]);
         set_key(runner->keyboard, VK_LEFT, controls_enabled && ((pad.buttons & SCE_CTRL_LEFT) || dx < -48 || touch_left), &previous[2]);
@@ -284,14 +299,17 @@ int main(void) {
         set_key(runner->keyboard, VK_PAGEDOWN, controls_enabled && (pad.buttons & SCE_CTRL_LTRIGGER), &previous[8]);
         set_key(runner->keyboard, VK_PAGEUP, controls_enabled && (pad.buttons & SCE_CTRL_RTRIGGER), &previous[9]);
 
-        uint64_t now = sceKernelGetProcessTimeWide();
+        uint64_t frame_begin = sceKernelGetProcessTimeWide();
+        uint64_t now = frame_begin;
         runner->deltaTime = (double)(now - last_time);
         last_time = now;
+        uint64_t step_begin = sceKernelGetProcessTimeWide();
         if (!settings.open && !settings.adjustMode) {
             if (frame == 0) log_line("FRAME0=step_begin");
             Runner_step(runner);
             if (frame == 0) log_line("FRAME0=step_complete");
         }
+        uint64_t step_us = sceKernelGetProcessTimeWide() - step_begin;
         if (runner->pendingWorkingDirectory != NULL) {
             int requested_chapter = chapter_from_request(runner->pendingWorkingDirectory);
             char line[160];
@@ -319,21 +337,17 @@ int main(void) {
             exit_requested = true;
             continue;
         }
+        uint64_t audio_begin = sceKernelGetProcessTimeWide();
         runner->audioSystem->vtable->update(runner->audioSystem, (float)(runner->deltaTime / 1000000.0));
+        uint64_t audio_us = sceKernelGetProcessTimeWide() - audio_begin;
 
+        uint64_t render_begin = sceKernelGetProcessTimeWide();
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         int game_w = runner->applicationWidth > 0 ? runner->applicationWidth : (int)dw->gen8.defaultWindowWidth;
         int game_h = runner->applicationHeight > 0 ? runner->applicationHeight : (int)dw->gen8.defaultWindowHeight;
         runner->widescreenExtraWidth = 0;
         runner->widescreenExtraHeight = 0;
-        if (settings.widescreenEnabled && game_w > 0 && game_h > 0) {
-            int target_w = (int)((float)game_h * (960.0f / 544.0f) + 0.5f);
-            if (target_w > game_w) {
-                runner->widescreenExtraWidth = target_w - game_w;
-                game_w = target_w;
-            }
-        }
         if (game_w != logged_game_w || game_h != logged_game_h) {
             char runtime_display[128];
             snprintf(runtime_display, sizeof(runtime_display),
@@ -349,16 +363,96 @@ int main(void) {
         if (frame == 0) log_line("FRAME0=begin_frame_complete");
         Runner_drawViews(runner, game_w, game_h, false);
         if (frame == 0) log_line("FRAME0=draw_views_complete");
+        VitaBorders_updateRoom(runner->currentRoom != NULL ? runner->currentRoom->name : NULL);
+        VitaBorders_draw(960, 544);
         renderer->vtable->endFrameInit(renderer);
+        if (frame == 0) log_line("FRAME0=end_frame_init_complete");
+        if (frame == 0) log_line("FRAME0=draw_post_begin");
         Runner_drawPost(runner, 960, 544);
+        if (frame == 0) log_line("FRAME0=draw_post_complete");
         renderer->vtable->endFrameEnd(renderer);
+        if (frame == 0) log_line("FRAME0=end_frame_end_complete");
         Runner_drawGUI(runner, 960, 544, game_w, game_h);
+        if (frame == 0) log_line("FRAME0=draw_gui_complete");
         VitaSettings_drawTouchControls(&settings, renderer);
-        VitaSettings_drawLauncherCredit(&settings, renderer, active_chapter == 0);
+        if (frame == 0) log_line("FRAME0=touch_overlay_complete");
         VitaSettings_draw(&settings, renderer);
+        if (frame == 0) log_line("FRAME0=settings_overlay_complete");
         VitaSettings_drawCalibration(&settings, renderer);
-        if (runner->pendingRoom == -1) vglSwapBuffers(settings.vsyncEnabled ? GL_TRUE : GL_FALSE);
+        if (frame == 0) log_line("FRAME0=calibration_overlay_complete");
+        if (save_load_fade) {
+            uint64_t fade_now = sceKernelGetProcessTimeWide();
+            uint64_t elapsed = fade_now - save_load_fade_start;
+            float progress = (float)elapsed / (float)save_load_fade_duration;
+            if (progress >= 1.0f) {
+                progress = 1.0f;
+                save_load_fade = false;
+                log_line("SAVE_LOAD_FADE=complete");
+            }
+            AlAudioSystem_setCategoryGains((AlAudioSystem*)audio,
+                ((float)settings.musicVolume / 10.0f) * progress,
+                (float)settings.sfxVolume / 10.0f);
+            if (progress < 1.0f) {
+                renderer->vtable->drawRectangle(renderer, 0.0f, 0.0f, 960.0f, 544.0f,
+                                                 0x000000, 1.0f - progress, false);
+            }
+        }
+        if (runner->pendingRoom == -1) {
+            if (frame == 0) log_line("FRAME0=swap_begin");
+            vglSwapBuffers(settings.vsyncEnabled ? GL_TRUE : GL_FALSE);
+            if (frame == 0) log_line("FRAME0=swap_complete");
+        }
+        const char* previous_room_name = runner->currentRoom != NULL ? runner->currentRoom->name : NULL;
+        bool leaving_save_menu = previous_room_name != NULL &&
+            (strcmp(previous_room_name, "PLACE_MENU") == 0 ||
+             strstr(previous_room_name, "PLACE_MENU") != NULL);
+        int room_before_pending = runner->currentRoomIndex;
         Runner_handlePendingRoomChange(runner);
+        if (active_chapter > 0 && leaving_save_menu && runner->currentRoomIndex != room_before_pending) {
+            save_load_fade = true;
+            save_load_fade_start = sceKernelGetProcessTimeWide();
+            AlAudioSystem_setCategoryGains((AlAudioSystem*)audio, 0.0f,
+                                           (float)settings.sfxVolume / 10.0f);
+            log_line("SAVE_LOAD_FADE=begin duration_ms=1000");
+        }
+
+        uint64_t work_us = sceKernelGetProcessTimeWide() - frame_begin;
+        uint64_t render_us = sceKernelGetProcessTimeWide() - render_begin;
+        perf_total_us += work_us;
+        if (work_us > perf_max_us) perf_max_us = work_us;
+        perf_frames++;
+        if (work_us > 40000) perf_drops++;
+        if (work_us > 80000) perf_severe++;
+        if (runner->currentRoomIndex != logged_room_index) {
+            char room_change[192];
+            snprintf(room_change, sizeof(room_change), "ROOM_CHANGE frame=%u from=%d to=%d name=%s work_us=%llu",
+                     frame, logged_room_index, runner->currentRoomIndex,
+                     runner->currentRoom && runner->currentRoom->name ? runner->currentRoom->name : "<null>",
+                     (unsigned long long)work_us);
+            log_line(room_change);
+            logged_room_index = runner->currentRoomIndex;
+        }
+        if (work_us > 50000 && frame_begin - last_slow_log > 1000000ULL) {
+            char slow[224];
+            snprintf(slow, sizeof(slow), "PERF_SLOW frame=%u total_us=%llu step_us=%llu audio_us=%llu render_us=%llu room=%s index=%d",
+                     frame, (unsigned long long)work_us, (unsigned long long)step_us,
+                     (unsigned long long)audio_us, (unsigned long long)render_us,
+                     runner->currentRoom && runner->currentRoom->name ? runner->currentRoom->name : "<null>",
+                     runner->currentRoomIndex);
+            log_line(slow);
+            last_slow_log = frame_begin;
+        }
+        if (frame_begin - perf_window_start >= 5000000ULL && perf_frames > 0) {
+            char summary[192];
+            snprintf(summary, sizeof(summary), "PERF_SUMMARY frames=%u avg_us=%llu max_us=%llu drops40=%u severe80=%u room=%s",
+                     perf_frames, (unsigned long long)(perf_total_us / perf_frames),
+                     (unsigned long long)perf_max_us, perf_drops, perf_severe,
+                     runner->currentRoom && runner->currentRoom->name ? runner->currentRoom->name : "<null>");
+            log_line(summary);
+            perf_window_start = frame_begin;
+            perf_total_us = perf_max_us = 0;
+            perf_frames = perf_drops = perf_severe = 0;
+        }
 
         frame++;
         if (frame == 1) log_line("FRAME=first_complete");
@@ -396,6 +490,7 @@ int main(void) {
     Runner_free(runner);
     runner = NULL;
     audio->vtable->destroy(audio);
+    VitaBorders_shutdown();
     renderer->vtable->destroy(renderer);
     OverlayFileSystem_destroy(fs);
     VM_free(vm);

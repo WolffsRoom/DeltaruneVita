@@ -671,8 +671,30 @@ void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerO
 
     static bool rotateWarned = false;
 
-    repeat(data->tilesY, ty) {
-        repeat(data->tilesX, tx) {
+    // Large GMS2 rooms can contain tens of thousands of cells.  Drawing every
+    // non-empty cell is particularly expensive on Vita because each tile is a
+    // separate legacy GL submission.  Limit the walk to the active camera plus
+    // a two-tile guard band.  Rotated cameras keep the conservative full-layer
+    // path because their axis-aligned bounds need different handling.
+    int32_t firstTx = 0;
+    int32_t firstTy = 0;
+    int32_t lastTx = (int32_t) data->tilesX;
+    int32_t lastTy = (int32_t) data->tilesY;
+    GMLCamera* camera = Runner_getCameraById(runner, runner->renderer->cameraCurrent);
+    if (camera != nullptr && camera->viewAngle == 0.0f && tileW > 0 && tileH > 0) {
+        const int32_t guard = 2;
+        firstTx = (int32_t) floorf((camera->viewX - layerOffsetX) / (float) tileW) - guard;
+        firstTy = (int32_t) floorf((camera->viewY - layerOffsetY) / (float) tileH) - guard;
+        lastTx = (int32_t) ceilf((camera->viewX + (float) camera->viewWidth - layerOffsetX) / (float) tileW) + guard;
+        lastTy = (int32_t) ceilf((camera->viewY + (float) camera->viewHeight - layerOffsetY) / (float) tileH) + guard;
+        if (firstTx < 0) firstTx = 0;
+        if (firstTy < 0) firstTy = 0;
+        if (lastTx > (int32_t) data->tilesX) lastTx = (int32_t) data->tilesX;
+        if (lastTy > (int32_t) data->tilesY) lastTy = (int32_t) data->tilesY;
+    }
+
+    for (int32_t ty = firstTy; ty < lastTy; ty++) {
+        for (int32_t tx = firstTx; tx < lastTx; tx++) {
             uint32_t cell = data->tileData[ty * data->tilesX + tx];
             uint32_t tileIndex = cell & GMS2_TILE_INDEX_MASK;
             if (tileIndex == 0) continue; // 0 = empty

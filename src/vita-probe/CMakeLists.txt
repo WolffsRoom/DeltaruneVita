@@ -25,6 +25,7 @@ if(PLAYABLE_RUNNER)
   add_executable(${PROJECT_NAME}
     source/playable_main.c
     source/vita_settings.c
+    source/vita_borders.c
     ${BS_COMMON_SOURCES}
     ${BS_GL_SOURCES}
     ../butterscotch/src/audio/openal/al_audio_system.c
@@ -112,7 +113,7 @@ target_link_libraries(${PROJECT_NAME}
 
 vita_create_self(eboot.bin ${PROJECT_NAME} UNSAFE)
 vita_create_vpk(Deltarune.vpk DLTVITA01 eboot.bin
-  VERSION 00.35
+  VERSION 00.49
   NAME "Deltarune"
   FILE
     ${CMAKE_SOURCE_DIR}/../../data/legacy-assets/icon0.png sce_sys/icon0.png
@@ -128,4 +129,9 @@ vita_create_vpk(Deltarune.vpk DLTVITA01 eboot.bin
     ${CMAKE_SOURCE_DIR}/../../data/legacy-assets/manual/006.png sce_sys/manual/006.png
     ${CMAKE_SOURCE_DIR}/../../data/legacy-assets/manual/007.png sce_sys/manual/007.png
     ${CMAKE_SOURCE_DIR}/../../data/legacy-assets/manual/008.png sce_sys/manual/008.png
+    ${CMAKE_SOURCE_DIR}/../../data/assets/TouchControls/spr_joybase_frame0.png assets/touch/spr_joybase_frame0.png
+    ${CMAKE_SOURCE_DIR}/../../data/assets/TouchControls/spr_joystick_frame0.png assets/touch/spr_joystick_frame0.png
+    ${CMAKE_SOURCE_DIR}/../../data/assets/TouchControls/spr_control_zkey_frame0.png assets/touch/spr_control_zkey_frame0.png
+    ${CMAKE_SOURCE_DIR}/../../data/assets/TouchControls/spr_control_xkey_frame0.png assets/touch/spr_control_xkey_frame0.png
+    ${CMAKE_SOURCE_DIR}/../../data/assets/TouchControls/spr_control_ckey_frame0.png assets/touch/spr_control_ckey_frame0.png
 )

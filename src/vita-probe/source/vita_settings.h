@@ -15,6 +15,8 @@ typedef struct {
     bool widescreenEnabled;
     bool adjustMode;
     bool restartOnClose;
+    bool returnToChapterSelect;
+    bool confirmChapterSelect;
     int musicVolume;
     int sfxVolume;
     bool vsyncEnabled;
@@ -26,7 +28,9 @@ typedef struct {
     bool visualConfirm;
     bool visualCancel;
     bool visualMenu;
+    int category;
     int selected;
+    int inputCooldown;
     uint32_t previousButtons;
 } VitaSettings;
 
@@ -39,6 +43,5 @@ void VitaSettings_drawCalibration(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_setTouchVisuals(VitaSettings* settings, float stickX, float stickY,
                                   bool confirm, bool cancel, bool menu);
 void VitaSettings_setLauncherMode(bool launcherMode);
-void VitaSettings_drawLauncherCredit(VitaSettings* settings, Renderer* renderer, bool launcher);
 
 #endif

@@ -17,8 +17,11 @@
 // This is the index space that the native runner uses
 #define AUDIO_STREAM_INDEX_BASE 300000
 
-#define AL_STREAM_BUFFER_COUNT 4
-#define AL_STREAM_BUFFER_SAMPLES 4096
+// Keep roughly one second of music queued. Room/texture transitions on Vita can
+// block the main thread for hundreds of milliseconds, and the former ~370 ms
+// queue produced audible underruns during those stalls.
+#define AL_STREAM_BUFFER_COUNT 6
+#define AL_STREAM_BUFFER_SAMPLES 8192
 
 struct stb_vorbis;
 

@@ -18,14 +18,14 @@ A partir da v0.36, o projeto passou a executar diretamente os dados GameMaker da
 ## Release status
 
 <p align="center">
-  <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-~90%25-2ea44f?style=for-the-badge">
+  <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-80%25-2ea44f?style=for-the-badge">
   &nbsp;
   <img alt="Platform" src="https://img.shields.io/badge/Source-PC%2FSteam-003791?style=for-the-badge&logo=steam&logoColor=white">
   &nbsp;
   <img alt="State" src="https://img.shields.io/badge/State-Playable-brightgreen?style=for-the-badge">
 </p>
 
-A versão atual é a **v0.43**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora algumas cenas, efeitos e a sincronização de áudio ainda estejam em validação.
+A versão atual é a **v0.49**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora ainda possam ocorrer bugs, travamentos e quedas de desempenho.
 
 ---
 
@@ -84,21 +84,22 @@ To install the game correctly, follow these steps:
 
 ### HOW TO APPLY THE PATCH:
 
-O patcher para preparar os arquivos a partir de uma instalação oficial de PC/Steam será disponibilizado em breve.
+O patcher v0.49 prepara os dados necessários a partir de uma instalação oficial do jogo. A versão Steam compatível é **v0.0.247 Patch**.
 
-Quando publicado, o processo será:
+1. Comprar e instalar [DELTARUNE para PC](https://deltarune.com/) pela Steam.
+2. Confirmar que a instalação está na versão **v0.0.247 Patch** e sem arquivos modificados.
+3. Baixar o VPK e o ZIP do patcher na página de [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
+4. Extrair o patcher e copiar a pasta original `DELTARUNE` para `SteamFiles/DELTARUNE`.
+5. Executar `DeltaruneVitaPatcher.exe`, selecionar o idioma da interface e iniciar a preparação.
+6. Instalar `Deltarune-v0.49.vpk` pelo VitaShell.
+7. Copiar a pasta gerada `VitaFiles/deltarune` para `ux0:data/` no PS Vita.
 
-1. Comprar e instalar [DELTARUNE para PC](https://deltarune.com/).
-2. Baixar o patcher e o VPK na página de [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
-3. Executar o patcher apontando para a instalação oficial.
-4. Instalar `Deltarune.vpk` pelo VitaShell.
-5. Copiar a pasta gerada para `ux0:data/deltarune/deltarunevita/`.
+O resultado final deve conter `ux0:data/deltarune/deltarunevita/`. A seleção de idioma do patcher altera somente a interface do programa e não o idioma do jogo.
 
-Os fundos de console são distribuídos [separadamente](https://www.spriters-resource.com/pc_computer/deltarune/asset/115841/). 
-A pasta `borders` deve ficar em:
+Em caso de erro, abra uma ocorrência em [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues) e anexe o arquivo:
 
 ```text
-ux0:data/deltarune/deltarunevita/borders/
+ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 ```
 
 ---
@@ -213,6 +214,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
 | v0.41 | Streaming de músicas, bordas ligadas ao cenário e registros de quedas de desempenho. |
 | v0.42 | Correção dos caminhos de áudio e redução do recarregamento de texturas no Chapter 2. |
 | v0.43 | Acesso direto à biblioteca de músicas no Vita e correção da faixa sincronizada do logo do Chapter 5. |
+| v0.44 | Redução do uso dos atlas de textura e aumento do buffer de streaming de áudio. |
+| v0.45 | Revisão da interface de Game Settings. |
+| v0.46 | Correção da regressão que impedia a inicialização dos capítulos. |
+| v0.47 | Confirmação no Chapter Select, retorno do ícone de configuração e ampliação do cache de texturas. |
+| v0.48 | Recorte de tiles fora da câmera para melhorar o desempenho da cidade no Chapter 5. |
+| v0.49 | Correção das fontes no Chapter 5, fade ao carregar saves e primeiro patcher público. |
 
 As versões anteriores documentam a fase de pesquisa com Android, os probes gráficos e a evolução inicial do runner.
 

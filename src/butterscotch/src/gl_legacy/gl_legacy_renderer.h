@@ -22,6 +22,9 @@ typedef struct {
     int32_t* textureWidths;   // needed for UV normalization
     int32_t* textureHeights;
     bool* textureLoaded;      // lazy loading: true once PNG decoded and uploaded
+    uint32_t* textureLastUsedFrame;
+    uint32_t textureFrame;
+    uint64_t residentTextureBytes;
     uint32_t textureCount;
 
     GLuint whiteTexture; // 1x1 white pixel for drawing primitives (rectangles, lines, etc.)

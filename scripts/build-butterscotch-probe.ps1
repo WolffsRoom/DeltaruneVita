@@ -10,7 +10,7 @@ docker run --rm -v "${root}:/project" -w /project/src/vita-probe `
     "cmake -S . -B build-vita -DCMAKE_BUILD_TYPE=$Configuration && cmake --build build-vita -j2"
 
 if ($LASTEXITCODE -ne 0) { throw "Build falhou com codigo $LASTEXITCODE." }
-$output = Join-Path $rootPath 'artifacts\current\Deltarune.vpk'
+$output = Join-Path $rootPath 'artifacts\current\Deltarune-v0.49.vpk'
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $output) | Out-Null
 Copy-Item -Force (Join-Path $project 'build-vita\Deltarune.vpk') $output
 Write-Host "VPK: $output"

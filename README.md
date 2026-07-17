@@ -14,9 +14,6 @@ A partir da v0.36, o projeto passou a executar diretamente os dados GameMaker da
 
 > Este repositório e suas releases não incluem arquivos comerciais de DELTARUNE. Compre e obtenha o jogo oficial em [deltarune.com](https://deltarune.com/).
 
-<p align="center">
-  <img src="https://deltarune.com/assets/images/key-art.gif" alt="DELTARUNE official key art" width="760">
-</p>
 
 ## Release status
 
@@ -30,7 +27,9 @@ A partir da v0.36, o projeto passou a executar diretamente os dados GameMaker da
 
 A versão atual é a **v0.40**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora algumas cenas e efeitos ainda estejam em validação.
 
-## O que já funciona
+---
+
+## <img src="https://i.redd.it/pzi6lj5np5je1.gif" height="30" align="absmiddle"> O que já funciona
 
 - seletor e troca dos cinco capítulos;
 - retorno ao Chapter Select pelo menu do jogo;
@@ -45,8 +44,9 @@ A versão atual é a **v0.40**. Os cinco capítulos inicializam e são jogáveis
 - carregamento sob demanda e cache de texturas para os capítulos maiores;
 - saves, mods por capítulo e preparação de PT-BR;
 - logs persistentes para diagnóstico.
+---
 
-## Mudança de direção
+## <img src="https://64.media.tumblr.com/206eb01413bd79835a78db784da8bb92/f7b0141948b8aff0-22/s1280x1920/d4ab67a73fb9d77c5feca21425075717411ac77d.gif" height="30" align="absmiddle"> Mudança de direção
 
 O trabalho começou estudando ports Android e o carregamento por YoYo Loader/SoLoader. Essa etapa permitiu entender a divisão dos capítulos, os arquivos externos, a inicialização do runner e os controles touch.
 
@@ -64,7 +64,23 @@ Butterscotch adaptado ao Vita
 VitaGL + OpenAL + controles Vita
 ```
 
-## Installation
+## Guia de instalação
+
+To install the game correctly, follow these steps:
+
+- Install [kubridge](https://github.com/TheOfficialFloW/kubridge/releases/) and [FdFix](https://github.com/TheOfficialFloW/FdFix/releases/) by copying `kubridge.skprx` and `fd_fix.skprx` to your taiHEN plugins folder (usually `ux0:tai`) and adding these entries to `config.txt` under `*KERNEL`:
+
+  ```text
+  *KERNEL
+  ux0:tai/kubridge.skprx
+  ux0:tai/fd_fix.skprx
+  ```
+
+  **Note:** Do not install `fd_fix.skprx` if you are using the rePatch plugin.
+
+- **Optional:** Install [PSVshell](https://github.com/Electry/PSVshell/releases) to overclock your device.
+- Install `libshacccg.suprx`, if it is not already installed, by following [this guide](https://samilops2.gitbook.io/vita-troubleshooting-guide/shader-compiler/extract-libshacccg.suprx).
+- Legally obtain o jogo oficial em [deltarune.com](https://deltarune.com/).
 
 ### HOW TO APPLY THE PATCH:
 
@@ -78,31 +94,14 @@ Quando publicado, o processo será:
 4. Instalar `Deltarune.vpk` pelo VitaShell.
 5. Copiar a pasta gerada para `ux0:data/deltarune/deltarunevita/`.
 
-Os fundos de console são distribuídos separadamente. A pasta `borders` deve ficar em:
+Os fundos de console são distribuídos [separadamente](https://www.spriters-resource.com/pc_computer/deltarune/asset/115841/). 
+A pasta `borders` deve ficar em:
 
 ```text
 ux0:data/deltarune/deltarunevita/borders/
 ```
 
-### Preparação manual para desenvolvimento
-
-Coloque uma instalação legítima em `SteamFiles/DELTARUNE` e execute:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\prepare-windows-data.ps1
-```
-
-Os dados preparados serão criados em:
-
-```text
-data/prepared/deltarune/deltarunevita/
-```
-
-Para compilar o VPK com Docker e VitaSDK:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-butterscotch-probe.ps1
-```
+---
 
 ## Controles
 
@@ -146,17 +145,42 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-butterscotch-probe.ps1
   <img src="Assets/Screenshots/2026-07-16-030301-317266.png" alt="Deltarune chapter selector on PS Vita" width="32%">
 </p>
 
-## Vídeo
+## Official Vídeo 
 
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=yDzgiGdekas">
-    <img src="https://img.youtube.com/vi/yDzgiGdekas/maxresdefault.jpg" alt="Deltarune Vita video" width="760">
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=yDzgiGdekas" target="_blank" title="Assistir à demonstração no YouTube">
+    <img src="https://img.youtube.com/vi/yDzgiGdekas/maxresdefault.jpg" alt="Vídeo de demonstração do Deltarune rodando no PS Vita" width="760">
   </a>
-</p>
+  <br>
+  <sup><em>Clique na imagem para assistir ao vídeo completo no YouTube</em></sup>
+</div>
+
+---
+
+### Build Instructions 
+
+Coloque uma instalação legítima em `SteamFiles/DELTARUNE` e execute:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\prepare-windows-data.ps1
+```
+
+Os dados preparados serão criados em:
+
+```text
+data/prepared/deltarune/deltarunevita/
+```
+
+Para compilar o VPK com Docker e VitaSDK:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-butterscotch-probe.ps1
+```
+
 
 ## Mods
 
-O suporte PT-BR usa como referência a tradução comunitária [teiarruma/deltarune-ptbr](https://github.com/teiarruma/deltarune-ptbr). Os arquivos da tradução não são distribuídos neste repositório ou nas releases.
+O suporte a mods foi implementado justamente para carregar a tradução do jogo em PT-BR, sendo essa uma tradução comunitária [teiarruma/deltarune-ptbr](https://github.com/teiarruma/deltarune-ptbr). Os arquivos da tradução não são distribuídos neste repositório ou nas releases.
 
 Depois de obter a tradução no projeto original, coloque-a em `mods/PTBR` e execute:
 
@@ -168,6 +192,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
 
 | Versão | Mudanças principais |
 |---|---|
+| v0.08 | Primeiro VPK de prova integrando Butterscotch e VitaGL. |
+| v0.08 - 0.22| Várias verificações de viabilidade, testes de texturas, aúdios. |
+| v0.23 | Chapters 1 e 2 jogáveis pela primeira vez. |
+| v0.24 - v0.34   | Vários ajustes, correções, implementações com base na versão de Android. |
+| v0.35 | Última atualização com base nos dados do port de Android. |
 | v0.36 | Início da migração dos dados Android para os arquivos Windows/Steam. |
 | v0.37 | Ajustes no carregamento do runner Windows, fontes e áudio externo. |
 | v0.38 | Retorno à biblioteca VitaGL estável e diagnóstico do primeiro frame. |
@@ -175,6 +204,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
 | v0.40 | Música externa, novo Game Settings, Chapter Select, cache de texturas e bordas de console. |
 
 As versões anteriores documentam a fase de pesquisa com Android, os probes gráficos e a evolução inicial do runner.
+
+---
 
 ## Estrutura no Vita
 
@@ -200,6 +231,10 @@ O log principal é gravado em:
 ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 ```
 
+O registro de log será removido assim que uma versão final for implementada, até lá, caso alguém identifique algum bug ou problema, favor encaminhar o .log junto no canal [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues).
+
+---
+
 ## Créditos
 
 - DELTARUNE por Toby Fox e sua equipe. [Site oficial e compra](https://deltarune.com/).
@@ -209,14 +244,27 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 - [VitaGL](https://github.com/Rinnegatamante/vitaGL) por Rinnegatamante.
 - [VitaSDK](https://vitasdk.org/) e a comunidade homebrew do PlayStation Vita.
 - [Vita Development Wiki / PSDevWiki](https://www.psdevwiki.com/vita/) pela documentação técnica.
-- [Tradução PT-BR de DELTARUNE](https://github.com/teiarruma/deltarune-ptbr) pela equipe TEIARRUMA e colaboradores.
+- [Tradução PT-BR de DELTARUNE](https://github.com/teiarruma/deltarune-ptbr) pela tradução em PTBR da equipe TEIARRUMA e colaboradores.
+
+---
 
 ## AI Notice
 
-GPT-5.6 Sol foi usado como apoio no desenvolvimento, diagnóstico, organização e documentação. A direção do port e os testes em hardware real foram conduzidos por Wolff.
+GPT-5.6 Sol (Codex IDE) foi usado como apoio no desenvolvimento, diagnóstico, organização e documentação.
 
 ## Licença e dados do jogo
 
 As partes derivadas do Butterscotch permanecem sob a Mozilla Public License 2.0. Consulte [LICENSE](LICENSE).
 
-DELTARUNE, personagens, músicas e recursos pertencem aos respectivos detentores. Este projeto não distribui os dados comerciais necessários para jogar.
+<p align="center">
+  <img src="https://deltarune.com/assets/images/key-art.gif" alt="DELTARUNE official key art" width="760">
+</p>
+
+<p align="center" style="font-size: 8px;">
+  <i>
+  DELTARUNE © Toby Fox 2018-2026. All rights reserved.<br>
+  Steam and the Steam logo are trademarks and/or registered trademarks of Valve Corporation in the U.S. and/or other countries.<br>
+  "PlayStation" and the "PS" Family logo are registered trademarks, and "PS4", "PSVita" and "PS5" are trademarks of Sony Interactive Entertainment LLC.<br>
+  DELTARUNE, seus personagens, músicas e recursos pertencem aos seus respectivos detentores. Este projeto não distribui os arquivos comerciais necessários para jogar.
+  </i>
+</p>

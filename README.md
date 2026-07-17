@@ -92,9 +92,11 @@ O patcher v0.49 prepara os dados necessários a partir de uma instalação ofici
 4. Extrair o patcher e copiar a pasta original `DELTARUNE` para `SteamFiles/DELTARUNE`.
 5. Executar `DeltaruneVitaPatcher.exe`, selecionar o idioma da interface e iniciar a preparação.
 6. Instalar `Deltarune-v0.49.vpk` pelo VitaShell.
-7. Copiar a pasta gerada `VitaFiles/deltarune` para `ux0:data/` no PS Vita.
+7. Copiar a pasta gerada em VitaFiles `deltarune` para `ux0:data/` no PS Vita.
 
-O resultado final deve conter `ux0:data/deltarune/deltarunevita/`. A seleção de idioma do patcher altera somente a interface do programa e não o idioma do jogo.
+O resultado final deve conter `ux0:data/deltarune/deltarunevita/...`. 
+
+A seleção de idioma do patcher altera somente a interface do programa e não o idioma do jogo.
 
 Em caso de erro, abra uma ocorrência em [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues) e anexe o arquivo:
 

@@ -71,7 +71,7 @@ Currently, borders must be added manually if you wish to use them. To do this, d
 
 
 > [!IMPORTANT]
-> Em caso de erro, abra uma ocorrência em [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues) e anexe gerado em sua última seção de jogo antes do pub/problema identificado:
+> If you encounter an error, please open an issue at [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues) and attach the log generated during your last gameplay session before the crash or the identified problem:
 
 ```text
 ux0:data/deltarune/deltarunevita/butterscotch-probe.log

@@ -64,7 +64,7 @@ To run the game, make sure you have the required data files from an official gam
 8. Finally, install `Deltarune-vX.XX.vpk` using VitaShell.
 
 > [!IMPORTANT]
-> When updating to v0.52, generate and transfer the data again using the v0.52 patcher. Updating only the VPK does not provide the complete cache and data improvements.
+> When updating to latest [Realease](https://github.com/WolffsRoom/DeltaruneVita/releases/latest), verifique se é necessário generate and transfer the data again using the newest patcher. Sometimes, Updating only the VPK does not provide the complete cache and data improvements.
 
 #### Observations: 
 
@@ -188,7 +188,7 @@ The control layout is based on and adapted from the PS4 version, with additional
 > [!NOTE]
 > This project has undergone a change in direction. The scope has been streamlined to focus exclusively on porting directly from **Steam (Windows) to PS Vita**, removing the previous intermediate Android dependency. This ensures better performance, direct file parsing, and a more stable native experience on the console.
 
-The work began by studying Android ports and asset loading via YoYo Loader/SoLoader. This phase was crucial for understanding chapter division, external files, runner initialization, and touch controls.
+The project began with a study of Android ports and resource loading via YoYo Loader/SoLoader, using ChatGPT 5.6 Sol to make the project feasible. This phase was essential for understanding the chapter structure, external files, runner initialization, and touch controls.
 
 Following the initial tests with Butterscotch and VitaGL, the port shifted to loading official data directly from the Windows version. This eliminates the dependency on an APK file and avoids carrying over Android-specific runner limitations.
 
@@ -346,15 +346,17 @@ ux0:data/deltarune/
 ├── config.ini
 ├── save/
 └── deltarunevita/
+    ├── borders/
     ├── chapter0/
     ├── chapter1/
     ├── chapter2/
     ├── chapter3/
     ├── chapter4/
     ├── chapter5/
+    ├── devlogs/
+    ├── mods/
     ├── music/
-    ├── borders/
-    └── mods/
+    └── texture-cache/
 ```
 
 The main file log is saved in:
@@ -379,7 +381,7 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 
 ## AI Notice
 
-GPT-5.6 Sol (Codex IDE) was used to support development, diagnostics, organization, and documentation.
+GPT-5.6 Sol (Codex IDE) was integrated into the workflow to support development (specifically for the loader's programming logic), diagnostics, project organization, and documentation.
 
 ## Licença e dados do jogo
 

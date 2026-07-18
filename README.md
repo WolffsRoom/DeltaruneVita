@@ -17,7 +17,7 @@ Starting with v0.36, the project directly executes GameMaker data from the Windo
 ## Project Status
 
 <p align="center">
-  <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-80%25-2ea44f?style=for-the-badge">
+  <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-50%25-yellow?style=for-the-badge">
   &nbsp;
   <img alt="Platform" src="https://img.shields.io/badge/Source-PC%2FSteam-003791?style=for-the-badge&logo=steam&logoColor=white">
   &nbsp;
@@ -62,6 +62,9 @@ To run the game, make sure you have the required data files from an official gam
 6. Run `DeltaruneVitaPatcher.exe`, select your preferred interface language, and start the process.
 7. Copy the generated `deltarune` folder inside `VitaFiles` to `ux0:data/` on your PS Vita. USB transfer or an SD card reader is highly recommended since the file size is quite large (~1.1 GB).
 8. Finally, install `Deltarune-vX.XX.vpk` using VitaShell.
+
+> [!IMPORTANT]
+> When updating to v0.52, generate and transfer the data again using the v0.52 patcher. Updating only the VPK does not provide the complete cache and data improvements.
 
 #### Observations: 
 
@@ -172,6 +175,10 @@ The control layout is based on and adapted from the PS4 version, with additional
     <tr>
       <td>• Independent volume sliders for music and SFX</td>
       <td>• Persistent logging system for error diagnostics</td>
+    </tr>
+    <tr>
+      <td>• Animated chapter loading screen and prepared texture cache</td>
+      <td>• Original, Medium, and Low graphics profiles</td>
     </tr>
   </tbody>
 </table>
@@ -316,6 +323,18 @@ This section briefly documents past versions, covering the initial Android resea
     <tr>
       <td><code>v0.49</code></td>
       <td>Fixed font rendering in Chapter 5, added screen fades when loading save states, and released the first public patcher tool.</td>
+    </tr>
+    <tr>
+      <td><code>v0.50</code></td>
+      <td>Improved audio and texture caching, room transitions, dynamic borders, touch defaults, and Chapter 2/5 stability.</td>
+    </tr>
+    <tr>
+      <td><code>v0.51</code></td>
+      <td>Added patcher-generated texture preparation, chapter cache loading, and further runtime performance diagnostics.</td>
+    </tr>
+    <tr>
+      <td><code>v0.52</code></td>
+      <td>Added animated chapter loading, Debug Dev captures, RAM texture cache, font-safe texture optimization, and selectable Original/Medium/Low graphics profiles.</td>
     </tr>
   </tbody>
 </table>

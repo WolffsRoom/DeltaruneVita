@@ -70,12 +70,6 @@ To run the game, make sure you have the required data files from an official gam
 
 Ensure that the data files were correctly placed and are located in the following path: `ux0:data/deltarune/deltarunevita/...`, and verify that everything matches the layout shown in [Folder Structure](https://github.com/WolffsRoom/DeltaruneVita#folder-structure).
 
-Currently, borders must be added manually if you wish to use them. To do this, download them [here](https://www.spriters-resource.com/pc_computer/deltarune/asset/115841/) and place them inside a folder named `borders` at `ux0:data/deltarune/deltarunevita/...`.
-
-
-> [!IMPORTANT]
-> If you encounter an error, please open an issue at [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues) and attach the log generated during your last gameplay session before the crash or the identified problem:
-
 ```text
 ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 ```
@@ -148,7 +142,7 @@ The control layout is based on and adapted from the PS4 version, with additional
   <thead>
     <tr>
       <th width="50%">Core Features</th>
-      <th width="50%">System & Graphics</th>
+      <th width="50%">System and Graphics</th>
     </tr>
   </thead>
   <tbody>

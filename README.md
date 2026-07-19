@@ -63,9 +63,6 @@ To run the game, make sure you have the required data files from an official gam
 7. Copy the generated `deltarune` folder inside `VitaFiles` to `ux0:data/` on your PS Vita. USB transfer or an SD card reader is highly recommended since the file size is quite large (~1.1 GB).
 8. Finally, install `Deltarune-vX.XX.vpk` using VitaShell.
 
-> [!IMPORTANT]
-> When updating to latest [Realease](https://github.com/WolffsRoom/DeltaruneVita/releases/latest), verifique se é necessário generate and transfer the data again using the newest patcher. Sometimes, Updating only the VPK does not provide the complete cache and data improvements.
-
 #### Observations: 
 
 Ensure that the data files were correctly placed and are located in the following path: `ux0:data/deltarune/deltarunevita/...`, and verify that everything matches the layout shown in [Folder Structure](https://github.com/WolffsRoom/DeltaruneVita#folder-structure).
@@ -73,6 +70,9 @@ Ensure that the data files were correctly placed and are located in the followin
 ```text
 ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 ```
+
+> [!IMPORTANT]
+> When updating to latest [Realease](https://github.com/WolffsRoom/DeltaruneVita/releases/latest), verifique se é necessário generate and transfer the data again using the newest patcher. Sometimes, Updating only the VPK does not provide the complete cache and data improvements.
 
 ## Control Layout
 
@@ -233,6 +233,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
 ## Recent Changelog
 
 This section briefly documents past versions, covering the initial Android research phase, graphics probing, and early runner evolution.
+<details>
+  <summary><i>View changelog</i></summary>
 
 <table>
   <thead>
@@ -241,7 +243,7 @@ This section briefly documents past versions, covering the initial Android resea
       <th width="80%">Key Changes</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody
     <tr>
       <td><code>v0.08</code></td>
       <td>Initial proof-of-concept VPK integrating Butterscotch and VitaGL.</td>
@@ -332,6 +334,7 @@ This section briefly documents past versions, covering the initial Android resea
     </tr>
   </tbody>
 </table>
+</details>
 
 ## Folder Structure
 

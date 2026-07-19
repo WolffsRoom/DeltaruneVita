@@ -47,14 +47,14 @@ To install the game correctly, follow these steps:
 
 - **Optional:** Install [PSVshell](https://github.com/Electry/PSVshell/releases) to overclock your device.
 - Install `libshacccg.suprx`, if it is not already installed, by following [this guide](https://samilops2.gitbook.io/vita-troubleshooting-guide/shader-compiler/extract-libshacccg.suprx).
-- Purchase the official game legally at [deltarune.com](https://deltarune.com/).
+- Purchase the official game legally at [Steam](https://store.steampowered.com/app/1671210/DELTARUNE/).
 
 ### HOW TO APPLY THE PATCH:
 
 To run the game, make sure you have the required data files from an official game installation. The supported Steam version is **v0.0.247 Patch**.  
 *PS: The language selection in the patcher only changes the program's interface, not the in-game language.*
 
-1. Purchase and/or install [DELTARUNE for PC](https://deltarune.com/) via Steam.
+1. Purchase and/or install [DELTARUNE for PC](https://store.steampowered.com/app/1671210/DELTARUNE/) on Steam.
 2. Ensure the installation is on version **v0.0.247 Patch** and contains no modified files.
 3. Download the .VPK (`Deltarune-vX.XX.vpk`) and the .ZIP file (`DeltaruneVita-Patcher-vX.XX.zip`) from the [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases/latest) page.
 4. Extract the ZIP file to get the patcher.

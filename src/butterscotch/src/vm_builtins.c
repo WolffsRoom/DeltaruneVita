@@ -9493,16 +9493,23 @@ static RValue builtin_psn_setup_trophies(MAYBE_UNUSED VMContext* ctx, RValue* ar
 }
 
 // Draw functions
-static bool vitaShouldHideMobileControl(Runner* runner, int32_t spriteIndex) {
+static bool vitaShouldHideMobileControl(Runner* runner, int32_t spriteIndex, float x, float y) {
 #ifdef PLATFORM_VITA
     extern int g_vitaTouchEnabled;
     if (g_vitaTouchEnabled || spriteIndex < 0 || (uint32_t)spriteIndex >= runner->dataWin->sprt.count) return false;
     Sprite* sprite = &runner->dataWin->sprt.sprites[spriteIndex];
-    return sprite->name != nullptr &&
-           (strcmp(sprite->name, "spr_control_return") == 0 || strcmp(sprite->name, "spr_darkconfigbt") == 0);
+    if (sprite->name == nullptr) return false;
+    if (strcmp(sprite->name, "spr_control_return") == 0) return true;
+
+    // spr_darkconfigbt is shared by the Android touch overlay and the native
+    // in-game Config entry. Only suppress the floating top-left touch button;
+    // hiding the sprite globally also removes the menu icon in Chapters 1/2.
+    return strcmp(sprite->name, "spr_darkconfigbt") == 0 && x < 96.0f && y < 96.0f;
 #else
     (void)runner;
     (void)spriteIndex;
+    (void)x;
+    (void)y;
     return false;
 #endif
 }
@@ -9512,10 +9519,10 @@ static RValue builtin_draw_sprite(VMContext* ctx, RValue* args, MAYBE_UNUSED int
     if (runner->renderer == nullptr) return RValue_makeUndefined();
 
     int32_t spriteIndex = RValue_toInt32(args[0]);
-    if (vitaShouldHideMobileControl(runner, spriteIndex)) return RValue_makeUndefined();
     int32_t subimg = RValue_toInt32(args[1]);
     float x = (float) RValue_toReal(args[2]);
     float y = (float) RValue_toReal(args[3]);
+    if (vitaShouldHideMobileControl(runner, spriteIndex, x, y)) return RValue_makeUndefined();
 
     // If subimg < 0, use the current instance's imageIndex
     if (0 > subimg && ctx->currentInstance != nullptr) {
@@ -9531,10 +9538,10 @@ static RValue builtin_draw_sprite_ext(VMContext* ctx, RValue* args, MAYBE_UNUSED
     if (runner->renderer == nullptr) return RValue_makeUndefined();
 
     int32_t spriteIndex = RValue_toInt32(args[0]);
-    if (vitaShouldHideMobileControl(runner, spriteIndex)) return RValue_makeUndefined();
     int32_t subimg = RValue_toInt32(args[1]);
     float x = (float) RValue_toReal(args[2]);
     float y = (float) RValue_toReal(args[3]);
+    if (vitaShouldHideMobileControl(runner, spriteIndex, x, y)) return RValue_makeUndefined();
     float xscale = (float) RValue_toReal(args[4]);
     float yscale = (float) RValue_toReal(args[5]);
     float rot = (float) RValue_toReal(args[6]);
@@ -10258,6 +10265,32 @@ static RValue builtin_draw_line(VMContext* ctx, RValue* args, MAYBE_UNUSED int32
             x2 += 1.0f; y2 += 1.0f;
         }
         runner->renderer->vtable->drawLine(runner->renderer, x1, y1, x2, y2, 1.0f, runner->renderer->drawColor, runner->renderer->drawAlpha);
+    }
+    return RValue_makeUndefined();
+}
+
+// draw_path(path, x, y, absolute), used by the original Chapter 2 Cyber room.
+static RValue builtin_draw_path(VMContext* ctx, RValue* args, int32_t argCount) {
+    Runner* runner = ctx->runner;
+    if (argCount < 4 || runner->renderer == nullptr) return RValue_makeUndefined();
+    int32_t pathIndex = RValue_toInt32(args[0]);
+    if (pathIndex < 0 || (uint32_t)pathIndex >= runner->dataWin->path.count)
+        return RValue_makeUndefined();
+    GamePath* path = &runner->dataWin->path.paths[pathIndex];
+    if (path->internalPoints == nullptr || path->internalPointCount < 2)
+        return RValue_makeUndefined();
+    float originX = (float)RValue_toReal(args[1]);
+    float originY = (float)RValue_toReal(args[2]);
+    bool absolute = RValue_toBool(args[3]);
+    for (uint32_t i = 1; i < path->internalPointCount; ++i) {
+        float x1 = path->internalPoints[i - 1].x;
+        float y1 = path->internalPoints[i - 1].y;
+        float x2 = path->internalPoints[i].x;
+        float y2 = path->internalPoints[i].y;
+        if (!absolute) { x1 += originX; y1 += originY; x2 += originX; y2 += originY; }
+        runner->renderer->vtable->drawLine(runner->renderer, x1, y1, x2, y2, 1.0f,
+                                            runner->renderer->drawColor,
+                                            runner->renderer->drawAlpha);
     }
     return RValue_makeUndefined();
 }
@@ -16911,6 +16944,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     }
     VM_registerBuiltin(ctx, "draw_self", builtin_draw_self);
     VM_registerBuiltin(ctx, "draw_line", builtin_draw_line);
+    VM_registerBuiltin(ctx, "draw_path", builtin_draw_path);
     VM_registerBuiltin(ctx, "draw_line_colour", builtin_draw_line_colour);
     VM_registerBuiltin(ctx, "draw_line_color", builtin_draw_line_colour); // alt-spelling (used in Undertale)
     VM_registerBuiltin(ctx, "draw_line_width", builtin_draw_line_width);

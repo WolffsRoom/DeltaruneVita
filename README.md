@@ -18,14 +18,14 @@ A partir da v0.36, o projeto passou a executar diretamente os dados GameMaker da
 ## Release status
 
 <p align="center">
-  <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-80%25-2ea44f?style=for-the-badge">
+  <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-50%25-yellow?style=for-the-badge">
   &nbsp;
   <img alt="Platform" src="https://img.shields.io/badge/Source-PC%2FSteam-003791?style=for-the-badge&logo=steam&logoColor=white">
   &nbsp;
   <img alt="State" src="https://img.shields.io/badge/State-Playable-brightgreen?style=for-the-badge">
 </p>
 
-A versão atual é a **v0.49**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora ainda possam ocorrer bugs, travamentos e quedas de desempenho.
+A versão atual é a **v0.57**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora ainda possam ocorrer bugs, travamentos e quedas de desempenho.
 
 ---
 
@@ -44,6 +44,12 @@ A versão atual é a **v0.49**. Os cinco capítulos inicializam e são jogáveis
 - carregamento sob demanda e cache de texturas para os capítulos maiores;
 - saves, mods por capítulo e preparação de PT-BR;
 - logs persistentes para diagnóstico.
+- loading animado e preparação de cache ao iniciar os capítulos;
+- perfis gráficos Original, Médio e Baixo.
+- editor de posição e tamanho dos controles touch;
+- volumes separados e opção para desabilitar o processamento de áudio;
+- cache de áudio e texturas revisado com base nos Dev Logs;
+- `devmode` e `showsettings` configuráveis pelo `config.ini`.
 ---
 
 ## <img src="https://64.media.tumblr.com/206eb01413bd79835a78db784da8bb92/f7b0141948b8aff0-22/s1280x1920/d4ab67a73fb9d77c5feca21425075717411ac77d.gif" height="30" align="absmiddle"> Mudança de direção
@@ -84,14 +90,17 @@ To install the game correctly, follow these steps:
 
 ### HOW TO APPLY THE PATCH:
 
-O patcher v0.49 prepara os dados necessários a partir de uma instalação oficial do jogo. A versão Steam compatível é **v0.0.247 Patch**.
+O patcher v0.52 prepara os dados e o cache necessários a partir de uma instalação oficial do jogo. A versão Steam compatível é **v0.0.247 Patch**.
+
+> [!IMPORTANT]
+> Ao atualizar para a v0.52, gere e transfira novamente os dados usando o patcher v0.52. Atualizar apenas o VPK não aplica todas as melhorias.
 
 1. Comprar e instalar [DELTARUNE para PC](https://deltarune.com/) pela Steam.
 2. Confirmar que a instalação está na versão **v0.0.247 Patch** e sem arquivos modificados.
 3. Baixar o VPK e o ZIP do patcher na página de [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
 4. Extrair o patcher e copiar a pasta original `DELTARUNE` para `SteamFiles/DELTARUNE`.
 5. Executar `DeltaruneVitaPatcher.exe`, selecionar o idioma da interface e iniciar a preparação.
-6. Instalar `Deltarune-v0.49.vpk` pelo VitaShell.
+6. Instalar `Deltarune-v0.57.vpk` pelo VitaShell.
 7. Copiar a pasta gerada `VitaFiles/deltarune` para `ux0:data/` no PS Vita.
 
 O resultado final deve conter `ux0:data/deltarune/deltarunevita/`. A seleção de idioma do patcher altera somente a interface do programa e não o idioma do jogo.
@@ -220,6 +229,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
 | v0.47 | Confirmação no Chapter Select, retorno do ícone de configuração e ampliação do cache de texturas. |
 | v0.48 | Recorte de tiles fora da câmera para melhorar o desempenho da cidade no Chapter 5. |
 | v0.49 | Correção das fontes no Chapter 5, fade ao carregar saves e primeiro patcher público. |
+| v0.50 | Melhorias no cache de áudio e texturas, transições, bordas dinâmicas e estabilidade dos Chapters 2 e 5. |
+| v0.51 | Preparação de texturas pelo patcher, loading de cache por capítulo e novos diagnósticos de desempenho. |
+| v0.52 | Loading animado, Debug Dev, cache secundário em RAM, otimização segura de fontes e perfis gráficos Original/Médio/Baixo. |
+| v0.53 | Persistência das configurações, saves separados dos dados do jogo, ferramentas de modding e telemetria detalhada. |
+| v0.54-v0.56 | Builds internas para revisar cache, streaming de áudio, carregamento de salas, fontes, batalhas e estabilidade dos Chapters 1, 2 e 5. |
+| v0.57 | Consolidação das otimizações, editor touch, controles de áudio, bordas manuais, `draw_path` e configurações de desenvolvedor. |
+
+> Durante esse ciclo houve uma tentativa de substituir o backend `legacy-gl` por uma implementação OpenGL mais recente. Muitos conflitos gráficos e crashes foram identificados, então a v0.57 permanece no caminho `legacy-gl`, atualmente mais estável no Vita.
 
 As versões anteriores documentam a fase de pesquisa com Android, os probes gráficos e a evolução inicial do runner.
 

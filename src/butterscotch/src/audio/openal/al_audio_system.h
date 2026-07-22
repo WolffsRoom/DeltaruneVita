@@ -14,14 +14,15 @@
 #define MAX_SOUND_INSTANCES 128
 #define SOUND_INSTANCE_ID_BASE 100000
 #define MAX_AUDIO_STREAMS 32
+#define MAX_SFX_BUFFER_CACHE 32
 // This is the index space that the native runner uses
 #define AUDIO_STREAM_INDEX_BASE 300000
 
 // Keep roughly one second of music queued. Room/texture transitions on Vita can
 // block the main thread for hundreds of milliseconds, and the former ~370 ms
 // queue produced audible underruns during those stalls.
-#define AL_STREAM_BUFFER_COUNT 6
-#define AL_STREAM_BUFFER_SAMPLES 8192
+#define AL_STREAM_BUFFER_COUNT 32
+#define AL_STREAM_BUFFER_SAMPLES 2048
 
 struct stb_vorbis;
 
@@ -38,6 +39,7 @@ typedef struct {
     float startGain;
     int32_t priority;
     bool music;
+    bool sharedBuffer;
 
     // Streaming state (only valid when streaming == true)
     bool streaming;
@@ -45,6 +47,8 @@ typedef struct {
     bool streamEnded; // decoder produced no more samples; waiting for queue to drain
     struct stb_vorbis* vorbis;
     ALuint streamBuffers[AL_STREAM_BUFFER_COUNT];
+    int streamPrimedCount;
+    int streamBufferTarget;
     int16_t* decodeScratch; // sized for AL_STREAM_BUFFER_SAMPLES * streamChannels shorts
     int streamChannels;
     int streamSampleRate;
@@ -59,6 +63,12 @@ typedef struct {
 } AudioStreamEntry;
 
 typedef struct {
+    bool active;
+    int32_t soundIndex;
+    ALuint buffer;
+} SfxBufferCacheEntry;
+
+typedef struct {
     AudioSystem base;
     ALCdevice* alDevice;
     ALCcontext* alContext;
@@ -66,11 +76,15 @@ typedef struct {
     int32_t nextInstanceCounter;
     FileSystem* fileSystem;
     AudioStreamEntry streams[MAX_AUDIO_STREAMS];
+    SfxBufferCacheEntry sfxBufferCache[MAX_SFX_BUFFER_CACHE];
     float musicGain;
     float sfxGain;
+    bool disabled;
 } AlAudioSystem;
 
 AlAudioSystem* AlAudioSystem_create(void);
 void AlAudioSystem_setCategoryGains(AlAudioSystem* audio, float musicGain, float sfxGain);
+void AlAudioSystem_setDisabled(AlAudioSystem* audio, bool disabled);
+uint32_t AlAudioSystem_preloadChapterSfx(AlAudioSystem* audio, bool preloadBuffers);
 
 #endif /* _BS_AL_AUDIO_SYSTEM_H_ */

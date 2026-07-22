@@ -86,7 +86,6 @@ static void releaseInstance(SoundInstance* inst) {
             ALuint b;
             alSourceUnqueueBuffers(inst->alSource, 1, &b);
         }
-        alDeleteSources(1, &inst->alSource);
         alDeleteBuffers(AL_STREAM_BUFFER_COUNT, inst->streamBuffers);
         if (inst->vorbis != nullptr) {
             stb_vorbis_close((stb_vorbis*) inst->vorbis);
@@ -96,11 +95,34 @@ static void releaseInstance(SoundInstance* inst) {
         inst->decodeScratch = nullptr;
         inst->streaming = false;
     } else {
-        alDeleteSources(1, &inst->alSource);
-        alDeleteBuffers(1, &inst->alBuffer);
+        if (!inst->sharedBuffer) alDeleteBuffers(1, &inst->alBuffer);
     }
 
+    // Sources are expensive to create/delete on Vita. Keep the slot's source
+    // alive and detach its old buffer so the next sound can reuse it.
+    alSourcei(inst->alSource, AL_BUFFER, 0);
+
     inst->active = false;
+    inst->sharedBuffer = false;
+}
+
+static ALuint findCachedSfxBuffer(AlAudioSystem* ma, int32_t soundIndex) {
+    repeat(MAX_SFX_BUFFER_CACHE, i)
+        if (ma->sfxBufferCache[i].active && ma->sfxBufferCache[i].soundIndex == soundIndex)
+            return ma->sfxBufferCache[i].buffer;
+    return 0;
+}
+
+static bool cacheSfxBuffer(AlAudioSystem* ma, int32_t soundIndex, ALuint buffer) {
+    repeat(MAX_SFX_BUFFER_CACHE, i) {
+        if (!ma->sfxBufferCache[i].active) {
+            ma->sfxBufferCache[i].active = true;
+            ma->sfxBufferCache[i].soundIndex = soundIndex;
+            ma->sfxBufferCache[i].buffer = buffer;
+            return true;
+        }
+    }
+    return false;
 }
 
 // Decode the next chunk from inst->vorbis into inst->decodeScratch and upload it to "buf".
@@ -250,6 +272,8 @@ static void maDestroy(AudioSystem* audio) {
     // Uninit all active sound instances
     repeat(MAX_SOUND_INSTANCES, i) {
         releaseInstance(&ma->instances[i]);
+        if (ma->instances[i].alSource != 0)
+            alDeleteSources(1, &ma->instances[i].alSource);
     }
 
     // Free stream entries
@@ -275,6 +299,7 @@ static void maDestroy(AudioSystem* audio) {
 
 static void maUpdate(AudioSystem* audio, float deltaTime) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
+    if (ma->disabled) return;
 
     repeat(MAX_SOUND_INSTANCES, i) {
         SoundInstance* inst = &ma->instances[i];
@@ -297,7 +322,8 @@ static void maUpdate(AudioSystem* audio, float deltaTime) {
             // Recycle any buffers AL has finished with: count their samples toward the play position, then refill from the decoder and re-queue at the tail.
             ALint processed = 0;
             alGetSourcei(inst->alSource, AL_BUFFERS_PROCESSED, &processed);
-            while (processed > 0) {
+            int decodedThisFrame = 0;
+            while (processed > 0 && decodedThisFrame < 1) {
                 ALuint buf;
                 alSourceUnqueueBuffers(inst->alSource, 1, &buf);
                 processed--;
@@ -313,9 +339,21 @@ static void maUpdate(AudioSystem* audio, float deltaTime) {
                 if (!inst->streamEnded) {
                     if (streamFillBuffer(inst, buf)) {
                         alSourceQueueBuffers(inst->alSource, 1, &buf);
+                        decodedThisFrame++;
                     } else {
                         inst->streamEnded = true;
                     }
+                }
+            }
+
+            if (!inst->streamEnded && decodedThisFrame == 0 &&
+                inst->streamPrimedCount < inst->streamBufferTarget) {
+                ALuint buf = inst->streamBuffers[inst->streamPrimedCount];
+                if (streamFillBuffer(inst, buf)) {
+                    alSourceQueueBuffers(inst->alSource, 1, &buf);
+                    inst->streamPrimedCount++;
+                } else {
+                    inst->streamEnded = true;
                 }
             }
 
@@ -344,6 +382,7 @@ static void maUpdate(AudioSystem* audio, float deltaTime) {
 
 static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t priority, bool loop) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
+    if (ma->disabled) return -1;
 
     // Check if this is a stream index (created by audio_create_stream)
     bool isStream = (soundIndex >= AUDIO_STREAM_INDEX_BASE);
@@ -385,7 +424,6 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
         slot->music = categoryName != nullptr && strncmp(categoryName, "snd_", 4) != 0 &&
                       strncmp(categoryName, "AUDIO_INTRONOISE", 16) != 0;
     }
-
     if (isStream) {
         // Streaming path: open the decoder, queue a few small buffers, and let maUpdate() top them up.
         // This avoids the multi-hundred-millisecond hang of decoding a whole song into PCM on the main thread.
@@ -404,13 +442,18 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
         slot->streamSampleRate = (int) info.sample_rate;
         slot->streamFormat = (info.channels == 2) ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
         slot->streamLengthSeconds = stb_vorbis_stream_length_in_seconds(v);
+        slot->streamBufferTarget = AL_STREAM_BUFFER_COUNT;
         slot->decodeScratch = (int16_t *)safeMalloc(AL_STREAM_BUFFER_SAMPLES * info.channels * sizeof(int16_t));
 
-        alGenSources(1, &slot->alSource);
+        if (slot->alSource == 0) alGenSources(1, &slot->alSource);
         alGenBuffers(AL_STREAM_BUFFER_COUNT, slot->streamBuffers);
 
         int primed = 0;
-        for (int i = 0; AL_STREAM_BUFFER_COUNT > i; i++) {
+        // Two blocks are enough to start cleanly while avoiding a noticeable
+        // main-thread pause the first time a song is opened. The update loop
+        // grows the queue to its full transition-safe target afterwards.
+        const int initialStreamBuffers = 2;
+        for (int i = 0; initialStreamBuffers > i; i++) {
             if (!streamFillBuffer(slot, slot->streamBuffers[i])) break;
             alSourceQueueBuffers(slot->alSource, 1, &slot->streamBuffers[i]);
             primed++;
@@ -422,13 +465,21 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
             alDeleteBuffers(AL_STREAM_BUFFER_COUNT, slot->streamBuffers);
             stb_vorbis_close(v);
             free(slot->decodeScratch);
-            slot->streaming = false;
+    slot->streaming = false;
+    slot->sharedBuffer = false;
             slot->vorbis = nullptr;
             slot->decodeScratch = nullptr;
             return -1;
         }
+        slot->streamPrimedCount = primed;
     } else {
-        alGenSources(1, &slot->alSource);
+        if (slot->alSource == 0) alGenSources(1, &slot->alSource);
+        ALuint cachedSfx = !slot->music ? findCachedSfxBuffer(ma, soundIndex) : 0;
+        if (cachedSfx != 0) {
+            slot->alBuffer = cachedSfx;
+            slot->sharedBuffer = true;
+            alSourcei(slot->alSource, AL_BUFFER, slot->alBuffer);
+        } else {
         alGenBuffers(1, &slot->alBuffer);
         bool isRegular = (sound->flags & AUDIO_ENTRY_FLAG_REGULAR) == AUDIO_ENTRY_FLAG_REGULAR;
         bool isEmbedded = (sound->flags & AUDIO_ENTRY_FLAG_IS_EMBEDDED) != 0;
@@ -486,6 +537,8 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
                 if (wav.data != nullptr) free(wav.data);
             }
             alSourcei(slot->alSource, AL_BUFFER, slot->alBuffer);
+            if (!slot->music && cacheSfxBuffer(ma, soundIndex, slot->alBuffer))
+                slot->sharedBuffer = true;
             free(transientData);
         } else {
             // External OGG music is streamed on Vita. Decoding an entire track on the
@@ -502,6 +555,23 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
 #ifdef PLATFORM_VITA
             vitaAudioLog("external_resolved", sound->file, path);
 #endif
+            if (!slot->music) {
+                int channels = 0, sampleRate = 0;
+                short* pcm = nullptr;
+                int samples = stb_vorbis_decode_filename(path, &channels, &sampleRate, &pcm);
+                if (samples <= 0 || pcm == nullptr) {
+                    alDeleteBuffers(1, &slot->alBuffer);
+                    alDeleteSources(1, &slot->alSource);
+                    free(path);
+                    return -1;
+                }
+                alBufferData(slot->alBuffer, channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16,
+                             pcm, samples * channels * (int)sizeof(short), sampleRate);
+                free(pcm);
+                alSourcei(slot->alSource, AL_BUFFER, slot->alBuffer);
+                if (cacheSfxBuffer(ma, soundIndex, slot->alBuffer)) slot->sharedBuffer = true;
+                free(path);
+            } else {
             int err = 0;
             stb_vorbis* v = stb_vorbis_open_filename(path, &err, nullptr);
             if (v == nullptr) {
@@ -522,10 +592,12 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
             slot->streamSampleRate = (int)info.sample_rate;
             slot->streamFormat = info.channels == 2 ? AL_FORMAT_STEREO16 : AL_FORMAT_MONO16;
             slot->streamLengthSeconds = stb_vorbis_stream_length_in_seconds(v);
+            slot->streamBufferTarget = slot->music ? AL_STREAM_BUFFER_COUNT : 3;
             slot->decodeScratch = (int16_t*)safeMalloc(AL_STREAM_BUFFER_SAMPLES * info.channels * sizeof(int16_t));
             alGenBuffers(AL_STREAM_BUFFER_COUNT, slot->streamBuffers);
             int primed = 0;
-            for (int i = 0; i < AL_STREAM_BUFFER_COUNT; ++i) {
+            const int initialStreamBuffers = slot->music ? 2 : 1;
+            for (int i = 0; i < initialStreamBuffers; ++i) {
                 if (!streamFillBuffer(slot, slot->streamBuffers[i])) break;
                 alSourceQueueBuffers(slot->alSource, 1, &slot->streamBuffers[i]);
                 primed++;
@@ -541,7 +613,10 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
                 free(path);
                 return -1;
             }
+            slot->streamPrimedCount = primed;
             free(path);
+            }
+        }
         }
     }
 
@@ -1097,6 +1172,48 @@ AlAudioSystem* AlAudioSystem_create(void) {
     return ma;
 }
 
+static bool shouldPreloadChapterSfx(const char* name) {
+    if (name == nullptr) return false;
+    static const char* const priority[] = {
+        "snd_step1", "snd_step2", "snd_text", "snd_menumove",
+        "snd_select", "snd_cantselect", "snd_pause", "snd_save",
+        "snd_battleenter", "snd_damage", "snd_hurt1", "snd_hurtsmall",
+        "snd_hit", "snd_swing", "snd_smallswing", "snd_heavyswing",
+        "snd_criticalswing", "snd_graze", "snd_spare", "snd_spellcast",
+        "snd_item", "snd_equip", "snd_power", "snd_levelup",
+        "snd_rudebuster_hit", "snd_rudebuster_swing", "snd_bump",
+        "snd_impact", "snd_grab", "snd_jump", "snd_wing", "snd_won"
+    };
+    for (uint32_t i = 0; i < sizeof(priority) / sizeof(priority[0]); ++i)
+        if (strcmp(name, priority[i]) == 0) return true;
+    return false;
+}
+
+uint32_t AlAudioSystem_preloadChapterSfx(AlAudioSystem* ma, bool preloadBuffers) {
+    if (ma == nullptr || arrlen(ma->base.audioGroups) == 0) return 0;
+    DataWin* dw = ma->base.audioGroups[0];
+    float oldSfxGain = ma->sfxGain;
+    ma->sfxGain = 0.0f;
+    uint32_t prepared = 0;
+    if (preloadBuffers) {
+        for (uint32_t i = 0; i < dw->sond.count && prepared < MAX_SFX_BUFFER_CACHE; ++i) {
+            Sound* sound = &dw->sond.sounds[i];
+            if (!sound->present || !shouldPreloadChapterSfx(sound->name)) continue;
+            int32_t instance = maPlaySound((AudioSystem*)ma, (int32_t)i, 0, false);
+            if (instance >= SOUND_INSTANCE_ID_BASE) {
+                maStopSound((AudioSystem*)ma, instance);
+                if (findCachedSfxBuffer(ma, (int32_t)i) != 0) prepared++;
+            }
+        }
+    }
+    ma->sfxGain = oldSfxGain;
+    // Reserve a practical gameplay pool while the loading screen is visible.
+    // Extra concurrent slots remain lazy to avoid allocating all 128 sources.
+    for (int i = 0; i < 32; ++i)
+        if (ma->instances[i].alSource == 0) alGenSources(1, &ma->instances[i].alSource);
+    return prepared;
+}
+
 void AlAudioSystem_setCategoryGains(AlAudioSystem* ma, float musicGain, float sfxGain) {
     if (ma == nullptr) return;
     ma->musicGain = musicGain;
@@ -1104,5 +1221,16 @@ void AlAudioSystem_setCategoryGains(AlAudioSystem* ma, float musicGain, float sf
     repeat(MAX_SOUND_INSTANCES, i) {
         SoundInstance* inst = &ma->instances[i];
         if (inst->active) alSourcef(inst->alSource, AL_GAIN, inst->currentGain * instanceCategoryGain(ma, inst));
+    }
+}
+
+void AlAudioSystem_setDisabled(AlAudioSystem* ma, bool disabled) {
+    if (ma == nullptr || ma->disabled == disabled) return;
+    ma->disabled = disabled;
+    repeat(MAX_SOUND_INSTANCES, i) {
+        SoundInstance* inst = &ma->instances[i];
+        if (!inst->active || inst->alSource == 0) continue;
+        if (disabled) alSourcePause(inst->alSource);
+        else alSourcePlay(inst->alSource);
     }
 }

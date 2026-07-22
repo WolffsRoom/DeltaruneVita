@@ -35,7 +35,7 @@
 #define LOG_PATH DATA_ROOT "butterscotch-probe.log"
 #define NEXT_CHAPTER_PATH DATA_ROOT "next-chapter.txt"
 #define DEV_LOG_ROOT DATA_ROOT "devlogs"
-#define PORT_BUILD_VERSION "v0.57-r2"
+#define PORT_BUILD_VERSION "v0.57-r3"
 
 // Read by the Vita renderer to apply chapter-specific memory safety policies.
 int g_vitaActiveChapter = 0;
@@ -742,7 +742,11 @@ int main(void) {
             if (inst == NULL || inst->objectIndex < 0 || (uint32_t)inst->objectIndex >= dw->objt.count) continue;
             const char* object_name = dw->objt.objects[inst->objectIndex].name;
             if (object_name != NULL && strcmp(object_name, "obj_mobilecontroller") == 0) {
-                inst->visible = settings.touchEnabled;
+                // The Android controller uses its own fixed coordinates and
+                // fights the Vita editor by snapping a second joystick back
+                // to the original layout.  The Vita overlay already draws the
+                // same game sprites at the edited coordinates.
+                inst->visible = false;
             }
         }
 

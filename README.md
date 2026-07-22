@@ -33,6 +33,13 @@ Starting with v0.36, the project directly executes GameMaker data from the Windo
 
 A versão atual é a **v0.57**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora ainda possam ocorrer bugs, travamentos e quedas de desempenho.
 
+### Estado dos capítulos na v0.57
+
+- **Chapter 1:** revisado sala a sala. O percurso principal foi testado, mas alguma interação opcional ainda pode ter ficado fora da revisão.
+- **Chapter 2:** a maioria das correções de áudio, texturas, batalhas, transições e desempenho já foi aplicada. A revisão continua em salas específicas.
+- **Chapters 3 e 4:** inicializam e são jogáveis, ainda aguardando uma revisão completa no mesmo nível dos dois primeiros capítulos.
+- **Chapter 5:** jogável em parte, mas ainda é o principal ponto de otimização. A região da cidade possui o maior custo de CPU, renderização e memória, podendo apresentar lentidão ou crash.
+
 ---
 
 ## <img src="https://i.redd.it/pzi6lj5np5je1.gif" height="30" align="absmiddle"> O que já funciona
@@ -56,6 +63,8 @@ A versão atual é a **v0.57**. Os cinco capítulos inicializam e são jogáveis
 - volumes separados e opção para desabilitar o processamento de áudio;
 - cache de áudio e texturas revisado com base nos Dev Logs;
 - `devmode` e `showsettings` configuráveis pelo `config.ini`.
+
+O mapeamento das bordas de console usa como referência o mod [NXRUNE](https://gamejolt.com/games/nxrune/629072). Nenhum arquivo do mod é distribuído pelo projeto; suas associações entre salas e bordas foram usadas como material de estudo, com ajustes manuais próprios para o Vita.
 ---
 
 ## <img src="https://64.media.tumblr.com/206eb01413bd79835a78db784da8bb92/f7b0141948b8aff0-22/s1280x1920/d4ab67a73fb9d77c5feca21425075717411ac77d.gif" height="30" align="absmiddle"> Mudança de direção
@@ -304,7 +313,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
 | v0.52 | Loading animado, Debug Dev, cache secundário em RAM, otimização segura de fontes e perfis gráficos Original/Médio/Baixo. |
 | v0.53 | Persistência das configurações, saves separados dos dados do jogo, ferramentas de modding e telemetria detalhada. |
 | v0.54-v0.56 | Builds internas para revisar cache, streaming de áudio, carregamento de salas, fontes, batalhas e estabilidade dos Chapters 1, 2 e 5. |
-| v0.57 | Consolidação das otimizações, editor touch, controles de áudio, bordas manuais, `draw_path` e configurações de desenvolvedor. |
+| v0.57 | Revisão sala a sala do Chapter 1, maioria das correções do Chapter 2, editor touch, controles de áudio, bordas manuais, `draw_path`, Dev Log e ajustes de cache. O Chapter 5, principalmente a cidade, continua como o maior ponto de otimização. |
 
 > Durante esse ciclo houve uma tentativa de substituir o backend `legacy-gl` por uma implementação OpenGL mais recente. Muitos conflitos gráficos e crashes foram identificados, então a v0.57 permanece no caminho `legacy-gl`, atualmente mais estável no Vita.
 

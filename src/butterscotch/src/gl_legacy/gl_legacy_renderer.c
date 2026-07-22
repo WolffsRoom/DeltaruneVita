@@ -836,6 +836,15 @@ static void vitaGpuAtlasSize(GLLegacyRenderer* gl, uint32_t pageId, int w, int h
     extern int g_vitaGraphicsQuality;
     extern int g_vitaActiveChapter;
     bool largeAtlas = w == 2048 && h == 2048;
+    const char* roomName = gl->base.runner != nullptr && gl->base.runner->currentRoom != nullptr
+        ? gl->base.runner->currentRoom->name : nullptr;
+    // This room references enough full-size scenery pages in one draw pass to
+    // fill the 104 MiB cache. The final pages were then deferred every frame,
+    // showing missing houses/props. 1280 remains above the Vita's display
+    // resolution while allowing the complete room working set to coexist.
+    bool transformedCastleSafetyScale = g_vitaActiveChapter == 2 && largeAtlas &&
+        roomName != nullptr && strcmp(roomName, "room_dw_castle_area_2_transformed") == 0 &&
+        !gl->texturePinned[pageId] && !vitaTexturePageHasFont(gl, pageId);
     // Chapter 5 Town references more full-size scenery atlases in one frame
     // than the Vita graphics pool can hold. Even in Original mode, keep UI and
     // font pages intact but use the Medium scenery size for this chapter. This
@@ -845,7 +854,8 @@ static void vitaGpuAtlasSize(GLLegacyRenderer* gl, uint32_t pageId, int w, int h
                                !vitaTexturePageHasFont(gl, pageId);
     bool preserveOriginal = !largeAtlas || gl->texturePinned[pageId] ||
                             vitaTexturePageHasFont(gl, pageId) ||
-                            (g_vitaGraphicsQuality == 0 && !chapter5SafetyScale);
+                            (g_vitaGraphicsQuality == 0 && !chapter5SafetyScale &&
+                             !transformedCastleSafetyScale);
     int target = g_vitaGraphicsQuality == 2 ? 1024 : 1280;
     *gpuW = preserveOriginal ? w : target;
     *gpuH = preserveOriginal ? h : target;

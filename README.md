@@ -35,10 +35,12 @@ A versão atual é a **v0.57**. Os cinco capítulos inicializam e são jogáveis
 
 ### Estado dos capítulos na v0.57
 
-- **Chapter 1:** revisado sala a sala. O percurso principal foi testado, mas alguma interação opcional ainda pode ter ficado fora da revisão.
-- **Chapter 2:** a maioria das correções de áudio, texturas, batalhas, transições e desempenho já foi aplicada. A revisão continua em salas específicas.
-- **Chapters 3 e 4:** inicializam e são jogáveis, ainda aguardando uma revisão completa no mesmo nível dos dois primeiros capítulos.
-- **Chapter 5:** jogável em parte, mas ainda é o principal ponto de otimização. A região da cidade possui o maior custo de CPU, renderização e memória, podendo apresentar lentidão ou crash.
+| Chapter | Details |
+| :--- | :--- |
+| **1** | Thoroughly reviewed room by room. The run fully verified. Maybe some optimizations remain to be checked. |
+| **2** | Received comprehensive fixes (audio, battles, transitions, textures, menus, performance). Some rooms are under observation. |
+| **3 and 4**| Fully bootable and playable, subject to testing, optimizations, and perhaps fixes at certain points. |
+| **5** | The primary optimization challenge. The city area is highly resource-intensive and may still result in low FPS or crashes. |
 
 ---
 

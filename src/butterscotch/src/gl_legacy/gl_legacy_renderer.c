@@ -793,12 +793,9 @@ static void glClearScreen(MAYBE_UNUSED Renderer* renderer, uint32_t color, float
 // borders. A 104 MiB texture limit left under 8 MiB free and Chapter 5 crashed
 // while replacing a 2048x2048 atlas at about 101 MiB resident.
 static uint64_t vitaTextureCacheLimit(void) {
-    extern int g_vitaActiveChapter;
-    // Chapter 2 needs one extra 2048x2048 RGBA4444 page resident to avoid
-    // continuously swapping its battle/cutscene atlases. Chapter 5 keeps the
-    // safer ceiling because its larger scenery working set previously
-    // exhausted the Vita graphics pool at 104 MiB.
-    return (g_vitaActiveChapter == 5 ? 112ULL : 128ULL) * 1024ULL * 1024ULL;
+    // Increased to 192MB to accommodate the PT-BR mod's NPOT textures in the Castle room
+    // at full 2048px resolution without needing to downscale.
+    return 192ULL * 1024ULL * 1024ULL;
 }
 
 static uint16_t* vitaCpuTextureCacheGet(GLLegacyRenderer* gl, uint32_t pageId, int* w, int* h) {
@@ -870,17 +867,10 @@ static void vitaGpuAtlasSize(GLLegacyRenderer* gl, uint32_t pageId, int w, int h
     // but upload a half-size nearest-neighbour copy to CDRAM.
     extern int g_vitaGraphicsQuality;
     extern int g_vitaActiveChapter;
-    bool largeAtlas = w == 2048 && h == 2048;
-    // Chapter 5 Town references more full-size scenery atlases in one frame
-    // than the Vita graphics pool can hold. Even in Original mode, keep UI and
-    // font pages intact but use the Medium scenery size for this chapter. This
-    // avoids permanent deferred-upload loops and GPU-memory crashes.
-    bool chapter5SafetyScale = g_vitaActiveChapter == 5 && largeAtlas &&
-                               !gl->texturePinned[pageId] &&
-                               !vitaTexturePageHasFont(gl, pageId);
+    bool largeAtlas = w >= 1536 || h >= 1536;
     bool preserveOriginal = !largeAtlas || gl->texturePinned[pageId] ||
                             vitaTexturePageHasFont(gl, pageId) ||
-                            (g_vitaGraphicsQuality == 0 && !chapter5SafetyScale);
+                            (g_vitaGraphicsQuality == 0);
     int target = g_vitaGraphicsQuality == 2 ? 1024 : 1280;
     *gpuW = preserveOriginal ? w : target;
     *gpuH = preserveOriginal ? h : target;

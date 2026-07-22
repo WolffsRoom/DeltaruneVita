@@ -16,13 +16,16 @@ Starting with v0.36, the project directly executes GameMaker data from the Windo
 
 ## Project Status
 
-<p align="center">
-  <img alt="Overall progress" src="https://img.shields.io/badge/Overall_progress-50%25-yellow?style=for-the-badge">
-  &nbsp;
-  <img alt="Platform" src="https://img.shields.io/badge/Source-PC%2FSteam-003791?style=for-the-badge&logo=steam&logoColor=white">
-  &nbsp;
-  <img alt="State" src="https://img.shields.io/badge/State-Playable-brightgreen?style=for-the-badge">
-</p>
+<div align="center">
+  <a href="https://github.com/WolffsRoom/DeltaruneVita/releases"><img src="https://img.shields.io/github/downloads/WolffsRoom/DeltaruneVita/total?style=for-the-badge&color=blue&logo=github" alt="Downloads"></a>
+  <a href="https://github.com/WolffsRoom/DeltaruneVita/releases/latest"><img src="https://img.shields.io/github/v/release/WolffsRoom/DeltaruneVita?style=for-the-badge&color=brightgreen&logo=github" alt="Release"></a>
+  <br>
+  <img src="https://img.shields.io/badge/OVERALL_PROGRESS-60%25-ffc107?style=for-the-badge" alt="Progress">
+  <img src="https://img.shields.io/badge/SOURCE-PC%2FSTEAM-004aa5?style=for-the-badge&logo=steam&logoColor=white" alt="Source">
+  <img src="https://img.shields.io/badge/STATE-PLAYABLE-brightgreen?style=for-the-badge" alt="State">
+</div>
+
+<br>
 
 | Chapter | Details |
 | :--- | :--- |

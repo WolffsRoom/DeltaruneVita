@@ -23,17 +23,6 @@ Starting with v0.36, the project directly executes GameMaker data from the Windo
   &nbsp;
   <img alt="State" src="https://img.shields.io/badge/State-Playable-brightgreen?style=for-the-badge">
 </p>
-<div align="center">
-  <img src="https://img.shields.io/badge/Please%2C%20support%20this%20and%20others%20projects-black?style=for-the-badge&labelColor=black&color=yellow&logoWidth=0" alt="Please, support this and others projects" style="font-family: 'Press Start 2P', monospace; height: 35px;">
-  <br><br>
-  <a href="https://www.buymeacoffee.com/5rsrt7j4z8f" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important; width: 217px !important;">
-  </a>
-</div>
-
-A versão atual é a **v0.57**. Os cinco capítulos inicializam e são jogáveis em hardware real, embora ainda possam ocorrer bugs, travamentos e quedas de desempenho.
-
-### Estado dos capítulos na v0.57
 
 | Chapter | Details |
 | :--- | :--- |
@@ -42,52 +31,16 @@ A versão atual é a **v0.57**. Os cinco capítulos inicializam e são jogáveis
 | **3 and 4**| Fully bootable and playable, subject to testing, optimizations, and perhaps fixes at certain points. |
 | **5** | The primary optimization challenge. The city area is highly resource-intensive and may still result in low FPS or crashes. |
 
----
+<div align="center">
+  <img src="https://img.shields.io/badge/Please%2C%20support%20this%20and%20others%20projects-black?style=for-the-badge&labelColor=black&color=yellow&logoWidth=0" alt="Please, support this and others projects" style="font-family: 'Press Start 2P', monospace; height: 35px;">
+  <br><br>
+  <a href="https://www.buymeacoffee.com/5rsrt7j4z8f" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important; width: 217px !important;">
+  </a>
+</div>
 
-## <img src="https://i.redd.it/pzi6lj5np5je1.gif" height="30" align="absmiddle"> O que já funciona
 
-- seletor e troca dos cinco capítulos;
-- retorno ao Chapter Select pelo menu do jogo;
-- leitura direta dos arquivos Windows/Steam;
-- renderer VitaGL adaptado ao backend legado do Butterscotch;
-- controles físicos do Vita;
-- controles touch opcionais;
-- menu Game Settings em inglês e português;
-- volumes separados para música e efeitos;
-- posição e zoom da tela configuráveis;
-- bordas da versão de console selecionadas dinamicamente pelo capítulo e cenário;
-- carregamento sob demanda e cache de texturas para os capítulos maiores;
-- saves, mods por capítulo e preparação de PT-BR;
-- logs persistentes para diagnóstico.
-- loading animado e preparação de cache ao iniciar os capítulos;
-- perfis gráficos Original, Médio e Baixo.
-- editor de posição e tamanho dos controles touch;
-- volumes separados e opção para desabilitar o processamento de áudio;
-- cache de áudio e texturas revisado com base nos Dev Logs;
-- `devmode` e `showsettings` configuráveis pelo `config.ini`.
-
-O mapeamento das bordas de console usa como referência o mod [NXRUNE](https://gamejolt.com/games/nxrune/629072). Nenhum arquivo do mod é distribuído pelo projeto; suas associações entre salas e bordas foram usadas como material de estudo, com ajustes manuais próprios para o Vita.
----
-
-## <img src="https://64.media.tumblr.com/206eb01413bd79835a78db784da8bb92/f7b0141948b8aff0-22/s1280x1920/d4ab67a73fb9d77c5feca21425075717411ac77d.gif" height="30" align="absmiddle"> Mudança de direção
-
-O trabalho começou estudando ports Android e o carregamento por YoYo Loader/SoLoader. Essa etapa permitiu entender a divisão dos capítulos, os arquivos externos, a inicialização do runner e os controles touch.
-
-Depois dos primeiros testes com Butterscotch e VitaGL, o port passou a carregar os dados oficiais da versão Windows. Isso remove a dependência do APK e evita manter os problemas específicos do runner Android.
-
-O fluxo atual é:
-
-```text
-Arquivos oficiais PC/Steam
-        ↓
-Preparação dos dados por capítulo
-        ↓
-Butterscotch adaptado ao Vita
-        ↓
-VitaGL + OpenAL + controles Vita
-```
-
-## Guia de instalação
+## Installation Guide
 
 To install the game correctly, follow these steps:
 
@@ -103,22 +56,21 @@ To install the game correctly, follow these steps:
 
 - **Optional:** Install [PSVshell](https://github.com/Electry/PSVshell/releases) to overclock your device.
 - Install `libshacccg.suprx`, if it is not already installed, by following [this guide](https://samilops2.gitbook.io/vita-troubleshooting-guide/shader-compiler/extract-libshacccg.suprx).
-- Purchase the official game legally at [Steam](https://store.steampowered.com/app/1671210/DELTARUNE/).
+- Purchase the official game legally at [deltarune.com](https://deltarune.com/).
 
 ### HOW TO APPLY THE PATCH:
 
-O patcher v0.52 prepara os dados e o cache necessários a partir de uma instalação oficial do jogo. A versão Steam compatível é **v0.0.247 Patch**.
+To run the game, make sure you have the required data files from an official game installation. The supported Steam version is **v0.0.247 Patch**.  
+*PS: The language selection in the patcher only changes the program's interface, not the in-game language.*
 
-> [!IMPORTANT]
-> Ao atualizar para a v0.52, gere e transfira novamente os dados usando o patcher v0.52. Atualizar apenas o VPK não aplica todas as melhorias.
-
-1. Comprar e instalar [DELTARUNE para PC](https://deltarune.com/) pela Steam.
-2. Confirmar que a instalação está na versão **v0.0.247 Patch** e sem arquivos modificados.
-3. Baixar o VPK e o ZIP do patcher na página de [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
-4. Extrair o patcher e copiar a pasta original `DELTARUNE` para `SteamFiles/DELTARUNE`.
-5. Executar `DeltaruneVitaPatcher.exe`, selecionar o idioma da interface e iniciar a preparação.
-6. Instalar `Deltarune-v0.57.vpk` pelo VitaShell.
-7. Copiar a pasta gerada `VitaFiles/deltarune` para `ux0:data/` no PS Vita.
+1. Purchase and/or install [DELTARUNE for PC](https://deltarune.com/) via Steam.
+2. Ensure the installation is on version **v0.0.247 Patch** and contains no modified files.
+3. Download the .VPK (`Deltarune-vX.XX.vpk`) and the .ZIP file (`DeltaruneVita-Patcher-vX.XX.zip`) from the [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases/latest) page.
+4. Extract the ZIP file to get the patcher.
+5. Copy the `DELTARUNE` folder (typically located at `C:\Program Files (x86)\Steam\steamapps\common\`) into the patcher directory at `SteamFiles/DELTARUNE`.
+6. Run `DeltaruneVitaPatcher.exe`, select your preferred interface language, and start the process.
+7. Copy the generated `deltarune` folder inside `VitaFiles` to `ux0:data/` on your PS Vita. USB transfer or an SD card reader is highly recommended since the file size is quite large (~1.1 GB).
+8. Finally, install `Deltarune-vX.XX.vpk` using VitaShell.
 
 #### Observations: 
 
@@ -289,35 +241,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
 
 ## Recent Changelog
 
-| Versão | Mudanças principais |
-|---|---|
-| v0.08 | Primeiro VPK de prova integrando Butterscotch e VitaGL. |
-| v0.08 - 0.22| Várias verificações de viabilidade, testes de texturas, aúdios. |
-| v0.23 | Chapters 1 e 2 jogáveis pela primeira vez. |
-| v0.24 - v0.34   | Vários ajustes, correções, implementações com base na versão de Android. |
-| v0.35 | Última atualização com base nos dados do port de Android. |
-| v0.36 | Início da migração dos dados Android para os arquivos Windows/Steam. |
-| v0.37 | Ajustes no carregamento do runner Windows, fontes e áudio externo. |
-| v0.38 | Retorno à biblioteca VitaGL estável e diagnóstico do primeiro frame. |
-| v0.39 | Correção do crash causado pelo overlay dos controles touch. |
-| v0.40 | Música externa, novo Game Settings, Chapter Select, cache de texturas e bordas de console. |
-| v0.41 | Streaming de músicas, bordas ligadas ao cenário e registros de quedas de desempenho. |
-| v0.42 | Correção dos caminhos de áudio e redução do recarregamento de texturas no Chapter 2. |
-| v0.43 | Acesso direto à biblioteca de músicas no Vita e correção da faixa sincronizada do logo do Chapter 5. |
-| v0.44 | Redução do uso dos atlas de textura e aumento do buffer de streaming de áudio. |
-| v0.45 | Revisão da interface de Game Settings. |
-| v0.46 | Correção da regressão que impedia a inicialização dos capítulos. |
-| v0.47 | Confirmação no Chapter Select, retorno do ícone de configuração e ampliação do cache de texturas. |
-| v0.48 | Recorte de tiles fora da câmera para melhorar o desempenho da cidade no Chapter 5. |
-| v0.49 | Correção das fontes no Chapter 5, fade ao carregar saves e primeiro patcher público. |
-| v0.50 | Melhorias no cache de áudio e texturas, transições, bordas dinâmicas e estabilidade dos Chapters 2 e 5. |
-| v0.51 | Preparação de texturas pelo patcher, loading de cache por capítulo e novos diagnósticos de desempenho. |
-| v0.52 | Loading animado, Debug Dev, cache secundário em RAM, otimização segura de fontes e perfis gráficos Original/Médio/Baixo. |
-| v0.53 | Persistência das configurações, saves separados dos dados do jogo, ferramentas de modding e telemetria detalhada. |
-| v0.54-v0.56 | Builds internas para revisar cache, streaming de áudio, carregamento de salas, fontes, batalhas e estabilidade dos Chapters 1, 2 e 5. |
-| v0.57 | Revisão sala a sala do Chapter 1, maioria das correções do Chapter 2, editor touch, controles de áudio, bordas manuais, `draw_path`, Dev Log e ajustes de cache. O Chapter 5, principalmente a cidade, continua como o maior ponto de otimização. |
-
-> Durante esse ciclo houve uma tentativa de substituir o backend `legacy-gl` por uma implementação OpenGL mais recente. Muitos conflitos gráficos e crashes foram identificados, então a v0.57 permanece no caminho `legacy-gl`, atualmente mais estável no Vita.
+This section briefly documents past versions, covering the initial Android research phase, graphics probing, and early runner evolution.
+<details>
+  <summary><i>View changelog</i></summary>
 
 <table>
   <thead>
@@ -417,13 +343,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
     </tr>
   </tbody>
 </table>
+</details>
 
 ## Folder Structure
 
+- Game data:
 ```text
 ux0:data/deltarune/
 ├── config.ini
-├── save/
 └── deltarunevita/
     ├── borders/
     ├── chapter0/
@@ -437,9 +364,22 @@ ux0:data/deltarune/
     ├── music/
     └── texture-cache/
 ```
+- Save date:
+```text
+ux0:data/DeltaruneSaves/
+├── true_config.ini
+├── dr.ini/
+└── DLTR00000/
+    ├── sce_pfs/
+    ├── sce_sys/
+    ├── config_0.ini/
+    ├── dr.ini/
+    ├── filech1_0/
+    ├── filech1_9/
+    └── true_config.ini
+```
 
 The main file log is saved in:
-
 ```text
 ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 ```

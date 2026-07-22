@@ -337,8 +337,8 @@ static void migrate_save_directory(const char* old_save_dir) {
             if (strstr(dir.d_name, "filech") == dir.d_name ||
                 strcmp(dir.d_name, "dr.ini") == 0 ||
                 strcmp(dir.d_name, "true_config.ini") == 0) {
-                char old_path[256];
-                char new_path[256];
+                char old_path[512];
+                char new_path[512];
                 snprintf(old_path, sizeof(old_path), "%s%s", old_save_dir, dir.d_name);
                 snprintf(new_path, sizeof(new_path), "%s%s", SAVE_PATH, dir.d_name);
                 SceIoStat stat;
@@ -383,8 +383,8 @@ int main(void) {
     vglSetupRuntimeShaderCompiler(SHARK_OPT_SLOW, 0, 0, 0);
     log_line("SHARK=opt_slow fastmath=0 fastprecision=0 fastint=0");
     log_line("RENDERER=vita_arrays_v2 immediate_bridge=all STDIO=unbuffered");
-    log_line("VITAGL=init_begin reserve=67108864");
-    vglInitExtended(0, 960, 544, 64 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
+    log_line("VITAGL=init_begin reserve=33554432");
+    vglInitExtended(0, 960, 544, 32 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
     log_line("VITAGL=init_complete");
 
     VitaSettings settings;

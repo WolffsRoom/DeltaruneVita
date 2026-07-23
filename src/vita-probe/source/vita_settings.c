@@ -15,16 +15,25 @@
 #include "vita_borders.h"
 
 #define SETTINGS_PATH "ux0:data/deltarune/config.ini"
-#define SETTINGS_CATEGORIES 4
+#define SETTINGS_CATEGORIES 5
 #define MODS_ROOT "ux0:data/deltarune/deltarunevita/mods/"
 
 static bool g_devMode = false;
 
 static int settingsItemCount(int category) {
-    if (category == 0) return g_devMode ? 3 : 2;
-    if (category == 1) return g_devMode ? 4 : 3;
-    if (category == 3) return 4;
-    return category == 2 ? 4 : 2;
+    if (g_devMode) {
+        if (category == 0) return 2; // DEV
+        if (category == 1) return 3; // CONTROLES
+        if (category == 2) return 3; // TELA
+        if (category == 3) return 4; // AUDIO
+        if (category == 4) return 4; // SISTEMA
+    } else {
+        if (category == 0) return 3; // CONTROLES
+        if (category == 1) return 3; // TELA
+        if (category == 2) return 4; // AUDIO
+        if (category == 3) return 4; // SISTEMA
+    }
+    return 0;
 }
 
 int VitaSettings_itemCount(int category) { return settingsItemCount(category); }
@@ -78,18 +87,19 @@ static void discoverMods(VitaSettings* s) {
     s->modCount = 0;
     strncpy(s->modNames[0], "Original", MOD_NAME_MAX - 1);
     s->modCount = 1;
-
     SceUID dd = sceIoDopen(MODS_ROOT);
     if (dd < 0) return;
     SceIoDirent entry;
     while (sceIoDread(dd, &entry) > 0 && s->modCount < MAX_MODS) {
         if (entry.d_name[0] == '.') continue;
         SceIoStat stat;
-        char fullpath[256];
+        char fullpath[512];
         snprintf(fullpath, sizeof(fullpath), "%s%s", MODS_ROOT, entry.d_name);
         if (sceIoGetstat(fullpath, &stat) >= 0 && SCE_S_ISDIR(stat.st_mode)) {
-            strncpy(s->modNames[s->modCount], entry.d_name, MOD_NAME_MAX - 1);
-            s->modNames[s->modCount][MOD_NAME_MAX - 1] = '\0';
+            size_t nlen = strlen(entry.d_name);
+            if (nlen >= MOD_NAME_MAX) nlen = MOD_NAME_MAX - 1;
+            memcpy(s->modNames[s->modCount], entry.d_name, nlen);
+            s->modNames[s->modCount][nlen] = '\0';
             s->modCount++;
         }
     }
@@ -108,7 +118,7 @@ static void applyDisplaySettings(const VitaSettings* s) {
 static void saveSettings(const VitaSettings* s) {
     const char* modName = (s->modIndex > 0 && s->modIndex < s->modCount) ? s->modNames[s->modIndex] : "Original";
     char text[1024];
-    int length = snprintf(text, sizeof(text), "touch=%d\nroom_nav=%d\ndevmode=%d\nshowsettings=%d\nmod=%s\nwidescreen=%d\nmaster_volume=%d\nmusic_volume=%d\nsfx_volume=%d\naudio_disabled=%d\nvsync=%d\ngraphics=%d\nscreen_profile=3\noffset_x=%d\noffset_y=%d\nzoom=%d\ntouch_stick=%d,%d,%d\ntouch_z=%d,%d,%d\ntouch_x=%d,%d,%d\ntouch_c=%d,%d,%d\n",
+    int length = snprintf(text, sizeof(text), "touch=%d\nroom_nav=%d\ndevmode=%d\nshowsettings=%d\nmod=%s\nwidescreen=%d\nmaster_volume=%d\nmusic_volume=%d\nsfx_volume=%d\naudio_disabled=%d\nvsync=%d\ngraphics=%d\nscreen_profile=3\noffset_x=%d\noffset_y=%d\nzoom=%d\ntouch_stick=%d,%d,%d\ntouch_z=%d,%d,%d\ntouch_x=%d,%d,%d\ntouch_c=%d,%d,%d\nshortcut_skip=%d\n",
                            s->touchEnabled ? 1 : 0, s->devRoomNavEnabled ? 1 : 0,
                            s->devMode ? 1 : 0, s->showSettings ? 1 : 0, modName,
                           s->widescreenEnabled ? 1 : 0, s->masterVolume, s->musicVolume, s->sfxVolume, s->audioDisabled ? 1 : 0, s->vsyncEnabled ? 1 : 0,
@@ -116,7 +126,8 @@ static void saveSettings(const VitaSettings* s) {
                           s->touchControlX[0], s->touchControlY[0], s->touchControlScale[0],
                           s->touchControlX[1], s->touchControlY[1], s->touchControlScale[1],
                           s->touchControlX[2], s->touchControlY[2], s->touchControlScale[2],
-                          s->touchControlX[3], s->touchControlY[3], s->touchControlScale[3]);
+                          s->touchControlX[3], s->touchControlY[3], s->touchControlScale[3],
+                          s->shortcutSkipDialogs ? 1 : 0);
     SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
     if (fd >= 0) {
         sceIoWrite(fd, text, length);
@@ -140,6 +151,8 @@ void VitaSettings_load(VitaSettings* s) {
         s->devRoomNavEnabled = strstr(text, "room_nav=1") != NULL;
         s->devMode = strstr(text, "devmode=1") != NULL;
         s->showSettings = strstr(text, "showsettings=0") == NULL;
+        char* shortcutSetting = strstr(text, "shortcut_skip=");
+        if (shortcutSetting != NULL) s->shortcutSkipDialogs = strstr(shortcutSetting, "shortcut_skip=1") == shortcutSetting;
         s->ptbrEnabled = strstr(text, "mod=PTBR") != NULL;
         s->widescreenEnabled = strstr(text, "widescreen=1") != NULL;
         s->vsyncEnabled = strstr(text, "vsync=0") == NULL;
@@ -348,13 +361,14 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
     }
     if (!s->open) return requestRestart;
 
+    int numCategories = s->devMode ? 5 : 4;
     if (pressed & SCE_CTRL_LTRIGGER) {
-        s->category = (s->category + SETTINGS_CATEGORIES - 1) % SETTINGS_CATEGORIES;
+        s->category = (s->category + numCategories - 1) % numCategories;
         s->selected = 0;
         playSettingSound(audio, 0);
     }
     if (pressed & SCE_CTRL_RTRIGGER) {
-        s->category = (s->category + 1) % SETTINGS_CATEGORIES;
+        s->category = (s->category + 1) % numCategories;
         s->selected = 0;
         playSettingSound(audio, 0);
     }
@@ -367,27 +381,37 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
         if (pressed & SCE_CTRL_CROSS) playSettingSound(audio, 1);
         else playSettingSound(audio, 0);
         
-        if (s->category == 0 && s->selected == 0) {
-            s->touchEnabled = !s->touchEnabled;
-            saveSettings(s);
-        } else if (s->category == 0 && s->selected == 1 && s->devMode) {
+        int logicalCategory = s->category;
+        if (!s->devMode) logicalCategory += 1;
+
+        if (logicalCategory == 0 && s->selected == 0) {
             s->devRoomNavEnabled = !s->devRoomNavEnabled;
             saveSettings(s);
-        } else if (s->category == 0 && s->selected == (s->devMode ? 2 : 1)) {
+        } else if (logicalCategory == 0 && s->selected == 1) {
+            s->debugDevEnabled = !s->debugDevEnabled;
+            s->debugDevChanged = true;
+            saveSettings(s);
+        } else if (logicalCategory == 1 && s->selected == 0) {
+            s->touchEnabled = !s->touchEnabled;
+            saveSettings(s);
+        } else if (logicalCategory == 1 && s->selected == 1) {
             s->controlEditMode = true;
             s->touchEnabled = true;
             s->selectedTouchControl = 0;
-        } else if (s->category == 1 && s->selected == 0) {
+        } else if (logicalCategory == 1 && s->selected == 2) {
+            s->shortcutSkipDialogs = !s->shortcutSkipDialogs;
+            saveSettings(s);
+        } else if (logicalCategory == 2 && s->selected == 0) {
             s->widescreenEnabled = !s->widescreenEnabled;
             if (s->widescreenEnabled && !VitaBorders_filesAvailable()) s->borderWarningFrames = 240;
             s->displayOffsetX = 0;
             s->displayOffsetY = 0;
             s->displayZoom = s->widescreenEnabled ? 90 : 100;
             applyDisplaySettings(s);
-        } else if (s->category == 1 && s->selected == 1) {
+        } else if (logicalCategory == 2 && s->selected == 1) {
             s->adjustMode = true;
             s->open = false;
-        } else if (s->category == 1 && s->selected == 2) {
+        } else if (logicalCategory == 2 && s->selected == 2) {
             if (pressed & SCE_CTRL_LEFT) {
                 s->pendingGraphicsQuality--;
                 if (s->pendingGraphicsQuality < 0) s->pendingGraphicsQuality = 2;
@@ -400,11 +424,7 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
                     s->promptSelection = 0;
                 }
             }
-        } else if (s->category == 1 && s->selected == 3 && s->devMode) {
-            s->debugDevEnabled = !s->debugDevEnabled;
-            s->debugDevChanged = true;
-            saveSettings(s);
-        } else if (s->category == 2 && s->selected < 3) {
+        } else if (logicalCategory == 3 && s->selected < 3) {
             int* value = s->selected == 0 ? &s->masterVolume :
                          (s->selected == 1 ? &s->sfxVolume : &s->musicVolume);
             if (pressed & SCE_CTRL_LEFT) (*value)--;
@@ -413,14 +433,14 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             if (*value > 10) *value = 10;
             VitaSettings_applyAudio(s, audio);
             saveSettings(s);
-        } else if (s->category == 2 && s->selected == 3) {
+        } else if (logicalCategory == 3 && s->selected == 3) {
             s->audioDisabled = !s->audioDisabled;
             VitaSettings_applyAudio(s, audio);
             saveSettings(s);
-        } else if (s->category == 3 && s->selected == 0) {
+        } else if (logicalCategory == 4 && s->selected == 0) {
             s->vsyncEnabled = !s->vsyncEnabled;
             saveSettings(s);
-        } else if (s->category == 3 && s->selected == 1) {
+        } else if (logicalCategory == 4 && s->selected == 1) {
             if (pressed & SCE_CTRL_LEFT) {
                 s->pendingModIndex--;
                 if (s->pendingModIndex < 0) s->pendingModIndex = s->modCount - 1;
@@ -433,9 +453,9 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
                     s->promptSelection = 0;
                 }
             }
-        } else if (s->category == 3 && s->selected == 2) {
+        } else if (logicalCategory == 4 && s->selected == 2) {
             s->confirmChapterSelect = true;
-        } else {
+        } else if (logicalCategory == 4 && s->selected == 3) {
             resetDefaults(s);
             applyDisplaySettings(s);
             VitaSettings_applyAudio(s, audio);
@@ -451,8 +471,8 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
     return requestRestart;
 }
 
-static void drawLabel(Renderer* r, const char* text, float x, float y, uint32_t color) {
-    r->vtable->drawTextColor(r, text, x, y, 1.6f, 1.6f, 0.0f,
+static void drawLabel(Renderer* r, const char* text, float x, float y, uint32_t color, float scale) {
+    r->vtable->drawTextColor(r, text, x, y, scale, scale, 0.0f,
                              color, color, color, color, 1.0f, -1.0f);
 }
 
@@ -504,19 +524,21 @@ static void drawDialogBorder(Renderer* r, float left, float top, float right, fl
         return;
     }
 
-    float cw = (float) corner->width;
-    float ch = (float) corner->height;
+    float s_scale = 2.0f;
+    float cw = (float) corner->width * s_scale;
+    float ch = (float) corner->height * s_scale;
     float horizontalScale = (right - left - cw * 2.0f) / (float) edgeTop->width;
     float verticalScale = (bottom - top - ch * 2.0f) / (float) edgeLeft->height;
-    r->vtable->drawSprite(r, corner->tpagIndices[0], left, top, 0, 0, 1, 1, 0, 0xFFFFFF, 1.0f);
-    r->vtable->drawSprite(r, corner->tpagIndices[0], right, top, 0, 0, -1, 1, 0, 0xFFFFFF, 1.0f);
-    r->vtable->drawSprite(r, corner->tpagIndices[0], left, bottom, 0, 0, 1, -1, 0, 0xFFFFFF, 1.0f);
-    r->vtable->drawSprite(r, corner->tpagIndices[0], right, bottom, 0, 0, -1, -1, 0, 0xFFFFFF, 1.0f);
-    r->vtable->drawSprite(r, edgeTop->tpagIndices[0], left + cw, top, 0, 0, horizontalScale, 1, 0, 0xFFFFFF, 1.0f);
-    r->vtable->drawSprite(r, edgeTop->tpagIndices[0], left + cw, bottom, 0, 0, horizontalScale, -1, 0, 0xFFFFFF, 1.0f);
-    r->vtable->drawSprite(r, edgeLeft->tpagIndices[0], left, top + ch, 0, 0, 1, verticalScale, 0, 0xFFFFFF, 1.0f);
-    r->vtable->drawSprite(r, edgeLeft->tpagIndices[0], right, top + ch, 0, 0, -1, verticalScale, 0, 0xFFFFFF, 1.0f);
+    r->vtable->drawSprite(r, corner->tpagIndices[0], left, top, 0, 0, s_scale, s_scale, 0, 0xFFFFFF, 1.0f);
+    r->vtable->drawSprite(r, corner->tpagIndices[0], right, top, 0, 0, -s_scale, s_scale, 0, 0xFFFFFF, 1.0f);
+    r->vtable->drawSprite(r, corner->tpagIndices[0], left, bottom, 0, 0, s_scale, -s_scale, 0, 0xFFFFFF, 1.0f);
+    r->vtable->drawSprite(r, corner->tpagIndices[0], right, bottom, 0, 0, -s_scale, -s_scale, 0, 0xFFFFFF, 1.0f);
+    r->vtable->drawSprite(r, edgeTop->tpagIndices[0], left + cw, top, 0, 0, horizontalScale, s_scale, 0, 0xFFFFFF, 1.0f);
+    r->vtable->drawSprite(r, edgeTop->tpagIndices[0], left + cw, bottom, 0, 0, horizontalScale, -s_scale, 0, 0xFFFFFF, 1.0f);
+    r->vtable->drawSprite(r, edgeLeft->tpagIndices[0], left, top + ch, 0, 0, s_scale, verticalScale, 0, 0xFFFFFF, 1.0f);
+    r->vtable->drawSprite(r, edgeLeft->tpagIndices[0], right, top + ch, 0, 0, -s_scale, verticalScale, 0, 0xFFFFFF, 1.0f);
 }
+
 
 void VitaSettings_draw(VitaSettings* s, Renderer* r) {
     if (!s->open) return;
@@ -561,17 +583,25 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
     snprintf(masterVolume, sizeof(masterVolume), "%d%%", s->masterVolume * 10);
     snprintf(sfxVolume, sizeof(sfxVolume), "%d%%", s->sfxVolume * 10);
     snprintf(musicVolume, sizeof(musicVolume), "%d%%", s->musicVolume * 10);
-    const char* categoriesPt[SETTINGS_CATEGORIES] = {"CONTROLES", "TELA", "AUDIO", "SISTEMA"};
-    const char* categoriesEn[SETTINGS_CATEGORIES] = {"CONTROLS", "SCREEN", "AUDIO", "SYSTEM"};
+    const char* categoriesPt[SETTINGS_CATEGORIES] = {"DEV", "CONTROLES", "TELA", "AUDIO", "SISTEMA"};
+    const char* categoriesEn[SETTINGS_CATEGORIES] = {"DEV", "CONTROLS", "SCREEN", "AUDIO", "SYSTEM"};
     const char** categories = s->ptbrEnabled ? categoriesPt : categoriesEn;
-    for (int i = 0; i < SETTINGS_CATEGORIES; ++i) {
-        float centerX = 210.0f + i * 180.0f;
-        if (i == s->category) {
-            r->vtable->drawRectangle(r, centerX - 70, 126, centerX + 70, 156, 0x181818, 1.0f, false);
-            r->vtable->drawRectangle(r, centerX - 70, 126, centerX + 70, 156, 0x00FFFF, 0.72f, true);
+    
+    int numCategories = s->devMode ? 5 : 4;
+    int logicalSelectedCategory = s->category + (!s->devMode ? 1 : 0);
+    
+    float spacing = numCategories == 5 ? 140.0f : 180.0f;
+    float startX = 480.0f - (spacing * (numCategories - 1)) / 2.0f;
+
+    for (int i = 0; i < numCategories; ++i) {
+        int logicalIndex = i + (!s->devMode ? 1 : 0);
+        float centerX = startX + i * spacing;
+        if (logicalIndex == logicalSelectedCategory) {
+            r->vtable->drawRectangle(r, centerX - 65, 126, centerX + 65, 156, 0x181818, 1.0f, false);
+            r->vtable->drawRectangle(r, centerX - 65, 126, centerX + 65, 156, 0x00FFFF, 0.72f, true);
         }
-        drawCenteredText(r, categories[i], centerX, 132, 1.15f,
-                         i == s->category ? 0x00FFFF : 0x808080);
+        drawCenteredText(r, categories[logicalIndex], centerX, 132, 1.15f,
+                         logicalIndex == logicalSelectedCategory ? 0x00FFFF : 0x808080);
     }
     char adjustment[64];
     snprintf(adjustment, sizeof(adjustment), "%d,%d  %d%%", s->displayOffsetX, s->displayOffsetY, s->displayZoom);
@@ -580,29 +610,36 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
                            (s->pendingGraphicsQuality == 1 ? (s->ptbrEnabled ? "Medio" : "Medium") :
                                                       (s->ptbrEnabled ? "Baixo" : "Low"));
     const char* labelsPt[SETTINGS_CATEGORIES][4] = {
-        {"Controles touch", s->devMode ? "Navegador de salas" : "Editar controles", s->devMode ? "Editar controles" : "", ""}, {"Bordas de console", "Ajustar tela", "Graficos", "Debug Dev"},
-        {"Volume mestre", "Efeitos sonoros", "Musica", "Desabilitar audio"}, {"VSync / 30 FPS", "Mod / Idioma", "Voltar aos capitulos", ""}
+        {"Navegador de salas", "Debug DEV", "", ""},
+        {"Controles touch", "Editar controles", "Pular falas?", ""}, 
+        {"Bordas de console", "Ajustar tela", "Graficos", ""},
+        {"Volume mestre", "Efeitos sonoros", "Musica", "Desabilitar audio"}, 
+        {"VSync / 30 FPS", "Mod / Idioma", "Voltar aos capitulos", ""}
     };
     const char* labelsEn[SETTINGS_CATEGORIES][4] = {
-        {"Touch controls", s->devMode ? "Room navigator" : "Edit controls", s->devMode ? "Edit controls" : "", ""}, {"Console borders", "Adjust screen", "Graphics", "Debug Dev"},
-        {"Master volume", "Sound effects", "Music", "Disable audio"}, {"VSync / 30 FPS", "Mod / Language", "Chapter Select", ""}
+        {"Room navigator", "Debug DEV", "", ""},
+        {"Touch controls", "Edit controls", "Skip dialogs?", ""}, 
+        {"Console borders", "Adjust screen", "Graphics", ""},
+        {"Master volume", "Sound effects", "Music", "Disable audio"}, 
+        {"VSync / 30 FPS", "Mod / Language", "Chapter Select", ""}
     };
     const char* values[SETTINGS_CATEGORIES][4] = {
-        {touch, s->devMode ? (s->devRoomNavEnabled ? "On" : "Off") : ">", s->controlEditMode ? (s->ptbrEnabled ? "Aberto" : "Open") : ">", ""}, {screen, adjustment, graphics, s->debugDevEnabled ? "On" : "Off"}, {masterVolume, sfxVolume, musicVolume, s->audioDisabled ? (s->ptbrEnabled ? "Ligado" : "On") : (s->ptbrEnabled ? "Desligado" : "Off")}, {vsync, mod, "", ""}
+        {s->devRoomNavEnabled ? "On" : "Off", s->debugDevEnabled ? "On" : "Off", "", ""},
+        {touch, s->controlEditMode ? (s->ptbrEnabled ? "Aberto" : "Open") : ">", s->shortcutSkipDialogs ? "On" : "Off", ""}, 
+        {screen, adjustment, graphics, ""}, 
+        {masterVolume, sfxVolume, musicVolume, s->audioDisabled ? (s->ptbrEnabled ? "Ligado" : "On") : (s->ptbrEnabled ? "Desligado" : "Off")}, 
+        {vsync, mod, "", ""}
     };
     int visibleItems = settingsItemCount(s->category);
     for (int i = 0; i < visibleItems; ++i) {
-        float y = visibleItems == 4 ? 184.0f + i * 58.0f : (visibleItems == 3 ? 196.0f + i * 72.0f : 214.0f + i * 88.0f);
-        if (i == s->selected) {
-            r->vtable->drawRectangle(r, 194, y - 8, 766, y + 34, 0x141414, 1.0f, false);
-            r->vtable->drawRectangle(r, 194, y - 8, 766, y + 34, 0x404040, 1.0f, true);
-        }
-        drawLabel(r, i == s->selected ? ">" : " ", 214, y, i == s->selected ? 0x00FFFF : 0xFFFFFF);
-        const char* label = (i == 3 && s->category == 3)
+        float y = visibleItems == 4 ? 200.0f + i * 42.0f : (visibleItems == 3 ? 206.0f + i * 50.0f : 214.0f + i * 64.0f);
+        uint32_t textColor = i == s->selected ? 0x00FFFF : 0xFFFFFF;
+        drawLabel(r, i == s->selected ? ">" : " ", 214, y, textColor, 1.84f);
+        const char* label = (i == 3 && logicalSelectedCategory == 4)
             ? (s->ptbrEnabled ? "Restaurar padrao" : "Restore defaults")
-            : (s->ptbrEnabled ? labelsPt[s->category][i] : labelsEn[s->category][i]);
-        drawLabel(r, label, 252, y, 0xFFFFFF);
-        if (s->category == 2 && i < 3) {
+            : (s->ptbrEnabled ? labelsPt[logicalSelectedCategory][i] : labelsEn[logicalSelectedCategory][i]);
+        drawLabel(r, label, 252, y, textColor, 1.84f);
+        if (logicalSelectedCategory == 3 && i < 3) {
             int sliderValue = i == 0 ? s->masterVolume : (i == 1 ? s->sfxVolume : s->musicVolume);
             float sliderLeft = 570.0f, sliderRight = 698.0f, sliderY = y + 10.0f;
             r->vtable->drawRectangle(r, sliderLeft, sliderY, sliderRight, sliderY + 8.0f,
@@ -610,10 +647,10 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
             r->vtable->drawRectangle(r, sliderLeft, sliderY,
                                      sliderLeft + (sliderRight - sliderLeft) * ((float)sliderValue / 10.0f),
                                      sliderY + 8.0f, i == s->selected ? 0x00FFFF : 0xFFFFFF, 1.0f, false);
-            drawRightText(r, values[s->category][i], 742, y, 1.25f,
+            drawRightText(r, values[logicalSelectedCategory][i], 742, y, 1.25f,
                           i == s->selected ? 0x00FFFF : 0xFFFFFF);
         } else {
-            drawRightText(r, values[s->category][i], 742, y, 1.6f,
+            drawRightText(r, values[logicalSelectedCategory][i], 742, y, 1.6f,
                           i == s->selected ? 0x00FFFF : 0xFFFFFF);
         }
     }
@@ -863,7 +900,7 @@ void VitaSettings_drawCalibration(VitaSettings* s, Renderer* r) {
     g_vitaPortOverlayFullScreen = 1;
     r->vtable->beginGUI(r, 960, 544, 0, 0, 960, 544, RENDER_TARGET_HOST_FRAMEBUFFER);
     r->vtable->drawRectangle(r, (float)x, (float)y, (float)(x + width - 1), (float)(y + height - 1), 0xFFFFFF, 1.0f, true);
-    drawLabel(r, s->ptbrEnabled ? "ESQ: MOVER  DIR: ZOOM  X: SALVAR  O: RESET" : "LEFT: MOVE  RIGHT: ZOOM  X: SAVE  O: RESET", 125, 18, 0xFFFFFF);
+    drawLabel(r, s->ptbrEnabled ? "ESQ: MOVER  DIR: ZOOM  X: SALVAR  O: RESET" : "LEFT: MOVE  RIGHT: ZOOM  X: SAVE  O: RESET", 125, 18, 0xFFFFFF, 1.6f);
     r->vtable->endGUI(r);
     g_vitaPortOverlayFullScreen = 0;
 }

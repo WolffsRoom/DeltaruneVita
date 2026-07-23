@@ -22,10 +22,11 @@ if(PLAYABLE_RUNNER)
     ../butterscotch/src/gl_legacy/*.c
     ../butterscotch/src/image/*.c
   )
-  add_executable(${PROJECT_NAME}
+    add_executable(${PROJECT_NAME}
     source/playable_main.c
     source/vita_settings.c
     source/vita_borders.c
+    source/vita_video.c
     ${BS_COMMON_SOURCES}
     ${BS_GL_SOURCES}
     ../butterscotch/src/audio/openal/al_audio_system.c
@@ -82,12 +83,12 @@ target_include_directories(${PROJECT_NAME} PRIVATE
   $ENV{VITASDK}/share/gcc-arm-vita-eabi/samples/common
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-  ENABLE_WAD17 ENABLE_LEGACY_GL PLATFORM_VITA
+  ENABLE_WAD17 ENABLE_LEGACY_GL PLATFORM_VITA ENABLE_VM_GML_PROFILER
   BUTTERSCOTCH_COMMIT_HASH="vita-port"
-  BUTTERSCOTCH_COMMIT_DATE="2026-07-15"
+  BUTTERSCOTCH_COMMIT_DATE="2026-07-20"
 )
 target_link_libraries(${PROJECT_NAME}
-  vitaGL
+  ${CMAKE_SOURCE_DIR}/../../third_party/vitaGL-nosplash/libvitaGL.a
   vitashark
   SceShaccCgExt
   taihen_stub
@@ -99,6 +100,7 @@ target_link_libraries(${PROJECT_NAME}
   SceGxm_stub
   SceKernelDmacMgr_stub
   ScePower_stub
+  SceRtc_stub
   SceSysmem_stub
   SceTouch_stub
   kubridge_stub
@@ -107,13 +109,14 @@ target_link_libraries(${PROJECT_NAME}
   pthread
   SceAudio_stub
   SceAudioIn_stub
+  SceAvPlayer_stub
   z
   m
 )
 
 vita_create_self(eboot.bin ${PROJECT_NAME} UNSAFE)
 vita_create_vpk(Deltarune.vpk DLTVITA01 eboot.bin
-  VERSION 00.49
+  VERSION 00.63
   NAME "Deltarune"
   FILE
     ${CMAKE_SOURCE_DIR}/../../data/legacy-assets/icon0.png sce_sys/icon0.png
@@ -134,4 +137,10 @@ vita_create_vpk(Deltarune.vpk DLTVITA01 eboot.bin
     ${CMAKE_SOURCE_DIR}/../../data/assets/TouchControls/spr_control_zkey_frame0.png assets/touch/spr_control_zkey_frame0.png
     ${CMAKE_SOURCE_DIR}/../../data/assets/TouchControls/spr_control_xkey_frame0.png assets/touch/spr_control_xkey_frame0.png
     ${CMAKE_SOURCE_DIR}/../../data/assets/TouchControls/spr_control_ckey_frame0.png assets/touch/spr_control_ckey_frame0.png
+    ${CMAKE_SOURCE_DIR}/../../data/frames/Loading.png assets/loading/Loading.png
+    ${CMAKE_SOURCE_DIR}/../../data/frames/textures.png assets/loading/textures.png
+    ${CMAKE_SOURCE_DIR}/../../data/frames/frame_0_delay-0.75s.png assets/loading/frame_0.png
+    ${CMAKE_SOURCE_DIR}/../../data/frames/frame_1_delay-0.75s.png assets/loading/frame_1.png
+    ${CMAKE_SOURCE_DIR}/../../data/frames/frame_2_delay-0.75s.png assets/loading/frame_2.png
+    ${CMAKE_SOURCE_DIR}/../../data/frames/frame_3_delay-0.75s.png assets/loading/frame_3.png
 )

@@ -155,70 +155,9 @@ void VitaBorders_init(int chapter) {
     borderLog(chapter > 0 ? "waiting_for_gameplay" : "launcher_disabled");
 }
 
-static char customBorderPath[256] = {0};
+static char customBorderPath[512] = {0};
 
-static int roomInList(const char* room, const char* const* rooms, size_t count) {
-    if (room == NULL) return 0;
-    for (size_t i = 0; i < count; ++i)
-        if (strcmp(room, rooms[i]) == 0) return 1;
-    return 0;
-}
 
-#define ROOM_LIST_COUNT(list) (sizeof(list) / sizeof((list)[0]))
-
-/* Room groups recovered from NXRUNE's console-border controller.  Keep these
- * explicit: substring guesses select the wrong art in Chapter 5's Garden,
- * cliff and Card Castle transitions. */
-static const char* const ch5LightWorldRooms[] = {
-    "room_town_krisyard", "room_town_northwest", "room_town_north", "room_beach",
-    "room_town_mid", "room_town_apartments", "room_town_south", "room_town_school",
-    "room_town_church", "room_graveyard", "room_town_shelter", "room_town_noellehouse",
-    "room_lw_church_main", "room_torielclass", "room_schoollobby", "room_alphysclass",
-    "room_schooldoor", "room_school_unusedroom"
-};
-static const char* const ch5CastleRightRooms[] = {
-    "room_dw_fcastle_foyer", "room_dw_fcastle_foxhunt", "room_dw_fcastle_gloves_tower",
-    "room_dw_fcastle_green_orange_battle", "room_dw_fcastle_obscured_bullets",
-    "room_dw_fcastle_orange_puppet_introduction", "room_dw_fcastle_right_endingscene",
-    "room_dw_fcastle_right_puzzle", "room_dw_fcastle_right_wing_floweryscene",
-    "room_dw_fcastle_second_diner", "room_dw_fcastle_sidepuzzle",
-    "room_dw_fcastle_terracotta_bonus", "room_dw_fcastle_terracotta_encounter",
-    "room_dw_fcastle_trainroom", "room_dw_fcastle_terracotta_puzzle",
-    "room_dw_fcastle_foxhunt_terakota", "room_dw_fcastle_foxhunt_socks",
-    "room_dw_fcastle_foxhunt_chaos", "room_dw_fcastle_foxhunt_secret",
-    "room_dw_fcastle_fusumadodge"
-};
-static const char* const ch5CastleLeftRooms[] = {
-    "room_dw_fcastle_cafe", "room_dw_fcastle_blueroom", "room_dw_fcastle_bounce_1",
-    "room_dw_fcastle_bounce_3", "room_dw_fcastle_dangerous_platforming",
-    "room_dw_fcastle_left_twodoors", "room_dw_fcastle_left_wing_floweryscene",
-    "room_dw_fcastle_onsen", "room_dw_fcastle_sandtrap",
-    "room_dw_fcastle_shinobeetle_encounter", "room_dw_fcastle_yellow_miniboss",
-    "room_dw_fcastle_yellowjail", "room_dw_fcastle_zenlooker"
-};
-static const char* const ch5CastleGoldRooms[] = {
-    "room_dw_fcastle_top_pinkdoor", "room_dw_fcastle_green_checkpoint",
-    "room_dw_fcastle_flowery", "room_dw_post_fountain_close",
-    "room_dw_fcastle_top_staircase_1", "room_dw_fcastle_top_staircase_2",
-    "room_dw_fcastle_final_save"
-};
-static const char* const ch5CastleTopRooms[] = {
-    "room_dw_fcastle_top_entrance", "room_dw_fcastle_top_fountain", "room_dw_flowery_tree",
-    "room_dw_fcastle_ultradash", "room_dw_fcastle_yellowblue",
-    "room_dw_fcastle_seth_encounter", "room_dw_fcastle_top_ascent",
-    "room_dw_fcastle_top_challenge", "room_dw_fcastle_top_descent",
-    "room_dw_fcastle_orange_gauntlet"
-};
-static const char* const ch5GardenCliffRooms[] = {
-    "room_dw_garden_aqua", "room_dw_garden_finalplatforming", "room_dw_garden_aquahole",
-    "room_dw_garden_aquadarkness", "room_dw_garden_aquashrine", "room_dw_garden_starwalkerdash",
-    "room_dw_garden_wateringcan_aqua", "room_dw_garden_aquadash",
-    "room_dw_garden_aquaplatforming", "room_dw_garden_finalplatforming_right",
-    "room_dw_garden_aquatransition", "room_dw_garden_aquahole_left",
-    "room_dw_fcastle_heldmushrooms", "room_dw_fcastle_right_penultimate",
-    "room_dw_fcastle_left_penultimate", "room_dw_fcastle_flowerydash",
-    "room_dw_fcastle_shinobeetle_3d"
-};
 
 static const char* getCustomBorder(const char* room) {
     if (!room) return NULL;
@@ -388,7 +327,7 @@ static void updateBordersConfig(const char* room, const char* borderFilename) {
     char search[128];
     snprintf(search, sizeof(search), "%s=", room);
     
-    char newBuffer[4096] = {0};
+    char newBuffer[8192] = {0};
     char* line = strstr(buffer, search);
     if (line) {
         int prefixLen = line - buffer;
@@ -398,7 +337,7 @@ static void updateBordersConfig(const char* room, const char* borderFilename) {
         snprintf(newBuffer + prefixLen, sizeof(newBuffer) - prefixLen, "%s=%s", room, borderFilename);
         strncat(newBuffer, end, sizeof(newBuffer) - strlen(newBuffer) - 1);
     } else {
-        snprintf(newBuffer, sizeof(newBuffer), "%s\n%s=%s\n", buffer, room, borderFilename);
+        snprintf(newBuffer, sizeof(newBuffer), "%.4095s\n%.255s=%.255s\n", buffer, room, borderFilename);
     }
     
     fd = sceIoOpen(BORDER_ROOT "borders_config.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
@@ -419,8 +358,10 @@ void VitaBorders_cycleCurrent(int direction) {
     SceIoDirent dir_stat;
     while (sceIoDread(dir, &dir_stat) > 0 && count < 64) {
         if (strstr(dir_stat.d_name, ".png") != NULL) {
-            strncpy(files[count], dir_stat.d_name, 127);
-            files[count][127] = '\0';
+            size_t nlen = strlen(dir_stat.d_name);
+            if (nlen >= 128) nlen = 127;
+            memcpy(files[count], dir_stat.d_name, nlen);
+            files[count][nlen] = '\0';
             count++;
         }
     }
@@ -456,7 +397,7 @@ void VitaBorders_cycleCurrent(int direction) {
     if (currentIndex == -1) currentIndex = 0;
     else currentIndex = (currentIndex + direction + count) % count;
     
-    snprintf(customBorderPath, sizeof(customBorderPath), BORDER_ROOT "%s", files[currentIndex]);
+    snprintf(customBorderPath, sizeof(customBorderPath), BORDER_ROOT "%.127s", files[currentIndex]);
     
     if (previousBorderTexture != 0) glDeleteTextures(1, &previousBorderTexture);
     previousBorderTexture = borderTexture;

@@ -10,7 +10,7 @@
 #include "debugScreen.h"
 #include "data_win.h"
 
-#define DATA_DIR "ux0:data/deltarune/butterscotch"
+#define DATA_DIR "ux0:data/deltarune/deltarunevita"
 #define LOG_PATH DATA_DIR "/butterscotch-probe.log"
 
 typedef struct {
@@ -204,7 +204,7 @@ int main(void) {
                                  results[i].free_after / (1024 * 1024));
         }
     }
-    psvDebugScreenPrintf("\nLog salvo em ux0:data/deltarune/butterscotch/\n");
+    psvDebugScreenPrintf("\nLog salvo em ux0:data/deltarune/deltarunevita/\n");
     psvDebugScreenPrintf("Pressione START para sair.\n");
 
     for (;;) {

@@ -625,6 +625,20 @@ struct Runner {
 
     // Offset between game start time and nowNanos()
     uint64_t gameStartTime;
+
+    uint64_t profStepEventsUs;
+    uint64_t profStepAlarmsUs;
+    uint64_t profStepSpatialUs;
+    uint64_t profStepCollisionUs;
+    uint64_t profStepOtherUs;
+    // Last pending-room transition breakdown. Platform frontends can log these
+    // without putting filesystem I/O in the portable runner.
+    uint64_t profRoomParseUs;
+    uint64_t profRoomCreateUs;
+    uint64_t profRoomEndEventsUs;
+    uint64_t profRoomStartEventsUs;
+    uint64_t profRoomCleanupUs;
+    uint64_t profRoomTotalUs;
 };
 
 const char* Runner_getEventName(int32_t eventType, int32_t eventSubtype);

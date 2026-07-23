@@ -96,6 +96,25 @@ bool RunnerGamepad_isConnected(RunnerGamepadState* gp, int device) {
     return gp->slots[device].connected;
 }
 
+void RunnerGamepad_setButton(RunnerGamepadState* gp, int device, int button, bool down, bool* previous) {
+    if (device < 0 || device >= MAX_GAMEPADS) return;
+    int idx = gmlButtonToIndex(button);
+    if (idx < 0 || idx >= GP_BUTTON_COUNT) return;
+    
+    gp->slots[device].buttonDown[idx] = down;
+    if (down && !(*previous)) gp->slots[device].buttonPressed[idx] = true;
+    if (!down && (*previous)) gp->slots[device].buttonReleased[idx] = true;
+    gp->slots[device].buttonValue[idx] = down ? 1.0f : 0.0f;
+    *previous = down;
+}
+
+void RunnerGamepad_setAxis(RunnerGamepadState* gp, int device, int axis, float value) {
+    if (device < 0 || device >= MAX_GAMEPADS) return;
+    int idx = gmlAxisToIndex(axis);
+    if (idx < 0 || idx >= GP_AXIS_COUNT) return;
+    gp->slots[device].axisValue[idx] = value;
+}
+
 bool RunnerGamepad_buttonCheck(RunnerGamepadState* gp, int device, int button) {
     if (device < 0 || device >= MAX_GAMEPADS) return false;
     if (!gp->slots[device].connected) return false;

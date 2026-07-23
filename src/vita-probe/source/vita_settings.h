@@ -30,6 +30,7 @@ typedef struct {
     bool debugDevEnabled;
     bool debugDevChanged;
     bool devRoomNavEnabled;
+    bool shortcutSkipDialogs;
     int graphicsQuality;
     int pendingGraphicsQuality;
     int modIndex;

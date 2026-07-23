@@ -6,11 +6,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $Source) { $Source = Join-Path $root 'mods\PTBR' }
-if (-not $Destination) { $Destination = Join-Path $root 'data\prepared\deltarune\butterscotch\mods\PTBR' }
+if (-not $Destination) { $Destination = Join-Path $root 'data\prepared\deltarune\deltarunevita\mods\PTBR' }
 
 $sourcePath = [IO.Path]::GetFullPath($Source)
 $destinationPath = [IO.Path]::GetFullPath($Destination)
-$allowedRoot = [IO.Path]::GetFullPath((Join-Path $root 'data\prepared\deltarune\butterscotch\mods'))
+$allowedRoot = [IO.Path]::GetFullPath((Join-Path $root 'data\prepared\deltarune\deltarunevita\mods'))
 if (-not $destinationPath.StartsWith($allowedRoot, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Destino fora da pasta preparada permitida: $destinationPath"
 }
@@ -54,7 +54,7 @@ for ($chapter = 1; $chapter -le 5; $chapter++) {
 }
 
 # Faixas modificadas ficam em uma biblioteca compartilhada do mod. O backend
-# procura aqui antes de retornar para butterscotch/music.
+# procura aqui antes de retornar para deltarunevita/music.
 $musicSource = Join-Path $sourcePath 'mus'
 if (Test-Path -LiteralPath $musicSource) {
     $musicTarget = Join-Path $destinationPath 'music'
@@ -64,4 +64,4 @@ if (Test-Path -LiteralPath $musicSource) {
 }
 
 Write-Host "Traducao preparada em: $destinationPath"
-Write-Host "Copie a pasta 'mods' para ux0:data/deltarune/butterscotch/."
+Write-Host "Copie a pasta 'mods' para ux0:data/deltarune/deltarunevita/."

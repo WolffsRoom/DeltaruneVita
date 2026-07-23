@@ -23,9 +23,25 @@ typedef struct {
     int32_t* textureHeights;
     bool* textureLoaded;      // lazy loading: true once PNG decoded and uploaded
     uint32_t* textureLastUsedFrame;
+    bool* texturePinned;
     uint32_t textureFrame;
+    uint32_t textureCacheBlockedFrame;
     uint64_t residentTextureBytes;
     uint32_t textureCount;
+#ifdef PLATFORM_VITA
+    // Small second-level cache for atlas sets larger than CDRAM. Chapter 2's
+    // transformed castle alternates a handful of 8 MiB pages every frame;
+    // retaining four in user RAM avoids rereading them from the Vita card.
+    uint16_t* cpuTextureCachePixels[4];
+    uint32_t cpuTextureCachePage[4];
+    uint32_t cpuTextureCacheStamp[4];
+    int32_t cpuTextureCacheWidth[4];
+    int32_t cpuTextureCacheHeight[4];
+    uint32_t cpuTextureCacheClock;
+    uint32_t vitaTextureEvictions;
+    uint32_t vitaTextureDeferred;
+    uint32_t vitaTextureRamHits;
+#endif
 
     GLuint whiteTexture; // 1x1 white pixel for drawing primitives (rectangles, lines, etc.)
 
@@ -61,6 +77,12 @@ typedef struct {
 } GLLegacyRenderer;
 
 bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId);
+#ifdef PLATFORM_VITA
+typedef void (*VitaTexturePrepareProgress)(uint32_t current, uint32_t total, void* user);
+uint32_t GLLegacyRenderer_prepareTextureCache(DataWin* dataWin,
+                                              VitaTexturePrepareProgress progress,
+                                              void* user);
+#endif
 Renderer* GLLegacyRenderer_create(void);
 
 #endif /* _BS_GL_LEGACY_RENDERER_H_ */

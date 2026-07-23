@@ -402,8 +402,15 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
     }
 #endif
 
+    uint64_t ev_start = nowNanos();
     executeCode(runner, instance, codeId);
-
+    uint64_t ev_end = nowNanos();
+    uint64_t dur = (ev_end - ev_start) / 1000;
+    if (dur >= 2500) {
+        const char* eventName = Runner_getEventName(eventType, eventSubtype);
+        const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+        printf("PERF_EVENT_SLOW obj=%s inst=%d evt=%s sub=%d dur_us=%llu\n", objectName, instance->instanceId, eventName, (int)eventSubtype, (unsigned long long)dur);
+    }
     vm->currentEventType = savedEventType;
     vm->currentEventSubtype = savedEventSubtype;
     vm->currentEventObjectIndex = savedEventObjectIndex;
@@ -3478,6 +3485,12 @@ static void persistRoomState(Runner* runner, int32_t roomIndex) {
 }
 
 void Runner_handlePendingRoomChange(Runner* runner) {
+    runner->profRoomParseUs = 0;
+    runner->profRoomCreateUs = 0;
+    runner->profRoomEndEventsUs = 0;
+    runner->profRoomStartEventsUs = 0;
+    runner->profRoomCleanupUs = 0;
+    runner->profRoomTotalUs = 0;
     // Handle game restart
     if (runner->pendingRoom == ROOM_RESTARTGAME) {
         // See you soon!
@@ -3492,6 +3505,7 @@ void Runner_handlePendingRoomChange(Runner* runner) {
 
     // Handle room transition
     if (runner->pendingRoom >= 0) {
+        uint64_t roomChangeBegin = nowNanos();
         int32_t oldRoomIndex = runner->currentRoomIndex;
         Room* oldRoom = runner->currentRoom;
         const char* oldRoomName = oldRoom->name;
@@ -3501,7 +3515,9 @@ void Runner_handlePendingRoomChange(Runner* runner) {
         runner->pendingRoom = -1;
 
         // Fire Room End for all instances
+        uint64_t phaseBegin = nowNanos();
         Runner_executeEventForAll(runner, EVENT_OTHER, OTHER_ROOM_END);
+        runner->profRoomEndEventsUs = (nowNanos() - phaseBegin) / 1000ULL;
         require(runner->dataWin->room.count > (uint32_t) newRoomIndex);
         const char* newRoomName = runner->dataWin->room.rooms[newRoomIndex].name;
 
@@ -3517,14 +3533,27 @@ void Runner_handlePendingRoomChange(Runner* runner) {
             DataWin_freeRoomPayload(oldRoom);
         }
 
-        // Load new room
+        // Keep lazy payload parsing separate from runtime room construction.
+        Room* newRoom = &runner->dataWin->room.rooms[newRoomIndex];
+        if (!newRoom->payloadLoaded) {
+            phaseBegin = nowNanos();
+            DataWin_loadRoomPayload(runner->dataWin, newRoomIndex);
+            runner->profRoomParseUs = (nowNanos() - phaseBegin) / 1000ULL;
+        }
+        phaseBegin = nowNanos();
         initRoom(runner, newRoomIndex);
+        runner->profRoomCreateUs = (nowNanos() - phaseBegin) / 1000ULL;
 
         // Fire Room Start for all instances
+        phaseBegin = nowNanos();
         Runner_executeEventForAll(runner, EVENT_OTHER, OTHER_ROOM_START);
+        runner->profRoomStartEventsUs = (nowNanos() - phaseBegin) / 1000ULL;
 
+        phaseBegin = nowNanos();
         Runner_cleanupDestroyedInstances(runner);
         Runner_sweepDeadStructs(runner);
+        runner->profRoomCleanupUs = (nowNanos() - phaseBegin) / 1000ULL;
+        runner->profRoomTotalUs = (nowNanos() - roomChangeBegin) / 1000ULL;
     }
 }
 
@@ -3634,6 +3663,12 @@ static void tickTimelines(Runner* runner) {
 }
 
 void Runner_step(Runner* runner) {
+    uint64_t stepStartNanos = nowNanos();
+    runner->profStepEventsUs = 0;
+    runner->profStepAlarmsUs = 0;
+    runner->profStepSpatialUs = 0;
+    runner->profStepCollisionUs = 0;
+    runner->profStepOtherUs = 0;
     // The snapshot arena is stack-like and every push must be matched with a pop within the same frame. Assert that invariant at the top of each step: a non-zero length here means some site below pushed without popping, and we want a loud failure with the offending length so we can find it instead of silently leaking until the next frame.
     requireMessageFormatted(__FILE__, __LINE__, arrlen(runner->instanceSnapshots) == 0, "instanceSnapshots arena was not fully popped at end of previous frame (length=%td)", arrlen(runner->instanceSnapshots));
 
@@ -3699,8 +3734,11 @@ void Runner_step(Runner* runner) {
         rl->yOffset += rl->vSpeed;
     }
 
+    uint64_t t1 = nowNanos();
     // Execute Begin Step for all instances
     Runner_executeEventForAll(runner, EVENT_STEP, STEP_BEGIN);
+    uint64_t t2 = nowNanos();
+    runner->profStepEventsUs += (t2 - t1) / 1000;
 
     // Process alarms. Outer loop is over alarm slots (matching the native runner's HandleAlarm), and for each slot we walk only the objects in the event table's bySlot range and only those objects' exact instance buckets. Idle instances are further skipped via activeAlarmMask.
     repeat(GML_ALARM_COUNT, alarmIdx) {
@@ -3757,6 +3795,8 @@ void Runner_step(Runner* runner) {
             arrsetlen(runner->instanceSnapshots, snapshotBase);
         }
     }
+    uint64_t t3 = nowNanos();
+    runner->profStepAlarmsUs += (t3 - t2) / 1000;
 
     RunnerKeyboardState* kb = runner->keyboard;
     for (int32_t key = 0; GML_KEY_COUNT > key; key++) {
@@ -3785,8 +3825,11 @@ void Runner_step(Runner* runner) {
     dispatchMouseEvents(runner);
     if (runner->pendingRoom >= 0) { Runner_handlePendingRoomChange(runner); return; }
 
+    uint64_t t4 = nowNanos();
     // Execute Normal Step for all instances
     Runner_executeEventForAll(runner, EVENT_STEP, STEP_NORMAL);
+    uint64_t t5 = nowNanos();
+    runner->profStepEventsUs += (t5 - t4) / 1000;
 
     // Apply motion: friction, gravity, then x += hspeed, y += vspeed
     int32_t motionCount = (int32_t) arrlen(runner->instances);
@@ -3927,10 +3970,21 @@ void Runner_step(Runner* runner) {
     }
 
     // Dispatch collision events
+    uint64_t tc1 = nowNanos();
     dispatchCollisionEvents(runner);
+    uint64_t tc2 = nowNanos();
+    runner->profStepCollisionUs = (tc2 - tc1) / 1000;
 
     // Execute End Step for all instances
+    uint64_t t6 = nowNanos();
     Runner_executeEventForAll(runner, EVENT_STEP, STEP_END);
+    uint64_t t7 = nowNanos();
+    runner->profStepEventsUs += (t7 - t6) / 1000;
+
+    uint64_t totalStepUs = (nowNanos() - stepStartNanos) / 1000;
+    uint64_t trackedUs = runner->profStepEventsUs + runner->profStepAlarmsUs + runner->profStepSpatialUs + runner->profStepCollisionUs;
+    if (totalStepUs > trackedUs) runner->profStepOtherUs = totalStepUs - trackedUs;
+    else runner->profStepOtherUs = 0;
 
     // Update view following
     updateViews(runner);
@@ -4028,7 +4082,7 @@ void Runner_beginFrame(
     // And the Port W/Port H are scaled by the window size too (set by the GEN8 chunk)
     Runner_computeViewDisplayScale(runner, gameW, gameH, &runner->displayScaleX, &runner->displayScaleY);
 
-    // Calculate viewport in screen coordinates for mouse mapping.
+    // Calculate viewport (letterboxing) in screen coordinates for mouse mapping
     int32_t scaledW, scaledH;
     if ((gameW * windowH) / gameH < windowW) {
         scaledW = (gameW * windowH) / gameH;

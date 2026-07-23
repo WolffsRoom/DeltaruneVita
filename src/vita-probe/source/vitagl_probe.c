@@ -13,7 +13,7 @@
 #include "data_win.h"
 #include "image_decoder.h"
 
-#define DATA_DIR "ux0:data/deltarune/butterscotch"
+#define DATA_DIR "ux0:data/deltarune/deltarunevita"
 #define LOG_PATH DATA_DIR "/butterscotch-probe.log"
 
 static void log_line(const char *text) {

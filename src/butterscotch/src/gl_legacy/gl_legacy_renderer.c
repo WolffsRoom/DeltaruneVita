@@ -215,7 +215,7 @@ static void vitaDrawQuad(const Vita2DVertex vertices[4]) {
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
-#define VITA_IMMEDIATE_MAX_VERTICES 65536
+#define VITA_IMMEDIATE_MAX_VERTICES 262144
 static Vita2DVertex vitaImmediateVertices[VITA_IMMEDIATE_MAX_VERTICES];
 static GLsizei vitaImmediateCount;
 static GLenum vitaImmediateMode;
@@ -266,16 +266,51 @@ static void vitaDrawVertexRange(GLenum mode, const Vita2DVertex* vertices, GLsiz
 static void vitaEnd(void) {
     static bool firstConvertedBatch = true;
     if (firstConvertedBatch) vitaRenderLog("VITA_IMMEDIATE_BRIDGE=first_batch_begin");
+    
     if (vitaImmediateMode == GL_QUADS) {
-        for (GLsizei i = 0; i + 3 < vitaImmediateCount; i += 4)
-            vitaDrawQuad(&vitaImmediateVertices[i]);
+        static GLushort quadIndices[65536 * 6 / 4];
+        static bool indicesInited = false;
+        if (!indicesInited) {
+            for (int i = 0, v = 0; i < (65536 * 6 / 4); i += 6, v += 4) {
+                quadIndices[i+0] = v + 0;
+                quadIndices[i+1] = v + 1;
+                quadIndices[i+2] = v + 2;
+                quadIndices[i+3] = v + 0;
+                quadIndices[i+4] = v + 2;
+                quadIndices[i+5] = v + 3;
+            }
+            indicesInited = true;
+        }
+
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glEnableClientState(GL_COLOR_ARRAY);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        
+        // Draw in chunks of 65536 vertices (16-bit index limit)
+        for (GLsizei offset = 0; offset + 3 < vitaImmediateCount; offset += 65536) {
+            GLsizei count = vitaImmediateCount - offset;
+            if (count > 65536) count = 65536;
+            GLsizei quads = count / 4;
+            
+            glTexCoordPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vitaImmediateVertices[offset].u);
+            glColorPointer(4, GL_FLOAT, sizeof(Vita2DVertex), &vitaImmediateVertices[offset].r);
+            glVertexPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vitaImmediateVertices[offset].x);
+            
+            glDrawElements(GL_TRIANGLES, quads * 6, GL_UNSIGNED_SHORT, quadIndices);
+        }
+        
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_COLOR_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     } else if (vitaImmediateMode == GL_TRIANGLES) {
         vitaDrawVertexRange(GL_TRIANGLES, vitaImmediateVertices, vitaImmediateCount);
     }
+    
     if (firstConvertedBatch) {
         vitaRenderLog("VITA_IMMEDIATE_BRIDGE=first_batch_complete");
         firstConvertedBatch = false;
     }
+    vitaImmediateCount = 0;
 }
 
 // Convert every remaining immediate-mode call in this translation unit. This
@@ -758,12 +793,9 @@ static void glClearScreen(MAYBE_UNUSED Renderer* renderer, uint32_t color, float
 // borders. A 104 MiB texture limit left under 8 MiB free and Chapter 5 crashed
 // while replacing a 2048x2048 atlas at about 101 MiB resident.
 static uint64_t vitaTextureCacheLimit(void) {
-    extern int g_vitaActiveChapter;
-    // Chapter 2 needs one extra 2048x2048 RGBA4444 page resident to avoid
-    // continuously swapping its battle/cutscene atlases. Chapter 5 keeps the
-    // safer ceiling because its larger scenery working set previously
-    // exhausted the Vita graphics pool at 104 MiB.
-    return (g_vitaActiveChapter == 5 ? 96ULL : 104ULL) * 1024ULL * 1024ULL;
+    // Increased to 192MB to accommodate the PT-BR mod's NPOT textures in the Castle room
+    // at full 2048px resolution without needing to downscale.
+    return 192ULL * 1024ULL * 1024ULL;
 }
 
 static uint16_t* vitaCpuTextureCacheGet(GLLegacyRenderer* gl, uint32_t pageId, int* w, int* h) {
@@ -835,27 +867,10 @@ static void vitaGpuAtlasSize(GLLegacyRenderer* gl, uint32_t pageId, int w, int h
     // but upload a half-size nearest-neighbour copy to CDRAM.
     extern int g_vitaGraphicsQuality;
     extern int g_vitaActiveChapter;
-    bool largeAtlas = w == 2048 && h == 2048;
-    const char* roomName = gl->base.runner != nullptr && gl->base.runner->currentRoom != nullptr
-        ? gl->base.runner->currentRoom->name : nullptr;
-    // This room references enough full-size scenery pages in one draw pass to
-    // fill the 104 MiB cache. The final pages were then deferred every frame,
-    // showing missing houses/props. 1280 remains above the Vita's display
-    // resolution while allowing the complete room working set to coexist.
-    bool transformedCastleSafetyScale = g_vitaActiveChapter == 2 && largeAtlas &&
-        roomName != nullptr && strcmp(roomName, "room_dw_castle_area_2_transformed") == 0 &&
-        !gl->texturePinned[pageId] && !vitaTexturePageHasFont(gl, pageId);
-    // Chapter 5 Town references more full-size scenery atlases in one frame
-    // than the Vita graphics pool can hold. Even in Original mode, keep UI and
-    // font pages intact but use the Medium scenery size for this chapter. This
-    // avoids permanent deferred-upload loops and GPU-memory crashes.
-    bool chapter5SafetyScale = g_vitaActiveChapter == 5 && largeAtlas &&
-                               !gl->texturePinned[pageId] &&
-                               !vitaTexturePageHasFont(gl, pageId);
+    bool largeAtlas = w >= 1536 || h >= 1536;
     bool preserveOriginal = !largeAtlas || gl->texturePinned[pageId] ||
                             vitaTexturePageHasFont(gl, pageId) ||
-                            (g_vitaGraphicsQuality == 0 && !chapter5SafetyScale &&
-                             !transformedCastleSafetyScale);
+                            (g_vitaGraphicsQuality == 0);
     int target = g_vitaGraphicsQuality == 2 ? 1024 : 1280;
     *gpuW = preserveOriginal ? w : target;
     *gpuH = preserveOriginal ? h : target;
@@ -931,8 +946,9 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
     // Nearest is mandatory for index textures, bilinear would interpolate palette indices into nonsense colors.
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    bool is_pot = ((w & (w - 1)) == 0) && ((h & (h - 1)) == 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 
     free(pixels);
 #else
@@ -1091,8 +1107,9 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    bool is_pot = ((w & (w - 1)) == 0) && ((h & (h - 1)) == 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 #endif
     fprintf(stderr, "GL: Loaded TXTR page %u (%dx%d)\n", pageId, w, h);
     return true;
@@ -2040,8 +2057,9 @@ static int32_t glCreateSpriteFromSurface(Renderer* renderer, int32_t surfaceID, 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    bool is_pot = ((w & (w - 1)) == 0) && ((h & (h - 1)) == 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 
     free(pixels);
 
@@ -2222,8 +2240,9 @@ static int32_t glLegacyCreateSurface(Renderer* renderer, int32_t width, int32_t 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    bool is_pot = ((texW & (texW - 1)) == 0) && ((texH & (texH - 1)) == 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 
     glBindFramebuffer(GL_FRAMEBUFFER, gl->surfaces[surfaceIndex]);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gl->surfaceTexture[surfaceIndex], 0);
@@ -2298,8 +2317,9 @@ static void glLegacySurfaceResize(Renderer* renderer, int32_t surfaceId, int32_t
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    bool is_pot = ((texW & (texW - 1)) == 0) && ((texH & (texH - 1)) == 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
 
     glBindFramebuffer(GL_FRAMEBUFFER, gl->surfaces[surfaceId]);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gl->surfaceTexture[surfaceId], 0);
@@ -2641,3 +2661,7 @@ Renderer* GLLegacyRenderer_create(void) {
 
     return (Renderer*) gl;
 }
+
+
+
+

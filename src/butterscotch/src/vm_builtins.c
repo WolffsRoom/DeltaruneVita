@@ -4129,6 +4129,86 @@ static RValue builtin_os_get_region(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RV
 
 STUB_RETURN_FALSE(os_is_paused)
 
+// ===[ VIDEO PLAYBACK ]===
+// On PLATFORM_VITA: backed by vita_video.c (SceAvPlayer / hardware H.264 decoder).
+// On other platforms: stubs (no video decoder available).
+
+#ifdef PLATFORM_VITA
+#include "../../vita-probe/source/vita_video.h"
+
+// video_open(path) — open an MP4 and start playing
+static RValue builtin_video_open(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    if (argCount < 1 || args[0].type != RVALUE_STRING || args[0].string == nullptr)
+        return RValue_makeUndefined();
+    VitaVideo_open(args[0].string);
+    return RValue_makeUndefined();
+}
+
+// video_draw(x, y, w, h) — render current frame into the given rectangle
+static RValue builtin_video_draw(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    float x = argCount > 0 ? (float)RValue_toReal(args[0]) : 0.0f;
+    float y = argCount > 1 ? (float)RValue_toReal(args[1]) : 0.0f;
+    float w = argCount > 2 ? (float)RValue_toReal(args[2]) : 960.0f;
+    float h = argCount > 3 ? (float)RValue_toReal(args[3]) : 544.0f;
+    VitaVideo_draw(x, y, w, h);
+    return RValue_makeUndefined();
+}
+
+// video_close()
+static RValue builtin_video_close(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    VitaVideo_close();
+    return RValue_makeUndefined();
+}
+
+// video_pause()
+static RValue builtin_video_pause(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    VitaVideo_pause();
+    return RValue_makeUndefined();
+}
+
+// video_resume()
+static RValue builtin_video_resume(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    VitaVideo_resume();
+    return RValue_makeUndefined();
+}
+
+// video_seek() — no-op on Vita (sceAvPlayer does not support arbitrary seeking)
+static RValue builtin_video_seek(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    return RValue_makeUndefined();
+}
+
+// video_get_status() -> 0=none 1=playing 2=paused
+static RValue builtin_video_get_status(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    return RValue_makeReal((GMLReal)VitaVideo_getStatus());
+}
+
+// video_get_duration() -> seconds
+static RValue builtin_video_get_duration(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    return RValue_makeReal((GMLReal)VitaVideo_getDuration());
+}
+
+// Generic no-op returning undefined (kept for completeness)
+static RValue builtin_return_undefined_0args(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    return RValue_makeUndefined();
+}
+
+#else // non-Vita platforms: full stubs
+
+static RValue builtin_return_undefined_0args(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    return RValue_makeUndefined();
+}
+static RValue builtin_video_open(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) { return RValue_makeUndefined(); }
+static RValue builtin_video_draw(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) { return RValue_makeUndefined(); }
+static RValue builtin_video_close(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) { return RValue_makeUndefined(); }
+static RValue builtin_video_pause(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) { return RValue_makeUndefined(); }
+static RValue builtin_video_resume(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) { return RValue_makeUndefined(); }
+static RValue builtin_video_seek(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) { return RValue_makeUndefined(); }
+static RValue builtin_video_get_status(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) { return RValue_makeReal(0.0); }
+static RValue builtin_video_get_duration(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) { return RValue_makeReal(0.0); }
+
+#endif // PLATFORM_VITA
+
+
 // ===[ XBOX ONE FUNCTIONS ]===
 
 // xboxone_show_account_picker(pad_index, flags): shows the Xbox account picker (async).
@@ -14266,6 +14346,72 @@ static RValue builtin_array_create(VMContext* ctx, RValue* args, int32_t argCoun
     return arr;
 }
 
+// array_equals(a, b) - GMS2.3+ builtin. Performs a deep element-wise comparison of two
+// 1-D arrays. Returns true iff both arguments are arrays of the same length whose
+// corresponding elements are all == (real/int by value, string by content, everything else
+// by identity). The native runner never recurses into nested arrays - just like GameMaker.
+static bool RValue_shallowEqual(RValue a, RValue b) {
+    if (a.type != b.type) {
+        // Allow real vs int comparisons (GML is loosely typed)
+        if ((a.type == RVALUE_REAL || a.type == RVALUE_INT32 || a.type == RVALUE_INT64 || a.type == RVALUE_BOOL) &&
+            (b.type == RVALUE_REAL || b.type == RVALUE_INT32 || b.type == RVALUE_INT64 || b.type == RVALUE_BOOL)) {
+            return RValue_toReal(a) == RValue_toReal(b);
+        }
+        return false;
+    }
+    switch (a.type) {
+        case RVALUE_REAL:    return a.real  == b.real;
+        case RVALUE_INT32:   return a.int32 == b.int32;
+        case RVALUE_INT64:   return a.int64 == b.int64;
+        case RVALUE_BOOL:    return a.int32 == b.int32;  // bool stored as int32
+        case RVALUE_STRING:  return strcmp(a.string ? a.string : "", b.string ? b.string : "") == 0;
+        case RVALUE_ARRAY:   return a.array == b.array;   // identity only, matching GML spec
+        case RVALUE_UNDEFINED: return true;
+        default:             return false;
+    }
+}
+
+static RValue builtin_array_equals(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    if (argCount < 2) return RValue_makeBool(false);
+    if (args[0].type != RVALUE_ARRAY || args[1].type != RVALUE_ARRAY) return RValue_makeBool(false);
+    GMLArray* a = args[0].array;
+    GMLArray* b = args[1].array;
+    if (a == nullptr || b == nullptr) return RValue_makeBool(a == b);
+    if (a == b) return RValue_makeBool(true);  // same pointer -> fast path
+    int32_t lenA = GMLArray_length1D(a);
+    int32_t lenB = GMLArray_length1D(b);
+    if (lenA != lenB) return RValue_makeBool(false);
+    for (int32_t i = 0; i < lenA; i++) {
+        RValue* slotA = GMLArray_slot(a, i);
+        RValue* slotB = GMLArray_slot(b, i);
+        RValue va = slotA ? *slotA : RValue_makeReal(0);
+        RValue vb = slotB ? *slotB : RValue_makeReal(0);
+        if (!RValue_shallowEqual(va, vb)) return RValue_makeBool(false);
+    }
+    return RValue_makeBool(true);
+}
+
+// array_copy(dest, dest_index, src, src_index, count) - GMS2.3+
+// Copies 'count' elements from src[src_index..] into dest[dest_index..]
+static RValue builtin_array_copy(MAYBE_UNUSED VMContext* ctx, RValue* args, int32_t argCount) {
+    if (argCount < 5) return RValue_makeUndefined();
+    if (args[0].type != RVALUE_ARRAY || args[2].type != RVALUE_ARRAY) return RValue_makeUndefined();
+    GMLArray* dest = args[0].array;
+    int32_t dest_idx = (int32_t) RValue_toReal(args[1]);
+    GMLArray* src  = args[2].array;
+    int32_t src_idx  = (int32_t) RValue_toReal(args[3]);
+    int32_t count    = (int32_t) RValue_toReal(args[4]);
+    if (dest == nullptr || src == nullptr || count <= 0) return RValue_makeUndefined();
+    for (int32_t i = 0; i < count; i++) {
+        RValue* slot = GMLArray_slot(src, src_idx + i);
+        RValue val = slot ? RValue_makeIndependent(*slot) : RValue_makeReal(0);
+        GMLArray_growTo(dest, dest_idx + i + 1);
+        GMLArray_set(dest, dest_idx + i, val);
+        RValue_free(&val);
+    }
+    return RValue_makeUndefined();
+}
+
 // @@This@@ - GMS2 internal function returning the current instance's ID.
 // Emitted by the GMS2 compiler for expressions like `self` when used as a value.
 static RValue builtin_This(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
@@ -16624,6 +16770,18 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "array_delete", builtin_array_delete);
     VM_registerBuiltin(ctx, "array_insert", builtin_array_insert);
     VM_registerBuiltin(ctx, "array_create", builtin_array_create);
+    VM_registerBuiltin(ctx, "array_equals", builtin_array_equals);
+    VM_registerBuiltin(ctx, "array_copy",   builtin_array_copy);
+
+    // Video playback - Deltarune Chapter 3 (Tenna cutscene)
+    VM_registerBuiltin(ctx, "video_open",       builtin_video_open);
+    VM_registerBuiltin(ctx, "video_draw",       builtin_video_draw);
+    VM_registerBuiltin(ctx, "video_close",      builtin_video_close);
+    VM_registerBuiltin(ctx, "video_pause",      builtin_video_pause);
+    VM_registerBuiltin(ctx, "video_resume",     builtin_video_resume);
+    VM_registerBuiltin(ctx, "video_seek",       builtin_video_seek);
+    VM_registerBuiltin(ctx, "video_get_status", builtin_video_get_status);
+    VM_registerBuiltin(ctx, "video_get_duration", builtin_video_get_duration);
 
     // Steam stubs
     VM_registerBuiltin(ctx, "steam_initialised", builtin_steam_initialised);

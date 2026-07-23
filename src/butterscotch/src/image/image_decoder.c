@@ -160,7 +160,18 @@ uint8_t* ImageDecoder_decodeToRgba(const uint8_t* blob, size_t blobSize, bool gm
     // PNG (or anything else stbi recognizes).
     int w, h, channels;
     uint8_t* pixels = stbi_load_from_memory(blob, (int) blobSize, &w, &h, &channels, 4);
-    if (!pixels) return nullptr;
+    if (!pixels) {
+        #ifdef __vita__
+        FILE* f = fopen("ux0:data/deltarune/stb_error.log", "a");
+        if (f) {
+            fprintf(f, "ImageDecoder: STB failed: %s (blobSize=%zu, header=%02x %02x %02x %02x)\n", 
+                    stbi_failure_reason(), blobSize, blob[0], blob[1], blob[2], blob[3]);
+            fclose(f);
+        }
+        #endif
+        fprintf(stderr, "ImageDecoder: STB failed: %s (blobSize=%zu)\n", stbi_failure_reason(), blobSize);
+        return nullptr;
+    }
     *outW = w;
     *outH = h;
     return pixels;

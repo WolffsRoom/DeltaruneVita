@@ -4,6 +4,8 @@
 
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 #include <GLES3/gl3.h>
+#elif defined(__vita__)
+#include <vitaGL.h>
 #else
 #include <glad/glad.h>
 #endif
@@ -51,7 +53,9 @@ static const char* baseFragmentShader =
 // ===[ Runtime OpenGL extension checks ]===
 
 static bool hasFBO() {
-#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#if defined(__vita__)
+    return true;
+#elif !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
     return (glGenFramebuffers || glGenFramebuffersEXT);
 #else
     return true;
@@ -59,7 +63,9 @@ static bool hasFBO() {
 }
 
 static bool hasVAO() {
-#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#if defined(__vita__)
+    return true;
+#elif !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
     return (glGenVertexArrays || glGenVertexArraysOES);
 #else
     return true;
@@ -133,6 +139,16 @@ GLShaderUniform* findShaderUniformByName(GMLShader* shader, const char* name) {
 
 static void flushBatch(GLRenderer* gl) {
     if (gl->batchCount == 0) return;
+
+    // Ensure the correct shader program is active. vitaEvictTexturePage unbinds
+    // the VAO before glDeleteTextures to prevent VitaGL state corruption; we
+    // need to restore the active program here before every draw.
+    if (gl->base.currentShader != -1) {
+        GMLShader* shader = &gl->gmlShaders[gl->base.currentShader];
+        glUseProgram(shader->shaderId);
+    } else {
+        glUseProgram(gl->defaultShaderProgram->shaderId);
+    }
 
     if (gl->base.currentShader != -1) {
         GMLShader* shader = &gl->gmlShaders[gl->base.currentShader];
@@ -452,6 +468,13 @@ static void glInit(Renderer* renderer, DataWin* dataWin) {
     gl->textureWidths = (int32_t *)safeMalloc(gl->textureCount * sizeof(int32_t));
     gl->textureHeights = (int32_t *)safeMalloc(gl->textureCount * sizeof(int32_t));
     gl->textureLoaded = (bool *)safeMalloc(gl->textureCount * sizeof(bool));
+#ifdef __vita__
+    gl->originalTexturePageCount = gl->textureCount;
+    gl->textureLastUsedFrame = (uint32_t *)safeCalloc(gl->textureCount, sizeof(uint32_t));
+    gl->texturePinned = (bool *)safeCalloc(gl->textureCount, sizeof(bool));
+    gl->textureFrame = 1;
+    gl->residentTextureBytes = 0;
+#endif
 
     glGenTextures((GLsizei) gl->textureCount, gl->glTextures);
 
@@ -482,6 +505,8 @@ static void glInit(Renderer* renderer, DataWin* dataWin) {
     gl->originalSpriteCount = dataWin->sprt.count;
 
     fprintf(stderr, "GL: Renderer initialized (%u texture pages)\n", gl->textureCount);
+
+    glUseProgram(0);
 }
 
 static void glGpuSetShader(Renderer* renderer, int32_t shaderIndex) {
@@ -648,6 +673,14 @@ static void glBeginFrame(Renderer* renderer, int32_t gameW, int32_t gameH, int32
     gl->base.CPortY = 0;
     gl->base.CPortW = gameW;
     gl->base.CPortH = gameH;
+
+    glUseProgram(gl->defaultShaderProgram->shaderId);
+    if (hasVAO()) glBindVertexArray(gl->vao);
+
+#ifdef __vita__
+    gl->textureFrame++;
+    if (gl->textureFrame == 0) gl->textureFrame = 1;
+#endif
 }
 
 static void glBeginView(Renderer* renderer, MAYBE_UNUSED int32_t viewX, MAYBE_UNUSED int32_t viewY, MAYBE_UNUSED int32_t viewW, MAYBE_UNUSED int32_t viewH, int32_t portX, int32_t portY, int32_t portW, int32_t portH, MAYBE_UNUSED float viewAngle) {
@@ -682,7 +715,8 @@ static void glBeginView(Renderer* renderer, MAYBE_UNUSED int32_t viewX, MAYBE_UN
     glShaderSettingsRefresh(renderer);
     glActiveTexture(GL_TEXTURE1);
 
-    if (hasVAO()) glBindVertexArray(gl->vao);
+    if (hasVAO()) glBindVertexArray(0);
+    glUseProgram(0);
 
 }
 
@@ -829,6 +863,9 @@ static void glEndFrameEnd(Renderer* renderer) {
         glEnable(GL_BLEND);
         if (scissorWasEnabled) glEnable(GL_SCISSOR_TEST);
     }
+
+    if (hasVAO()) glBindVertexArray(0);
+    glUseProgram(0);
 }
 
 static void glRendererFlush(Renderer* renderer) {
@@ -852,45 +889,524 @@ static void glClearScreen(Renderer* renderer, uint32_t color, float alpha) {
 
 // Lazily decodes and uploads a TXTR page on first access.
 // Returns true if the texture is ready, false if it failed to decode.
+
+typedef struct VitaTextureCacheHeader {
+    uint32_t magic;
+    uint32_t sourceSize;
+    uint32_t sourceOffset;
+    uint32_t width;
+    uint32_t height;
+} VitaTextureCacheHeader;
+
+#ifdef __vita__
+#include <psp2/io/fcntl.h>
+#include <psp2/io/stat.h>
+#include <stdio.h>
+#define VITA_TX_CACHE_ROOT "ux0:data/deltarune/deltarunevita/texture-cache"
+#endif
+
+#define VITA_TX_CACHE_MAGIC 0x31435456U /* VTC1 */
+#define VITA_TX_CACHE_COMPLETE_MAGIC 0x32435456U /* VTC2 */
+
+static void vitaTextureLog(uint32_t pageId, int w, int h, GLint maxTextureSize, const char* phase);
+
+static int vitaTextureChapter(const DataWin* dw) {
+    const char* path = dw != nullptr ? dw->lazyLoadFilePath : nullptr;
+    if (path == nullptr) return 0;
+    const char* marker = strstr(path, "chapter");
+    if (marker == nullptr || marker[7] < '0' || marker[7] > '5') return 0;
+    return marker[7] - '0';
+}
+
+static const char* vitaTextureCacheVariant(const DataWin* dw) {
+    const char* path = dw != nullptr ? dw->lazyLoadFilePath : nullptr;
+    return path != nullptr && strstr(path, "mods/PTBR") != nullptr ? "-ptbr" : "";
+}
+
+static void vitaTextureCachePath(const DataWin* dw, uint32_t pageId, char* output, size_t outputSize) {
+    snprintf(output, outputSize, VITA_TX_CACHE_ROOT "/chapter%d%s/page_%03u.r444",
+             vitaTextureChapter(dw), vitaTextureCacheVariant(dw), pageId);
+}
+
+static void vitaTextureCacheDir(const DataWin* dw, char* output, size_t outputSize) {
+    snprintf(output, outputSize, VITA_TX_CACHE_ROOT "/chapter%d%s",
+             vitaTextureChapter(dw), vitaTextureCacheVariant(dw));
+}
+
+static bool vitaTextureCacheIsComplete(const DataWin* dw) {
+    char path[256];
+    char dir[192];
+    vitaTextureCacheDir(dw, dir, sizeof(dir));
+    snprintf(path, sizeof(path), "%s/complete.vtc", dir);
+    SceUID fd = sceIoOpen(path, SCE_O_RDONLY, 0);
+    if (fd < 0) return false;
+    uint32_t marker[2] = {0, 0};
+    int got = sceIoRead(fd, marker, sizeof(marker));
+    sceIoClose(fd);
+    return got == sizeof(marker) && marker[0] == VITA_TX_CACHE_COMPLETE_MAGIC &&
+           marker[1] == dw->txtr.count;
+}
+
+static void vitaMarkTextureCacheComplete(const DataWin* dw) {
+    char path[256];
+    char dir[192];
+    vitaTextureCacheDir(dw, dir, sizeof(dir));
+    snprintf(path, sizeof(path), "%s/complete.vtc", dir);
+    SceUID fd = sceIoOpen(path, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
+    if (fd < 0) return;
+    uint32_t marker[2] = {VITA_TX_CACHE_COMPLETE_MAGIC, dw->txtr.count};
+    sceIoWrite(fd, marker, sizeof(marker));
+    sceIoClose(fd);
+}
+
+static uint16_t* vitaLoadPreparedTexture(const DataWin* dw, const Texture* txtr,
+                                         uint32_t pageId, int* width, int* height) {
+    char path[256];
+    vitaTextureCachePath(dw, pageId, path, sizeof(path));
+    SceUID fd = sceIoOpen(path, SCE_O_RDONLY, 0);
+    if (fd < 0) return nullptr;
+    VitaTextureCacheHeader header;
+    int got = sceIoRead(fd, &header, sizeof(header));
+    if (got != sizeof(header) || header.magic != VITA_TX_CACHE_MAGIC ||
+        header.sourceSize != txtr->blobSize || header.sourceOffset != txtr->blobOffset ||
+        header.width == 0 || header.height == 0 || header.width > 4096 || header.height > 4096) {
+        sceIoClose(fd);
+        return nullptr;
+    }
+    size_t bytes = (size_t)header.width * (size_t)header.height * sizeof(uint16_t);
+    uint16_t* packed = (uint16_t*)malloc(bytes);
+    if (packed == nullptr || sceIoRead(fd, packed, (unsigned int)bytes) != (int)bytes) {
+        free(packed);
+        sceIoClose(fd);
+        return nullptr;
+    }
+    sceIoClose(fd);
+    *width = (int)header.width;
+    *height = (int)header.height;
+    return packed;
+}
+
+static void vitaSavePreparedTexture(const DataWin* dw, const Texture* txtr, uint32_t pageId,
+                                    int width, int height, const uint16_t* packed) {
+    sceIoMkdir(VITA_TX_CACHE_ROOT, 0777);
+    char chapterDir[192];
+    vitaTextureCacheDir(dw, chapterDir, sizeof(chapterDir));
+    sceIoMkdir(chapterDir, 0777);
+    char path[256];
+    vitaTextureCachePath(dw, pageId, path, sizeof(path));
+    SceUID fd = sceIoOpen(path, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
+    if (fd < 0) return;
+    VitaTextureCacheHeader header = {
+        VITA_TX_CACHE_MAGIC, txtr->blobSize, txtr->blobOffset, (uint32_t)width, (uint32_t)height
+    };
+    size_t bytes = (size_t)width * (size_t)height * sizeof(uint16_t);
+    sceIoWrite(fd, &header, sizeof(header));
+    sceIoWrite(fd, packed, (unsigned int)bytes);
+    sceIoClose(fd);
+}
+
+
+
+static void vitaTextureLog(uint32_t pageId, int w, int h, GLint maxTextureSize, const char* phase) {
+    char line[160];
+    int length = snprintf(line, sizeof(line), "TXTR page=%u size=%dx%d max=%d phase=%s\n",
+                          pageId, w, h, (int) maxTextureSize, phase);
+    SceUID fd = sceIoOpen("ux0:data/deltarune/deltarunevita/butterscotch-probe.log",
+                          SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
+    if (fd >= 0) {
+        sceIoWrite(fd, line, (SceSize) length);
+        sceIoClose(fd);
+    }
+}
+
+
+#ifdef __vita__
+// Chapter 2's castle scene actively alternates five 2048x2048 pages (80 MiB)
+// plus smaller pages. At 80 MiB the cache continuously evicted and decoded the
+// same pages, producing multi-second frames. 88 MiB holds that working set while
+// retaining headroom in the 112 MiB graphics pool for surfaces and borders.
+#define VITA_TEXTURE_CACHE_LIMIT (104ULL * 1024ULL * 1024ULL)
+
+static uint16_t* vitaCpuTextureCacheGet(GLRenderer* gl, uint32_t pageId, int* w, int* h) {
+    for (int i = 0; i < 4; ++i) {
+        if (gl->cpuTextureCachePixels[i] != nullptr && gl->cpuTextureCachePage[i] == pageId) {
+            gl->vitaTextureRamHits++;
+            gl->cpuTextureCacheStamp[i] = ++gl->cpuTextureCacheClock;
+            *w = gl->cpuTextureCacheWidth[i];
+            *h = gl->cpuTextureCacheHeight[i];
+            return gl->cpuTextureCachePixels[i];
+        }
+    }
+    return nullptr;
+}
+
+static uint16_t* vitaCpuTextureCacheStore(GLRenderer* gl, uint32_t pageId,
+                                          uint16_t* pixels, int w, int h) {
+    int slot = -1;
+    uint32_t oldest = UINT32_MAX;
+    for (int i = 0; i < 4; ++i) {
+        if (gl->cpuTextureCachePixels[i] == nullptr) { slot = i; break; }
+        if (gl->cpuTextureCacheStamp[i] < oldest) {
+            oldest = gl->cpuTextureCacheStamp[i];
+            slot = i;
+        }
+    }
+    if (slot < 0) return pixels;
+    free(gl->cpuTextureCachePixels[slot]);
+    gl->cpuTextureCachePixels[slot] = pixels;
+    gl->cpuTextureCachePage[slot] = pageId;
+    gl->cpuTextureCacheWidth[slot] = w;
+    gl->cpuTextureCacheHeight[slot] = h;
+    gl->cpuTextureCacheStamp[slot] = ++gl->cpuTextureCacheClock;
+    return pixels;
+}
+
+static bool vitaCpuTextureCacheOwns(const GLRenderer* gl, const uint16_t* pixels) {
+    if (pixels == nullptr) return false;
+    for (int i = 0; i < 4; ++i)
+        if (gl->cpuTextureCachePixels[i] == pixels) return true;
+    return false;
+}
+
+static void vitaReleasePreparedPixels(GLRenderer* gl, uint16_t* pixels) {
+    if (!vitaCpuTextureCacheOwns(gl, pixels)) free(pixels);
+}
+
+static bool vitaTextureNeedsFullColor(GLRenderer* gl, uint32_t pageId) {
+    // Non-zero alpha rounding keeps fonts and spr_darkconfigbt visible in
+    // RGBA4444, avoiding a 16 MiB full-color atlas in Chapter 2.
+    (void)gl;
+    (void)pageId;
+    return false;
+}
+
+static bool vitaTexturePageHasFont(GLRenderer* gl, uint32_t pageId) {
+    DataWin* dw = gl->base.dataWin;
+    for (uint32_t i = 0; i < dw->font.count; ++i) {
+        Font* font = &dw->font.fonts[i];
+        if (!font->present || font->tpagIndex < 0 || (uint32_t)font->tpagIndex >= dw->tpag.count) continue;
+        if ((uint32_t)dw->tpag.items[font->tpagIndex].texturePageId == pageId) return true;
+    }
+    return false;
+}
+
+static void vitaGpuAtlasSize(GLRenderer* gl, uint32_t pageId, int w, int h, int* gpuW, int* gpuH) {
+    // A 2048x2048 atlas contains far more source pixels than the Vita can show
+    // on its 960x544 display. Keep logical dimensions unchanged for UV math,
+    // but upload a half-size nearest-neighbour copy to CDRAM.
+    extern int g_vitaGraphicsQuality;
+    bool largeAtlas = w == 2048 && h == 2048;
+    bool preserveOriginal = !largeAtlas || gl->texturePinned[pageId] ||
+                            vitaTexturePageHasFont(gl, pageId) || g_vitaGraphicsQuality == 0;
+    int target = g_vitaGraphicsQuality == 2 ? 1024 : 1280;
+    *gpuW = preserveOriginal ? w : target;
+    *gpuH = preserveOriginal ? h : target;
+}
+
+static uint64_t vitaGpuTextureBytes(GLRenderer* gl, uint32_t pageId, int w, int h) {
+    int gpuW, gpuH;
+    vitaGpuAtlasSize(gl, pageId, w, h, &gpuW, &gpuH);
+    return (uint64_t)gpuW * (uint64_t)gpuH *
+           (vitaTextureNeedsFullColor(gl, pageId) ? 4ULL : 2ULL);
+}
+
+static bool vitaEvictTexturePage(GLRenderer* gl, uint32_t protectedPage) {
+    uint32_t victim = UINT32_MAX;
+    uint32_t oldestFrame = UINT32_MAX;
+
+    // First pass: try to evict a large texture (>512)
+    for (uint32_t i = 0; i < gl->originalTexturePageCount; ++i) {
+        if (i == protectedPage || gl->texturePinned[i] || !gl->textureLoaded[i] || gl->textureWidths[i] <= 0 || gl->textureHeights[i] <= 0) continue;
+        if (gl->textureWidths[i] <= 512 && gl->textureHeights[i] <= 512) continue;
+        if (gl->textureLastUsedFrame[i] == gl->textureFrame) continue;
+        if (gl->textureLastUsedFrame[i] < oldestFrame) {
+            oldestFrame = gl->textureLastUsedFrame[i];
+            victim = i;
+        }
+    }
+
+    // Second pass: only attempt to evict small textures if the incoming texture
+    // is itself small. Large scenery atlases must NOT evict UI/font pages because
+    // those are needed every frame and would be re-uploaded immediately, thrashing
+    // the cache and potentially leaving the GPU with a dangling texture reference.
+    bool incomingIsSmall = (gl->textureWidths[protectedPage] <= 0 || gl->textureHeights[protectedPage] <= 0) ||
+                           (gl->textureWidths[protectedPage] <= 512 && gl->textureHeights[protectedPage] <= 512);
+    if (victim == UINT32_MAX && incomingIsSmall) {
+        oldestFrame = UINT32_MAX;
+        for (uint32_t i = 0; i < gl->originalTexturePageCount; ++i) {
+            if (i == protectedPage || gl->texturePinned[i] || !gl->textureLoaded[i] || gl->textureWidths[i] <= 0 || gl->textureHeights[i] <= 0) continue;
+            if (gl->textureLastUsedFrame[i] == gl->textureFrame) continue;
+            if (gl->textureLastUsedFrame[i] < oldestFrame) {
+                oldestFrame = gl->textureLastUsedFrame[i];
+                victim = i;
+            }
+        }
+    }
+
+    if (victim == UINT32_MAX) return false;
+
+    uint64_t bytes = vitaGpuTextureBytes(gl, victim, gl->textureWidths[victim], gl->textureHeights[victim]);
+    vitaTextureLog(victim, gl->textureWidths[victim], gl->textureHeights[victim], 4096, "evict_lru");
+    gl->vitaTextureEvictions++;
+#ifdef __vita__
+    // Unbind VAO before destroying the texture object. VitaGL can cache
+    // GL state internally; deleting a texture while a VAO is active has been
+    // observed to corrupt the driver's texture-unit state on the PSVITA,
+    // leading to a GPU crash on the next draw call.
+    if (hasVAO()) glBindVertexArray(0);
+#endif
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDeleteTextures(1, &gl->glTextures[victim]);
+    glGenTextures(1, &gl->glTextures[victim]);
+    gl->textureLoaded[victim] = false;
+    gl->textureWidths[victim] = 0;
+    gl->textureHeights[victim] = 0;
+    gl->textureLastUsedFrame[victim] = 0;
+    gl->residentTextureBytes = gl->residentTextureBytes > bytes ? gl->residentTextureBytes - bytes : 0;
+    return true;
+}
+#endif
+
+
 bool GLRenderer_ensureTextureLoaded(GLRenderer* gl, uint32_t pageId) {
-    if (gl->textureLoaded[pageId]) return (gl->textureWidths[pageId] != 0);
+    if (gl->textureLoaded[pageId]) {
+        if (pageId < gl->originalTexturePageCount) gl->textureLastUsedFrame[pageId] = gl->textureFrame;
+        return (gl->textureWidths[pageId] != 0);
+    }
+#ifdef __vita__
+    // Once the protected working set fills the cache, do not decode every
+    // remaining missing atlas only to discover the same condition again.
+    if (gl->textureCacheBlockedFrame == gl->textureFrame) return false;
+#endif
 
     gl->textureLoaded[pageId] = true;
 
-    DataWin* dw = gl->base.dataWin;
-    Texture* txtr = &dw->txtr.textures[pageId];
-
-    DataWin_loadTxtrIfNeeded(dw, pageId);
-
     int w, h;
-    bool gm2022_5 = DataWin_isVersionAtLeast(dw, 2022, 5, 0, 0);
-    uint8_t* pixels = ImageDecoder_decodeToRgba(txtr->blobData, (size_t) txtr->blobSize, gm2022_5, &w, &h);
-    if (pixels == nullptr) {
-        fprintf(stderr, "GL: Failed to decode TXTR page %u\n", pageId);
+#ifdef PLATFORM_PS3
+    // We'll load the textures on demand.
+    uint8_t* pixels;
+    if (!PS3Textures_loadPage(pageId, &w, &h, &pixels)) {
+        fprintf(stderr, "GL: PS3 page %u has no pixels\n", pageId);
         return false;
     }
-    if (!txtr->mapped) {
-        free(txtr->blobData);
-        txtr->blobData = nullptr;
+    gl->textureWidths[pageId] = w;
+    gl->textureHeights[pageId] = h;
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gl->glTextures[pageId]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0, GL_RED, GL_UNSIGNED_BYTE, pixels);
+    // Nearest is mandatory for index textures, bilinear would interpolate palette indices into nonsense colors.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    free(pixels);
+#else
+    DataWin* dw = gl->base.dataWin;
+    Texture* txtr = &dw->txtr.textures[pageId];
+    uint8_t* pixels = nullptr;
+#ifdef __vita__
+    uint16_t* preparedPixels = vitaCpuTextureCacheGet(gl, pageId, &w, &h);
+    if (preparedPixels != nullptr) vitaTextureLog(pageId, w, h, 4096, "prepared_ram_hit");
+    else {
+        preparedPixels = vitaLoadPreparedTexture(dw, txtr, pageId, &w, &h);
+        if (preparedPixels != nullptr) {
+            vitaCpuTextureCacheStore(gl, pageId, preparedPixels, w, h);
+            vitaTextureLog(pageId, w, h, 4096, "prepared_cache_hit");
+        }
+    }
+#endif
+#ifdef __vita__
+    if (preparedPixels == nullptr)
+#endif
+    {
+        DataWin_loadTxtrIfNeeded(dw, pageId);
+        bool gm2022_5 = DataWin_isVersionAtLeast(dw, 2022, 5, 0, 0);
+        pixels = ImageDecoder_decodeToRgba(txtr->blobData, (size_t) txtr->blobSize, gm2022_5, &w, &h);
+        if (pixels == nullptr) {
+            fprintf(stderr, "GL: Failed to decode TXTR page %u\\n", pageId);
+            return false;
+        }
+        if (!txtr->mapped) {
+            free(txtr->blobData);
+            txtr->blobData = nullptr;
+        }
     }
 
     gl->textureWidths[pageId] = w;
     gl->textureHeights[pageId] = h;
 
+#ifdef __vita__
+    GLint maxTextureSize = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+    vitaTextureLog(pageId, w, h, maxTextureSize, "upload_begin");
+    if (w <= 0 || h <= 0) {
+        vitaTextureLog(pageId, w, h, maxTextureSize, "rejected_invalid_size");
+        free(pixels);
+        vitaReleasePreparedPixels(gl, preparedPixels);
+        gl->textureWidths[pageId] = 0;
+        gl->textureHeights[pageId] = 0;
+        return false;
+    }
+    
+    if (w > maxTextureSize || h > maxTextureSize) {
+        vitaTextureLog(pageId, w, h, maxTextureSize, "forced_downscale");
+        int scale = 1;
+        while (w / scale > maxTextureSize || h / scale > maxTextureSize) {
+            scale *= 2;
+        }
+        int new_w = w / scale;
+        int new_h = h / scale;
+        
+        if (pixels != nullptr) {
+            uint8_t* new_pixels = (uint8_t*)safeMalloc((size_t)new_w * (size_t)new_h * 4);
+            for (int y = 0; y < new_h; y++) {
+                for (int x = 0; x < new_w; x++) {
+                    int src_x = x * scale;
+                    int src_y = y * scale;
+                    for (int c = 0; c < 4; c++) {
+                        new_pixels[(y * new_w + x) * 4 + c] = pixels[(src_y * w + src_x) * 4 + c];
+                    }
+                }
+            }
+            free(pixels);
+            pixels = new_pixels;
+        } else if (preparedPixels != nullptr) {
+            uint16_t* new_pixels = (uint16_t*)safeMalloc((size_t)new_w * (size_t)new_h * 2);
+            for (int y = 0; y < new_h; y++) {
+                for (int x = 0; x < new_w; x++) {
+                    int src_x = x * scale;
+                    int src_y = y * scale;
+                    new_pixels[y * new_w + x] = preparedPixels[src_y * w + src_x];
+                }
+            }
+            vitaReleasePreparedPixels(gl, preparedPixels);
+            preparedPixels = new_pixels;
+        }
+        w = new_w;
+        h = new_h;
+    }
+    // RGBA4444 cuts atlas residency and transfer size in half. DELTARUNE's
+    // pixel-art presentation tolerates the 4-bit channels well, while keeping
+    // the Chapter 2/5 working sets resident instead of decoding the same PNGs
+    // every few frames.
+    uint64_t pixelCount = (uint64_t)w * (uint64_t)h;
+    bool fullColor = vitaTextureNeedsFullColor(gl, pageId);
+    int gpuW, gpuH;
+    vitaGpuAtlasSize(gl, pageId, w, h, &gpuW, &gpuH);
+    uint64_t uploadBytes = (uint64_t)gpuW * (uint64_t)gpuH * (fullColor ? 4ULL : 2ULL);
+    while (gl->residentTextureBytes + uploadBytes > VITA_TEXTURE_CACHE_LIMIT) {
+        if (!vitaEvictTexturePage(gl, pageId)) break;
+    }
+    if (gl->residentTextureBytes + uploadBytes > VITA_TEXTURE_CACHE_LIMIT) {
+        // Every possible victim was already used by this frame. The old path
+        // uploaded anyway, temporarily exceeding the 112 MiB graphics pool;
+        // Chapter 5 could enqueue many such pages in one room change and crash.
+        // Defer this atlas until the next frame, when an older page can be
+        // reclaimed safely. This also prevents a 20-30 second unbroken upload
+        // burst while leaving currently referenced textures valid.
+        vitaTextureLog(pageId, w, h, maxTextureSize, "deferred_cache_budget");
+        gl->vitaTextureDeferred++;
+        free(pixels);
+        vitaReleasePreparedPixels(gl, preparedPixels);
+        gl->textureCacheBlockedFrame = gl->textureFrame;
+        gl->textureLoaded[pageId] = false;
+        gl->textureWidths[pageId] = 0;
+        gl->textureHeights[pageId] = 0;
+        return false;
+    }
+    uint16_t* packedPixels = preparedPixels;
+    uint16_t* gpuPackedPixels = nullptr;
+    if (!fullColor) {
+        // Pack into the first half of the decoded RGBA allocation. Reading four
+        // bytes and writing two bytes advances the destination more slowly than
+        // the source, so this is safe in-place and avoids an extra 8 MiB staging
+        // allocation for every 2048x2048 atlas. The old 24 MiB peak per upload
+        // fragmented memory during Chapter 5's large room changes.
+        if (packedPixels == nullptr) {
+            packedPixels = (uint16_t*)pixels;
+            for (uint64_t i = 0; i < pixelCount; ++i) {
+                const uint8_t* src = &pixels[i * 4ULL];
+                uint16_t alpha4 = src[3] == 0 ? 0 : (uint16_t)((src[3] + 15U) >> 4);
+                if (alpha4 > 15U) alpha4 = 15U;
+                packedPixels[i] = (uint16_t)(((uint16_t)(src[0] >> 4) << 12) |
+                                             ((uint16_t)(src[1] >> 4) << 8) |
+                                             ((uint16_t)(src[2] >> 4) << 4) |
+                                             alpha4);
+            }
+            vitaSavePreparedTexture(dw, txtr, pageId, w, h, packedPixels);
+            vitaTextureLog(pageId, w, h, maxTextureSize, "prepared_cache_written");
+        }
+        if (gpuW != w || gpuH != h) {
+            gpuPackedPixels = (uint16_t*)safeMalloc((size_t)uploadBytes);
+            for (int y = 0; y < gpuH; ++y) {
+                int srcY = (int)((int64_t)y * h / gpuH);
+                const uint16_t* srcRow = packedPixels + (size_t)srcY * (size_t)w;
+                uint16_t* dstRow = gpuPackedPixels + (size_t)y * (size_t)gpuW;
+                for (int x = 0; x < gpuW; ++x) {
+                    int srcX = (int)((int64_t)x * w / gpuW);
+                    dstRow[x] = srcRow[srcX];
+                }
+            }
+            vitaTextureLog(pageId, gpuW, gpuH, maxTextureSize, "upload_rgba4444_half");
+        } else {
+            gpuPackedPixels = packedPixels;
+            vitaTextureLog(pageId, w, h, maxTextureSize, "upload_rgba4444");
+        }
+    } else {
+        vitaReleasePreparedPixels(gl, preparedPixels);
+        preparedPixels = nullptr;
+        vitaTextureLog(pageId, w, h, maxTextureSize, "upload_rgba8888_ui");
+    }
+#endif
     glBindTexture(GL_TEXTURE_2D, gl->glTextures[pageId]);
+#ifdef __vita__
+    while (glGetError() != GL_NO_ERROR) {}
+#endif
+#ifdef __vita__
+    if (fullColor) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        free(pixels);
+        pixels = nullptr;
+    } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gpuW, gpuH, 0, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4, gpuPackedPixels);
+        if (gpuPackedPixels != packedPixels) free(gpuPackedPixels);
+        if (pixels != nullptr) free(pixels);
+        else vitaReleasePreparedPixels(gl, packedPixels);
+        pixels = nullptr;
+        packedPixels = nullptr;
+        gpuPackedPixels = nullptr;
+    }
+#else
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+#endif
+
+#ifdef __vita__
+    GLenum uploadError = glGetError();
+    if (uploadError != GL_NO_ERROR) {
+        vitaTextureLog(pageId, w, h, maxTextureSize, "upload_failed_gpu_memory");
+        free(pixels);
+        glDeleteTextures(1, &gl->glTextures[pageId]);
+        glGenTextures(1, &gl->glTextures[pageId]);
+        gl->textureLoaded[pageId] = false;
+        gl->textureWidths[pageId] = 0;
+        gl->textureHeights[pageId] = 0;
+        return false;
+    }
+    gl->residentTextureBytes += uploadBytes;
+    gl->textureLastUsedFrame[pageId] = gl->textureFrame;
+    vitaTextureLog(pageId, w, h, maxTextureSize, "upload_complete_cached");
+#endif
 
     free(pixels);
 
-    bool isPOT = (w & (w - 1)) == 0 && (h & (h - 1)) == 0;
-    GLint wrapMode = isPOT ? GL_REPEAT : GL_CLAMP_TO_EDGE;
-
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
-
-    fprintf(stderr, "GL: Loaded TXTR page %u (%dx%d)\n", pageId, w, h);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+#endif
+    fprintf(stderr, "GL: Loaded TXTR page %u (%dx%d)\\n", pageId, w, h);
     return true;
 }
 
@@ -1890,6 +2406,12 @@ static uint32_t findOrAllocTexturePageSlot(GLRenderer* gl) {
     gl->textureWidths = (int32_t *)safeRealloc(gl->textureWidths, gl->textureCount * sizeof(int32_t));
     gl->textureHeights = (int32_t *)safeRealloc(gl->textureHeights, gl->textureCount * sizeof(int32_t));
     gl->textureLoaded = (bool *)safeRealloc(gl->textureLoaded, gl->textureCount * sizeof(bool));
+#ifdef __vita__
+    gl->textureLastUsedFrame = (uint32_t *)safeRealloc(gl->textureLastUsedFrame, gl->textureCount * sizeof(uint32_t));
+    gl->texturePinned = (bool *)safeRealloc(gl->texturePinned, gl->textureCount * sizeof(bool));
+    gl->textureLastUsedFrame[newPageId] = gl->textureFrame;
+    gl->texturePinned[newPageId] = false;
+#endif
     gl->glTextures[newPageId] = 0;
     gl->textureWidths[newPageId] = 0;
     gl->textureHeights[newPageId] = 0;
@@ -2744,4 +3266,59 @@ Renderer* GLRenderer_create(void) {
     gl->base.currentShader = -1;
     gl->base.cameraCurrent = 0;
     return (Renderer*) gl;
+}
+
+uint32_t GLRenderer_prepareTextureCache(DataWin* dw,
+                                              void (*progress)(uint32_t, uint32_t, void*),
+                                              void* user) {
+    if (dw == nullptr || dw->txtr.count == 0) return 0;
+    if (vitaTextureCacheIsComplete(dw)) return dw->txtr.count;
+    uint32_t prepared = 0;
+    bool gm2022_5 = DataWin_isVersionAtLeast(dw, 2022, 5, 0, 0);
+    for (uint32_t pageId = 0; pageId < dw->txtr.count; ++pageId) {
+        Texture* txtr = &dw->txtr.textures[pageId];
+        int w = 0, h = 0;
+        uint16_t* cached = vitaLoadPreparedTexture(dw, txtr, pageId, &w, &h);
+        if (cached != nullptr) {
+            free(cached);
+            prepared++;
+            vitaTextureLog(pageId, w, h, 4096, "preload_cache_hit");
+        } else {
+            vitaTextureLog(pageId, 0, 0, 4096, "preload_decode_begin");
+            DataWin_loadTxtrIfNeeded(dw, pageId);
+            
+            // LOG BLOB SIZE
+            char debug_msg[64];
+            snprintf(debug_msg, sizeof(debug_msg), "blobSize_%zu", (size_t)txtr->blobSize);
+            vitaTextureLog(pageId, 0, 0, 4096, debug_msg);
+            
+            uint8_t* pixels = ImageDecoder_decodeToRgba(txtr->blobData, (size_t)txtr->blobSize,
+                                                        gm2022_5, &w, &h);
+            if (pixels != nullptr && w > 0 && h > 0 && w <= 4096 && h <= 4096) {
+                uint64_t pixelCount = (uint64_t)w * (uint64_t)h;
+                uint16_t* packed = (uint16_t*)pixels;
+                for (uint64_t i = 0; i < pixelCount; ++i) {
+                    const uint8_t* src = &pixels[i * 4ULL];
+                    uint16_t alpha4 = src[3] == 0 ? 0 : (uint16_t)((src[3] + 15U) >> 4);
+                    if (alpha4 > 15U) alpha4 = 15U;
+                    packed[i] = (uint16_t)(((uint16_t)(src[0] >> 4) << 12) |
+                                           ((uint16_t)(src[1] >> 4) << 8) |
+                                           ((uint16_t)(src[2] >> 4) << 4) | alpha4);
+                }
+                vitaSavePreparedTexture(dw, txtr, pageId, w, h, packed);
+                prepared++;
+                vitaTextureLog(pageId, w, h, 4096, "preload_cache_written");
+            } else {
+                vitaTextureLog(pageId, w, h, 4096, "preload_decode_skipped");
+            }
+            free(pixels);
+            if (!txtr->mapped) {
+                free(txtr->blobData);
+                txtr->blobData = nullptr;
+            }
+        }
+        if (progress != nullptr) progress(pageId + 1, dw->txtr.count, user);
+    }
+    if (prepared == dw->txtr.count) vitaMarkTextureCacheComplete(dw);
+    return prepared;
 }

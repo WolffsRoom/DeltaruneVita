@@ -7,7 +7,11 @@
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 #include <GLES3/gl3.h>
 #else
+#ifdef __vita__
+#include <vitaGL.h>
+#else
 #include <glad/glad.h>
+#endif
 #endif
 
 typedef enum {
@@ -54,14 +58,33 @@ typedef struct {
     Vertex* vertexData; // MAX_QUADS * VERTICES_PER_QUAD vertices
 
     BatchType batchType;
-    int32_t batchCount;
-    GLuint currentTextureId;
 
     GLuint* glTextures;       // one GL texture per TXTR page
     int32_t* textureWidths;   // needed for UV normalization
     int32_t* textureHeights;
     bool* textureLoaded;      // lazy loading: true once PNG decoded and uploaded
+    uint32_t* textureLastUsedFrame;
+    bool* texturePinned;
+    uint32_t textureFrame;
+    uint32_t textureCacheBlockedFrame;
+    uint64_t residentTextureBytes;
     uint32_t textureCount;
+
+#ifdef __vita__
+    uint16_t* cpuTextureCachePixels[4];
+    uint32_t cpuTextureCachePage[4];
+    uint32_t cpuTextureCacheStamp[4];
+    int32_t cpuTextureCacheWidth[4];
+    int32_t cpuTextureCacheHeight[4];
+    uint32_t cpuTextureCacheClock;
+    uint32_t vitaTextureEvictions;
+    uint32_t vitaTextureDeferred;
+    uint32_t vitaTextureRamHits;
+#endif
+    int32_t batchCount;
+    GLuint currentTextureId;
+
+
 
     GLuint whiteTexture; // 1x1 white pixel for drawing primitives (rectangles, lines, etc.)
 
@@ -94,6 +117,7 @@ typedef struct {
 } GLRenderer;
 
 bool GLRenderer_ensureTextureLoaded(GLRenderer* gl, uint32_t pageId);
+uint32_t GLRenderer_prepareTextureCache(DataWin* dw, void (*progressCallback)(uint32_t, uint32_t, void*), void* user);
 Renderer* GLRenderer_create(void);
 
 #endif /* _BS_GL_RENDERER_H_ */

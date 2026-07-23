@@ -1,4 +1,5 @@
 #include <psp2/ctrl.h>
+int _newlib_heap_size_user = 256 * 1024 * 1024;
 #include <psp2/appmgr.h>
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
@@ -26,6 +27,7 @@
 #include "spatial_grid.h"
 #include "vita_settings.h"
 #include "vita_borders.h"
+#include "vita_video.h"
 #include "vm.h"
 #include "profiler.h"
 #include "stb_image.h"
@@ -35,7 +37,7 @@
 #define LOG_PATH DATA_ROOT "butterscotch-probe.log"
 #define NEXT_CHAPTER_PATH DATA_ROOT "next-chapter.txt"
 #define DEV_LOG_ROOT DATA_ROOT "devlogs"
-#define PORT_BUILD_VERSION "v0.57-r3"
+#define PORT_BUILD_VERSION "v0.63"
 
 // Read by the Vita renderer to apply chapter-specific memory safety policies.
 int g_vitaActiveChapter = 0;
@@ -337,8 +339,8 @@ static void migrate_save_directory(const char* old_save_dir) {
             if (strstr(dir.d_name, "filech") == dir.d_name ||
                 strcmp(dir.d_name, "dr.ini") == 0 ||
                 strcmp(dir.d_name, "true_config.ini") == 0) {
-                char old_path[256];
-                char new_path[256];
+                char old_path[512];
+                char new_path[512];
                 snprintf(old_path, sizeof(old_path), "%s%s", old_save_dir, dir.d_name);
                 snprintf(new_path, sizeof(new_path), "%s%s", SAVE_PATH, dir.d_name);
                 SceIoStat stat;
@@ -383,8 +385,8 @@ int main(void) {
     vglSetupRuntimeShaderCompiler(SHARK_OPT_SLOW, 0, 0, 0);
     log_line("SHARK=opt_slow fastmath=0 fastprecision=0 fastint=0");
     log_line("RENDERER=vita_arrays_v2 immediate_bridge=all STDIO=unbuffered");
-    log_line("VITAGL=init_begin reserve=67108864");
-    vglInitExtended(0, 960, 544, 64 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
+    log_line("VITAGL=init_begin reserve=33554432");
+    vglInitExtended(0, 960, 544, 32 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
     log_line("VITAGL=init_complete");
 
     VitaSettings settings;
@@ -519,6 +521,7 @@ int main(void) {
     log_line(display_line);
 
     bool previous[sizeof(KEY_MAP) / sizeof(KEY_MAP[0])] = {0};
+    bool gp_previous[20] = {0};
     uint32_t frame = 0;
     uint64_t last_time = sceKernelGetProcessTimeWide();
     uint64_t next_frame_deadline = last_time;
@@ -547,6 +550,9 @@ int main(void) {
     while (!exit_requested && !runner->shouldExit) {
         RunnerKeyboard_beginFrame(runner->keyboard);
         RunnerGamepad_beginFrame(runner->gamepads);
+        runner->gamepads->connectedCount = 1;
+        runner->gamepads->slots[0].connected = true;
+        strcpy(runner->gamepads->slots[0].description, "Sony DualShock 4");
         RunnerMouse_beginFrame(runner->mouse);
         SceCtrlData pad = {0};
         sceCtrlPeekBufferPositive(0, &pad, 1);
@@ -632,7 +638,7 @@ int main(void) {
         
         bool r_trigger = (pad.buttons & SCE_CTRL_RTRIGGER);
         bool border_cycled = false;
-        if (!settings.open && r_trigger) {
+        if (!settings.open && r_trigger && settings.devMode) {
             if ((pad.buttons & (SCE_CTRL_RIGHT | SCE_CTRL_DOWN))) {
                 if (!border_cycle_dpad_held) {
                     VitaBorders_cycleCurrent(1);
@@ -691,11 +697,16 @@ int main(void) {
                 int stickCenterX = settings.touchControlX[0] * 2;
                 int stickCenterY = settings.touchControlY[0] * 2;
                 int stickRadius = 210 * settings.touchControlScale[0] / 100;
+                int interactRadius = stickRadius * 3; // Much more tolerant
                 int stickDx = tx - stickCenterX;
                 int stickDy = ty - stickCenterY;
-                if (stickDx * stickDx + stickDy * stickDy <= stickRadius * stickRadius) {
+                if (stickDx * stickDx + stickDy * stickDy <= interactRadius * interactRadius) {
                     int tdx = stickDx;
                     int tdy = stickDy;
+                    if (tdx < -stickRadius) tdx = -stickRadius;
+                    if (tdx > stickRadius) tdx = stickRadius;
+                    if (tdy < -stickRadius) tdy = -stickRadius;
+                    if (tdy > stickRadius) tdy = stickRadius;
                     touch_axis_x = (float)tdx / (float)stickRadius;
                     touch_axis_y = (float)tdy / (float)stickRadius;
                     if (abs(tdx) > abs(tdy)) {
@@ -751,15 +762,49 @@ int main(void) {
         }
 
         bool controls_enabled = !settings.open && !settings.adjustMode && settings.inputCooldown == 0;
-        set_key(runner->keyboard, VK_UP, controls_enabled && !dev_force_move && ((pad.buttons & SCE_CTRL_UP) || dy < -48 || touch_up), &previous[0]);
-        set_key(runner->keyboard, VK_DOWN, controls_enabled && !dev_force_move && ((pad.buttons & SCE_CTRL_DOWN) || dy > 48 || touch_down), &previous[1]);
-        set_key(runner->keyboard, VK_LEFT, controls_enabled && !dev_force_move && ((pad.buttons & SCE_CTRL_LEFT) || dx < -48 || touch_left), &previous[2]);
-        set_key(runner->keyboard, VK_RIGHT, controls_enabled && !dev_force_move && ((pad.buttons & SCE_CTRL_RIGHT) || dx > 48 || touch_right), &previous[3]);
-        set_key(runner->keyboard, 'Z', controls_enabled && ((pad.buttons & SCE_CTRL_CROSS) || touch_confirm), &previous[4]);
-        set_key(runner->keyboard, 'X', controls_enabled && ((pad.buttons & (SCE_CTRL_CIRCLE | SCE_CTRL_SQUARE)) || touch_cancel), &previous[5]);
-        set_key_pulse(runner->keyboard, 'C', controls_enabled && ((pad.buttons & SCE_CTRL_TRIANGLE) || touch_menu), &previous[7]);
-        set_key(runner->keyboard, VK_PAGEDOWN, controls_enabled && (pad.buttons & SCE_CTRL_LTRIGGER), &previous[8]);
-        set_key(runner->keyboard, VK_PAGEUP, controls_enabled && (pad.buttons & SCE_CTRL_RTRIGGER), &previous[9]);
+        
+        bool gp_up = controls_enabled && !dev_force_move && ((pad.buttons & SCE_CTRL_UP) || dy < -48 || touch_up);
+        bool gp_down = controls_enabled && !dev_force_move && ((pad.buttons & SCE_CTRL_DOWN) || dy > 48 || touch_down);
+        bool gp_left = controls_enabled && !dev_force_move && ((pad.buttons & SCE_CTRL_LEFT) || dx < -48 || touch_left);
+        bool gp_right = controls_enabled && !dev_force_move && ((pad.buttons & SCE_CTRL_RIGHT) || dx > 48 || touch_right);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_PADU, gp_up, &gp_previous[0]);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_PADD, gp_down, &gp_previous[1]);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_PADL, gp_left, &gp_previous[2]);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_PADR, gp_right, &gp_previous[3]);
+        
+        bool gp_cross = controls_enabled && ((pad.buttons & SCE_CTRL_CROSS) || touch_confirm);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_FACE1, gp_cross, &gp_previous[4]);
+        
+        bool gp_circle = controls_enabled && ((pad.buttons & (SCE_CTRL_CIRCLE | SCE_CTRL_SQUARE)) || touch_cancel);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_FACE2, gp_circle, &gp_previous[5]);
+        
+        bool gp_triangle = controls_enabled && ((pad.buttons & SCE_CTRL_TRIANGLE) || touch_menu);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_FACE4, gp_triangle, &gp_previous[6]);
+        
+        bool gp_l = controls_enabled && (pad.buttons & SCE_CTRL_LTRIGGER);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_SHOULDERL, gp_l, &gp_previous[7]);
+        
+        bool gp_r = controls_enabled && (pad.buttons & SCE_CTRL_RTRIGGER);
+        RunnerGamepad_setButton(runner->gamepads, 0, GP_SHOULDERR, gp_r, &gp_previous[8]);
+
+        RunnerGamepad_setAxis(runner->gamepads, 0, GP_AXIS_LH, visual_x);
+        RunnerGamepad_setAxis(runner->gamepads, 0, GP_AXIS_LV, visual_y);
+
+        set_key(runner->keyboard, VK_UP, gp_up, &previous[0]);
+        set_key(runner->keyboard, VK_DOWN, gp_down, &previous[1]);
+        set_key(runner->keyboard, VK_LEFT, gp_left, &previous[2]);
+        set_key(runner->keyboard, VK_RIGHT, gp_right, &previous[3]);
+        set_key(runner->keyboard, 'Z', gp_cross, &previous[4]);
+        set_key(runner->keyboard, 'X', gp_circle, &previous[5]);
+        
+        if (settings.shortcutSkipDialogs) {
+            set_key(runner->keyboard, 'C', gp_triangle, &previous[7]);
+        } else {
+            set_key_pulse(runner->keyboard, 'C', gp_triangle, &previous[7]);
+        }
+        
+        set_key(runner->keyboard, VK_PAGEDOWN, gp_l, &previous[8]);
+        set_key(runner->keyboard, VK_PAGEUP, gp_r, &previous[9]);
 
         uint64_t frame_begin = sceKernelGetProcessTimeWide();
         uint64_t now = frame_begin;
@@ -799,7 +844,7 @@ int main(void) {
         // report every frame added 30-40 ms of Vita-card I/O. Keep a heartbeat
         // every 30 frames and always retain slow frames where the ranking matters.
         if (dev_log_fd >= 0 && runner->vmContext->profiler != NULL &&
-            ((frame % 30U) == 0U || step_us >= 8000ULL)) {
+            ((frame % 30U) == 0U || step_us >= 20000ULL)) {
             char* gmlReport = Profiler_createReport(runner->vmContext->profiler, 5, 1);
             if (gmlReport != NULL) {
                 char header[64];
@@ -942,6 +987,11 @@ int main(void) {
             AlAudioSystem_setCategoryGains((AlAudioSystem*)audio, 0.0f,
                                            (float)settings.sfxVolume / 10.0f);
             log_line("SAVE_LOAD_FADE=muted_before_room_change");
+            
+            renderer->vtable->beginGUI(renderer, 960, 544, 0, 0, 960, 544, RENDER_TARGET_HOST_FRAMEBUFFER);
+            renderer->vtable->drawRectangle(renderer, 0.0f, 0.0f, 960.0f, 544.0f, 0x000000, 1.0f, false);
+            renderer->vtable->endGUI(renderer);
+            vglSwapBuffers(GL_FALSE);
         }
         Runner_handlePendingRoomChange(runner);
         if ((starting_save_load || entering_place_menu) && runner->currentRoomIndex != room_before_pending) {
@@ -1070,6 +1120,7 @@ int main(void) {
     dev_log_stop();
     audio->vtable->destroy(audio);
     VitaBorders_shutdown();
+    VitaVideo_shutdown();
     renderer->vtable->destroy(renderer);
     OverlayFileSystem_destroy(fs);
     VM_free(vm);

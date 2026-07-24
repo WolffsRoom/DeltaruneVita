@@ -130,7 +130,7 @@
 <div id="frame">
   <img id="fundo"  class="layer" src="assets/fundo.png"   alt="">
   <img id="shopbg" class="layer" src="assets/shop_bg.png" alt="">
-  <div id="seam-wrap"><img id="seam" src="assets/seam/idle_0.png" alt="Seam"></div>
+  <div id="seam-wrap"><img id="seam" src="assets/Seam/idle_0.png" alt="Seam"></div>
   <img id="dialog" class="layer" src="assets/dialog1.png" alt="">
   <img id="plusbg" class="layer" src="assets/dialogplus.png" alt="">
 
@@ -187,7 +187,7 @@ function setSeam(state,holdMs){
       if(seamHold && t>seamHold && seamState!=="talk") setSeam("idle");
       const frames=SEAM[seamState]||SEAM.idle;
       seamFrame=(seamFrame+1)%frames.length;
-      seamImg.src="assets/seam/"+frames[seamFrame]+".png";
+      seamImg.src="assets/Seam/"+frames[seamFrame]+".png";
     }
     requestAnimationFrame(loop);
   }

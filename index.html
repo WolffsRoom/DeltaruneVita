@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SEAM'S SHOP — DELTARUNE Vita Patcher</title>
-<link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet">
 <style>
   :root{
     --white:#ffffff;
@@ -102,6 +104,9 @@
     font-size:.7em;animation:blink 1s steps(1) infinite}
   @keyframes blink{50%{opacity:0}}
 
+  #disclaimer{position:fixed;z-index:100;left:5%;right:5%;bottom:3.2vh;text-align:center;
+    color:rgba(255,255,255,0.45);font-family:"Mona Sans","Mona Sans FV",sans-serif;
+    font-size:clamp(7px,0.7vw,10px);line-height:1.25;pointer-events:none;text-shadow:1px 1px 0 #000}
   /* hint fica no viewport (parte preta abaixo do frame) */
   #hint{position:fixed;z-index:100;left:0;right:0;bottom:1.2vh;text-align:center;
     color:var(--white);font-family:"DTRune","Courier New",monospace;
@@ -171,6 +176,10 @@
       <div class="item" data-lang="ja">  JAPONES</div>
     </div>
   </div>
+</div>
+<div id="disclaimer">
+  DELTARUNE © Toby Fox 2018-2026. All rights reserved.<br>
+  DELTARUNE, its characters, music, and assets belong to their respective owners. This project does not distribute the commercial files required to play the game.
 </div>
 <div id="hint">↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar</div>
 
@@ -349,6 +358,30 @@ function settingsItems(){
 let webLang = "ptbr";
 const UI_TEXT = {
   ptbr: {
+    hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar",
+    btn_lang: "Idioma",
+    btn_steam: "Arquivos",
+    btn_apply: "Aplicar",
+    btn_ajustes: "Ajustes",
+    btn_talk: "Conversar",
+    btn_sair: "Sair",
+    talk_about: "Sobre você",
+    talk_project: "Sobre o DeltaruneVita",
+    talk_wolff: "Quem é Wolff?",
+    talk_butter: "O que é Butterscotch?",
+    sfx_on: "Ligar som",
+    sfx_off: "Desligar som",
+    music_on: "Ligar música",
+    music_off: "Desligar música",
+    cache_label: "Incluir cache?",
+    confirm_q: "Confirma?",
+    yes: "Sim",
+    no: "Não",
+    questions: {
+      lang: "* Qual língua deseja configurar?",
+      ajustes: "* O que deseja ajustar?",
+      talk: "* Sobre o que quer conversar?"
+    },
     intro:"* Hee Heee... Um viajante do outro mundo. O que deseja hoje?",
     choose:"* Escolha um idioma nas prateleiras, ou o que quiser. Você que sabe...",
     core:"* Inglês e Japonês são originais. Já vêm junto, viajante.",
@@ -365,6 +398,30 @@ const UI_TEXT = {
     done:"* Pronto! \n* Agora é só extrair e colocar a pasta 'deltarune/deltarunevita' em 'ux0:/data'. \n* Bom jogo!",
   },
   es: {
+    hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X volver",
+    btn_lang: "Idioma",
+    btn_steam: "Archivos",
+    btn_apply: "Aplicar",
+    btn_ajustes: "Ajustes",
+    btn_talk: "Hablar",
+    btn_sair: "Salir",
+    talk_about: "Sobre ti",
+    talk_project: "Sobre DeltaruneVita",
+    talk_wolff: "¿Quién es Wolff?",
+    talk_butter: "¿Qué es Butterscotch?",
+    sfx_on: "Encender sonido",
+    sfx_off: "Apagar sonido",
+    music_on: "Encender música",
+    music_off: "Apagar música",
+    cache_label: "¿Incluir caché?",
+    confirm_q: "¿Confirmar?",
+    yes: "Sí",
+    no: "No",
+    questions: {
+      lang: "* ¿Qué idioma deseas configurar?",
+      ajustes: "* ¿Qué deseas ajustar?",
+      talk: "* ¿De qué quieres hablar?"
+    },
     intro:"* Jua Jua... Un viajero de otro mundo. ¿Qué deseas hoy?",
     choose:"* Elige un idioma de los estantes, o lo que quieras. Tú decides...",
     core:"* Inglés y Japonés son originales. Ya vienen incluidos, viajero.",
@@ -381,6 +438,30 @@ const UI_TEXT = {
     done:"* ¡Listo! \n* Ahora extrae y coloca la carpeta 'deltarune/deltarunevita' en 'ux0:/data'. \n* ¡Buen juego!",
   },
   en: {
+    hint: "↑↓ move &nbsp; Z/Enter confirm &nbsp; X back",
+    btn_lang: "Language",
+    btn_steam: "Files",
+    btn_apply: "Apply",
+    btn_ajustes: "Settings",
+    btn_talk: "Talk",
+    btn_sair: "Exit",
+    talk_about: "About you",
+    talk_project: "About DeltaruneVita",
+    talk_wolff: "Who is Wolff?",
+    talk_butter: "What is Butterscotch?",
+    sfx_on: "Turn on sound",
+    sfx_off: "Turn off sound",
+    music_on: "Turn on music",
+    music_off: "Turn off music",
+    cache_label: "Include cache?",
+    confirm_q: "Confirm?",
+    yes: "Yes",
+    no: "No",
+    questions: {
+      lang: "* Which language do you want to configure?",
+      ajustes: "* What would you like to adjust?",
+      talk: "* What do you want to talk about?"
+    },
     intro:"* Hee Heee... A traveler from another world. What do you wish for today?",
     choose:"* Choose a language on the shelves, or whatever you want. It's up to you...",
     core:"* English and Japanese are original. They come bundled, traveler.",
@@ -397,6 +478,30 @@ const UI_TEXT = {
     done:"* All set! \n* Now just extract and place the 'deltarune/deltarunevita' folder in 'ux0:/data'. \n* Have fun!",
   },
   fr: {
+    hint: "↑↓ déplacer &nbsp; Z/Entrée confirmer &nbsp; X retour",
+    btn_lang: "Langue",
+    btn_steam: "Fichiers",
+    btn_apply: "Appliquer",
+    btn_ajustes: "Paramètres",
+    btn_talk: "Parler",
+    btn_sair: "Quitter",
+    talk_about: "À propos de vous",
+    talk_project: "À propos de DeltaruneVita",
+    talk_wolff: "Qui est Wolff ?",
+    talk_butter: "Qu'est-ce que Butterscotch ?",
+    sfx_on: "Activer le son",
+    sfx_off: "Désactiver le son",
+    music_on: "Activer la musique",
+    music_off: "Désactiver la musique",
+    cache_label: "Inclure le cache ?",
+    confirm_q: "Confirmer ?",
+    yes: "Oui",
+    no: "Non",
+    questions: {
+      lang: "* Quelle langue souhaitez-vous configurer ?",
+      ajustes: "* Que souhaitez-vous ajuster ?",
+      talk: "* De quoi voulez-vous parler ?"
+    },
     intro:"* Hee Heee... Un voyageur d'un autre monde. Que désires-tu aujourd'hui ?",
     choose:"* Choisissez une langue sur les étagères. C'est comme vous voulez...",
     core:"* L'anglais et le japonais sont originaux. Ils sont inclus, voyageur.",
@@ -413,6 +518,30 @@ const UI_TEXT = {
     done:"* Terminé ! \n* Extrayez et placez le dossier 'deltarune/deltarunevita' dans 'ux0:/data'. \n* Bon jeu !",
   },
   de: {
+    hint: "↑↓ bewegen &nbsp; Z/Enter bestätigen &nbsp; X zurück",
+    btn_lang: "Sprache",
+    btn_steam: "Dateien",
+    btn_apply: "Anwenden",
+    btn_ajustes: "Einstellungen",
+    btn_talk: "Sprechen",
+    btn_sair: "Beenden",
+    talk_about: "Über dich",
+    talk_project: "Über DeltaruneVita",
+    talk_wolff: "Wer ist Wolff?",
+    talk_butter: "Was ist Butterscotch?",
+    sfx_on: "Ton einschalten",
+    sfx_off: "Ton ausschalten",
+    music_on: "Musik einschalten",
+    music_off: "Musik ausschalten",
+    cache_label: "Cache einschließen?",
+    confirm_q: "Bestätigen?",
+    yes: "Ja",
+    no: "Nein",
+    questions: {
+      lang: "* Welche Sprache möchtest du konfigurieren?",
+      ajustes: "* Was möchtest du anpassen?",
+      talk: "* Worüber möchtest du sprechen?"
+    },
     intro:"* Hee Heee... Ein Reisender aus einer anderen Welt. Was wünschst du dir heute?",
     choose:"* Wähle eine Sprache aus den Regalen, ganz wie du willst...",
     core:"* Englisch und Japanisch sind im Original enthalten, Reisender.",
@@ -429,6 +558,30 @@ const UI_TEXT = {
     done:"* Fertig! \n* Entpacke und platziere den Ordner 'deltarune/deltarunevita' in 'ux0:/data'. \n* Viel Spaß!",
   },
   ru: {
+    hint: "↑↓ перемыш &nbsp; Z/Enter подтв &nbsp; X назад",
+    btn_lang: "Язык",
+    btn_steam: "Файлы",
+    btn_apply: "Применить",
+    btn_ajustes: "Настройки",
+    btn_talk: "Разговор",
+    btn_sair: "Выход",
+    talk_about: "О тебе",
+    talk_project: "О DeltaruneVita",
+    talk_wolff: "Кто такой Wolff?",
+    talk_butter: "Что такое Butterscotch?",
+    sfx_on: "Включить звук",
+    sfx_off: "Выключить звук",
+    music_on: "Включить музыку",
+    music_off: "Выключить музыку",
+    cache_label: "Включить кэш?",
+    confirm_q: "Подтвердить?",
+    yes: "Да",
+    no: "Нет",
+    questions: {
+      lang: "* Какой язык настроить?",
+      ajustes: "* Что изменить?",
+      talk: "* О чем поговорить?"
+    },
     intro:"* Хе-хе... Путешественник из другого мира. Чего ты желаешь сегодня?",
     choose:"* Выбери язык на полках, или что угодно. Решать тебе...",
     core:"* Английский и японский оригинальные. Они идут в комплекте.",
@@ -445,6 +598,30 @@ const UI_TEXT = {
     done:"* Готово! \n* Распакуй и помести папку 'deltarune/deltarunevita' в 'ux0:/data'. \n* Приятной игры!",
   },
   ja: {
+    hint: "↑↓ 移動 &nbsp; Z/Enter 決定 &nbsp; X 戻る",
+    btn_lang: "言語",
+    btn_steam: "ファイル",
+    btn_apply: "適用",
+    btn_ajustes: "設定",
+    btn_talk: "会話",
+    btn_sair: "終了",
+    talk_about: "あなたについて",
+    talk_project: "DeltaruneVitaについて",
+    talk_wolff: "Wolffとは誰？",
+    talk_butter: "Butterscotchとは？",
+    sfx_on: "効果音オン",
+    sfx_off: "効果音オフ",
+    music_on: "BGMオン",
+    music_off: "BGMオフ",
+    cache_label: "キャッシュを含める？",
+    confirm_q: "決定しますか？",
+    yes: "はい",
+    no: "いいえ",
+    questions: {
+      lang: "* 設定する言語は？",
+      ajustes: "* 何を調整しますか？",
+      talk: "* 何について話す？"
+    },
     intro:"* ヒッヒッヒ… 異世界からの旅人よ。今日は何を望むのかな？",
     choose:"* 棚から言語を選びなさい。君の自由だよ…",
     core:"* 英語と日本語はオリジナル版に含まれているよ。",
@@ -465,9 +642,62 @@ let SEAM_LINES = UI_TEXT.ptbr;
 
 function applyWebLanguage(code) {
   webLang = code;
-  if (UI_TEXT[code]) {
-    SEAM_LINES = UI_TEXT[code];
-  }
+  const T = UI_TEXT[code] || UI_TEXT.ptbr;
+  SEAM_LINES = T;
+  $("hint").innerHTML = T.hint;
+}
+function versionLine(L){
+  return "* "+L.label+", ótima escolha.A versão suportada é a v"+PORT_VERSION+".";
+}
+function speech(t){ type($("speech"),t); }
+
+function mainItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"lang", label: T.btn_lang},
+    {id:"steam", label: T.btn_steam},
+    {id:"apply", label: T.btn_apply},
+    {id:"ajustes", label: T.btn_ajustes},
+    {id:"talk", label: T.btn_talk},
+  ];
+}
+function getSairItem(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return {id:"sair", label: T.btn_sair};
+}
+function talkItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"about",   label: T.talk_about},
+    {id:"project", label: T.talk_project},
+    {id:"wolff",   label: T.talk_wolff},
+    {id:"butter",  label: T.talk_butter},
+    getSairItem(),
+  ];
+}
+function langItems(){
+  return LANGS.map(L=>{
+    let label=L.label;
+    if(L.base) label+="  (base)";
+    else if(!L.ready) label+="  (em breve)";
+    else if(selectedExtra===L.code) label="» "+L.label;
+    return {...L, label};
+  }).concat(getSairItem());
+}
+function settingsItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"sfx",   label:(sfxOn?T.sfx_off:T.sfx_on)},
+    {id:"music", label:(musicOn?T.music_off:T.music_on)},
+    {id:"cache", label:(cacheOn?"[x] ":"[  ] ")+T.cache_label},
+    getSairItem(),
+  ];
+}
+
+/* pergunta do Seam (vai para a caixa da direita) e explicacao (dialogplus) */
+function getQuestionText(sc){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return (T.questions && T.questions[sc]) || T.choose;
 }
 function versionLine(L){
   return "* "+L.label+", ótima escolha.A versão suportada é a v"+PORT_VERSION+".";
@@ -532,10 +762,11 @@ function showExplain(){
 }
 let confirmSel=0;   // 0 = Sim, 1 = Nao
 function renderConfirm(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   const box=$("options"); box.innerHTML="";
-  const q=document.createElement("div"); q.textContent="* Confirma?"; q.style.marginBottom=".25em";
+  const q=document.createElement("div"); q.textContent="* " + (T.confirm_q || "Confirma?"); q.style.marginBottom=".25em";
   box.appendChild(q);
-  ["Sim","Não"].forEach((lbl,idx)=>{
+  [(T.yes || "Sim"),(T.no || "Não")].forEach((lbl,idx)=>{
     const row=document.createElement("div");
     row.className="opt"+(idx===confirmSel?" active":"");
     row.innerHTML='<img class="h" src="assets/hearth1.png">'+lbl;
@@ -552,7 +783,7 @@ function render(){
   $("plus").classList.toggle("show", showPlus);
   if(!showPlus) $("plus").innerHTML="";       // limpa o texto que ficava la
   if(!sub){
-    renderRows($("options"), MAIN,
+    renderRows($("options"), mainItems(),
       idx=>{active=idx;play(A.move);render();},
       idx=>{active=idx;activate();});
     return;
@@ -567,7 +798,7 @@ function render(){
 /* ================= interaction ================= */
 function enterSub(which){
   screen=which; active=0; pending=false; play(A.sel);
-  setSeam("talk"); sayQ(QUESTION[which]); render();
+  setSeam("talk"); sayQ(getQuestionText(which)); render();
 }
 function activate(){
   if(screen==="main"){
@@ -671,7 +902,7 @@ document.addEventListener("keydown",e=>{
   if(["ArrowDown","ArrowUp","ArrowLeft","ArrowRight"].includes(e.key)){ e.preventDefault();
     if(pending){ confirmSel=(confirmSel+1)%2; play(A.move); renderConfirm(); return; }
     if(e.key==="ArrowLeft"||e.key==="ArrowRight") return;
-    const n = screen==="main"? MAIN.length : subList().length;
+    const n = screen==="main"? mainItems().length : subList().length;
     active=(active+(e.key==="ArrowDown"?1:n-1))%n; play(A.move); render(); }
   else if(e.key==="Enter"||e.key==="z"||e.key==="Z"){ e.preventDefault(); activate(); }
   else if(e.key==="x"||e.key==="X"){ e.preventDefault(); back(); }

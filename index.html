@@ -371,12 +371,7 @@ function settingsItems(){
   return [
     {id:"sfx",   label:(sfxOn?"Desligar":"Ligar")+" som"},
     {id:"music", label:(musicOn?"Desligar":"Ligar")+" música"},
-    {id:"cache", label:(cacheOn?"[x]":"[  ]")+" Incluir cache?"},
-    SAIR,
-  ];
-}
-
-let webLang = "ptbr";
+    {id:"cache", label:(cacheOn?"[x]":"[  ]")+" Incluir cachelet webLang = "ptbr";
 const UI_TEXT = {
   ptbr: {
     hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar",
@@ -398,6 +393,9 @@ const UI_TEXT = {
     confirm_q: "Confirma?",
     yes: "Sim",
     no: "Não",
+    base_tag: "  (base)",
+    soon_tag: "  (em breve)",
+    lang_names: { CORE: "Original", PTBR: "Português (BR)", ES: "Español", DE: "Alemão" },
     questions: {
       lang: "* Qual língua deseja configurar?",
       ajustes: "* O que deseja ajustar?",
@@ -438,6 +436,9 @@ const UI_TEXT = {
     confirm_q: "¿Confirmar?",
     yes: "Sí",
     no: "No",
+    base_tag: "  (base)",
+    soon_tag: "  (próximamente)",
+    lang_names: { CORE: "Original", PTBR: "Portugués (BR)", ES: "Español", DE: "Alemán" },
     questions: {
       lang: "* ¿Qué idioma deseas configurar?",
       ajustes: "* ¿Qué deseas ajustar?",
@@ -478,6 +479,9 @@ const UI_TEXT = {
     confirm_q: "Confirm?",
     yes: "Yes",
     no: "No",
+    base_tag: "  (base)",
+    soon_tag: "  (coming soon)",
+    lang_names: { CORE: "Original", PTBR: "Portuguese (BR)", ES: "Spanish", DE: "German" },
     questions: {
       lang: "* Which language do you want to configure?",
       ajustes: "* What would you like to adjust?",
@@ -518,13 +522,16 @@ const UI_TEXT = {
     confirm_q: "Confirmer ?",
     yes: "Oui",
     no: "Non",
+    base_tag: "  (de base)",
+    soon_tag: "  (bientôt)",
+    lang_names: { CORE: "Original", PTBR: "Portugais (BR)", ES: "Espagnol", DE: "Allemand" },
     questions: {
       lang: "* Quelle langue souhaitez-vous configurer ?",
       ajustes: "* Que souhaitez-vous ajuster ?",
       talk: "* De quoi voulez-vous parler ?"
     },
     intro:"* Hee Heee... Un voyageur d'un autre monde. Que désires-tu aujourd'hui ?",
-    choose:"* Choisissez une langue sur les étagères. C'est comme vous voulez...",
+    choose:"* Choisissez une langue sur les étagères. C me vous voulez...",
     core:"* L'anglais et le japonais sont originaux. Ils sont inclus, voyageur.",
     rem:"* Pas de langue supplémentaire alors. Il ne reste que l'original.",
     soon:"* Cette langue n'est pas encore arrivée en rayon...",
@@ -558,6 +565,9 @@ const UI_TEXT = {
     confirm_q: "Bestätigen?",
     yes: "Ja",
     no: "Nein",
+    base_tag: "  (basis)",
+    soon_tag: "  (demnächst)",
+    lang_names: { CORE: "Original", PTBR: "Portugiesisch (BR)", ES: "Spanisch", DE: "Deutsch" },
     questions: {
       lang: "* Welche Sprache möchtest du konfigurieren?",
       ajustes: "* Was möchtest du anpassen?",
@@ -598,6 +608,9 @@ const UI_TEXT = {
     confirm_q: "Подтвердить?",
     yes: "Да",
     no: "Нет",
+    base_tag: "  (базовый)",
+    soon_tag: "  (скоро)",
+    lang_names: { CORE: "Оригинал", PTBR: "Португальский (BR)", ES: "Испанский", DE: "Немецкий" },
     questions: {
       lang: "* Какой язык настроить?",
       ajustes: "* Что изменить?",
@@ -638,6 +651,9 @@ const UI_TEXT = {
     confirm_q: "決定しますか？",
     yes: "はい",
     no: "いいえ",
+    base_tag: "  (標準)",
+    soon_tag: "  (近日公開)",
+    lang_names: { CORE: "オリジナル", PTBR: "ポルトガル語 (BR)", ES: "スペイン語", DE: "ドイツ語" },
     questions: {
       lang: "* 設定する言語は？",
       ajustes: "* 何を調整しますか？",
@@ -653,6 +669,59 @@ const UI_TEXT = {
     steambad:"* ふーむ… これはDELTARUNEではないようだね… ファイルを確認しておくれ。",
     nopicker:"* お使いのブラウザではフォルダを開けません。ChromeかEdgeをご利用ください。",
     ajustes:"* 設定の引き出しを開けよう…",
+    cacheon:"* それは良いね。プレイ中の時間を節約できるよ。",
+    cacheoff:"* キャッシュなしだね。",
+    sair:"* 全ては然るべき時に…",
+    done:"* 完了だよ！ \n* 'deltarune/deltarunevita' フォルダを 'ux0:/data' に配置してね。 \n* 楽しんで！",
+  }
+};
+let SEAM_LINES = UI_TEXT.ptbr;
+
+function applyWebLanguage(code) {
+  webLang = code;
+  const T = UI_TEXT[code] || UI_TEXT.ptbr;
+  SEAM_LINES = T;
+  $("hint").innerHTML = T.hint;
+}
+function versionLine(L){
+  return "* "+L.label+", ótima escolha.A versão suportada é a v"+PORT_VERSION+".";
+}
+function speech(t){ type($("speech"),t); }
+
+function mainItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"lang", label: T.btn_lang},
+    {id:"steam", label: T.btn_steam},
+    {id:"apply", label: T.btn_apply},
+    {id:"ajustes", label: T.btn_ajustes},
+    {id:"talk", label: T.btn_talk},
+  ];
+}
+function getSairItem(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return {id:"sair", label: T.btn_sair};
+}
+function talkItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"about",   label: T.talk_about},
+    {id:"project", label: T.talk_project},
+    {id:"wolff",   label: T.talk_wolff},
+    {id:"butter",  label: T.talk_butter},
+    getSairItem(),
+  ];
+}
+function langItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return LANGS.map(L=>{
+    let label = (T.lang_names && T.lang_names[L.code]) || L.label;
+    if(L.base) label += (T.base_tag || "  (base)");
+    else if(!L.ready) label += (T.soon_tag || "  (em breve)");
+    else if(selectedExtra===L.code) label = "» " + label;
+    return {...L, label};
+  }).concat(getSairItem());
+}��けよう…",
     cacheon:"* それは良いね。プレイ中の時間を節約できるよ。",
     cacheoff:"* キャッシュなしだね。",
     sair:"* 全ては然るべき時に…",

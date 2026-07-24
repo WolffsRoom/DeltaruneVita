@@ -383,7 +383,7 @@ const LANGS=[
 ];
 
 /* ================= state ================= */
-let PORT_VERSION="0.51";
+let PORT_VERSION="0.63";
 let steamHandle=null, manifest=null;
 let screen="main";        // "main" | "lang" | "ajustes"
 let selectedExtra=null;
@@ -398,12 +398,12 @@ const MAIN=[
   {id:"talk",    label:"Conversar"},
 ];
 const SAIR={id:"sair", label:"Sair"};
-const STEAM_VERSION="v0.0.247 Patch";
+const STEAM_VERSION="v0.0.250";
 
 let webLang = "ptbr";
 const UI_TEXT = {
   ptbr: {
-    confirm_apply: "* Então vou aplicar:\n* {lang}\n* na versão v{ver}\n* em {dir}{cache}.\n* Confirma?",
+    confirm_apply: "* Então vou aplicar o mod {lang} na versão v{ver} em {dir}{cache}.\n* Confirma?",
     portrait_tip: "* Se estiver no celular, use-o no modo retrato para evitar que os textos fiquem sobrepostos.",
     press_continue: "Clique ou pressione uma tecla para continuar",
     hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar",
@@ -428,7 +428,7 @@ const UI_TEXT = {
     base_tag: "  (base)",
     soon_tag: "  (em breve)",
     lang_names: {
-    confirm_apply: "* Entonces aplicaré:\n* {lang}\n* en la versión v{ver}\n* en {dir}{cache}.\n* ¿Confirmar?",
+    confirm_apply: "* Entonces aplicaré el mod {lang} en la versión v{ver} en {dir}{cache}.\n* ¿Confirmar?",
     portrait_tip: "* Si estás en el móvil, utilízalo en modo retrato para evitar la superposición de texto.",
     press_continue: "Haz clic o presiona una tecla para continuar", CORE: "Original", PTBR: "Português (BR)", ES: "Español", DE: "Alemão" },
     questions: {
@@ -537,7 +537,7 @@ const UI_TEXT = {
     }
   },
   en: {
-    confirm_apply: "* Then I will apply:\n* {lang}\n* on version v{ver}\n* in {dir}{cache}.\n* Confirm?",
+    confirm_apply: "* So I will apply the {lang} mod on version v{ver} in {dir}{cache}.\n* Confirm?",
     portrait_tip: "* If on mobile, please use portrait mode to prevent text overlap.",
     press_continue: "Click or press a key to continue",
     hint: "↑↓ move &nbsp; Z/Enter confirm &nbsp; X back",
@@ -604,7 +604,7 @@ const UI_TEXT = {
     }
   },
   fr: {
-    confirm_apply: "* Je vais donc appliquer :\n* {lang}\n* sur la version v{ver}\n* dans {dir}{cache}.\n* Confirmer ?",
+    confirm_apply: "* Je vais donc appliquer le mod {lang} sur la version v{ver} dans {dir}{cache}.\n* Confirmer ?",
     portrait_tip: "* Sur mobile, veuillez utiliser le mode portrait pour éviter la superposition de texte.",
     press_continue: "Cliquez ou appuyez sur une touche pour continuer",
     hint: "↑↓ déplacer &nbsp; Z/Entrée confirmer &nbsp; X retour",
@@ -671,7 +671,7 @@ const UI_TEXT = {
     }
   },
   de: {
-    confirm_apply: "* Dann werde ich Folgendes anwenden:\n* {lang}\n* auf Version v{ver}\n* in {dir}{cache}.\n* Bestätigen?",
+    confirm_apply: "* Ich werde also den {lang}-Mod auf Version v{ver} in {dir}{cache} anwenden.\n* Bestätigen?",
     portrait_tip: "* Auf dem Handy nutzen Sie bitte das Hochformat, um Textüberlagerungen zu vermeiden.",
     press_continue: "Klicken oder drücken Sie eine Taste, um fortzufahren",
     hint: "↑↓ bewegen &nbsp; Z/Enter bestätigen &nbsp; X zurück",
@@ -738,7 +738,7 @@ const UI_TEXT = {
     }
   },
   ru: {
-    confirm_apply: "* Тогда я применю:\n* {lang}\n* на версию v{ver}\n* в {dir}{cache}.\n* Подтвердить?",
+    confirm_apply: "* Итак, я применю мод {lang} на версию v{ver} в {dir}{cache}.\n* Подтвердить?",
     portrait_tip: "* На мобильном телефоне используйте портретный режим, чтобы избежать наложения текста.",
     press_continue: "Нажмите или коснитесь клавиши для продолжения",
     hint: "↑↓ перемыкать &nbsp; Z/Enter подтв &nbsp; X назад",
@@ -805,7 +805,7 @@ const UI_TEXT = {
     }
   },
   ja: {
-    confirm_apply: "* それでは適用します：\n* {lang}\n* バージョン v{ver}\n* ファイル {dir}{cache}.\n* 決定しますか？",
+    confirm_apply: "* それでは、バージョン v{ver} の {dir}{cache} に {lang} モッドを適用します。\n* 決定しますか？",
     portrait_tip: "* モバイル端末の場合は、テキストの重なりを防ぐために縦向き（ポートレート）モードでご利用ください。",
     press_continue: "クリックまたはキーを押して続行します",
     hint: "↑↓ 移動 &nbsp; Z/Enter 決定 &nbsp; X 戻る",
@@ -1065,6 +1065,21 @@ function activate(){
 function resolveConfirm(){
   if(confirmSel===1) return cancelConfirm();   // Nao
   pending=false; play(A.sel);
+  
+  if(pendingAction === "apply") {
+    pendingAction = null;
+    if(confirmSel === 0) { // Sim / Yes
+      setSeam("laugh", 1200);
+      toSingle();
+      generate();
+    } else { // Não / No
+      setSeam("idle");
+      speech(SEAM_LINES.choose);
+      render();
+    }
+    return;
+  }
+  
   const it=subList()[active];
   if(screen==="lang"){
     const L=LANGS[active];

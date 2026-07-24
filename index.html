@@ -615,7 +615,7 @@ async function generate(){
       try{ const f=await getFile(steamHandle,rel);
         if(f.size!==exp.size) throw 0;
         if(await sha256(await f.arrayBuffer())!==exp.sha256) throw 0;
-      }catch(_){ bad++; }
+      }catch(_){ bad++; console.error("Mismatch: " + rel); }
       setBar((i+1)/req.length*100);
       if(i%2===0||i===req.length-1){ setLine(el,"* Verificando Steam... "+(i+1)+"/"+req.length+" (SHA-256)"); await sleep(0); }
     }

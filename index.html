@@ -104,13 +104,12 @@
     font-size:.7em;animation:blink 1s steps(1) infinite}
   @keyframes blink{50%{opacity:0}}
 
-  #disclaimer{position:fixed;z-index:100;left:5%;right:5%;bottom:3.2vh;text-align:center;
-    color:rgba(255,255,255,0.45);font-family:"Mona Sans","Mona Sans FV",sans-serif;
-    font-size:clamp(7px,0.7vw,10px);line-height:1.25;pointer-events:none;text-shadow:1px 1px 0 #000}
-  /* hint fica no viewport (parte preta abaixo do frame) */
-  #hint{position:fixed;z-index:100;left:0;right:0;bottom:1.2vh;text-align:center;
-    color:var(--white);font-family:"DTRune","Courier New",monospace;
-    font-size:clamp(9px,1.1vw,15px);pointer-events:none;text-shadow:1px 1px 0 #000}
+  #bottom-bar{position:fixed;z-index:100;left:0;right:0;bottom:0.8vh;
+    display:flex;flex-direction:column;align-items:center;gap:0.3vh;pointer-events:none}
+  #hint{color:var(--white);font-family:"DTRune","Courier New",monospace;
+    font-size:clamp(9px,1.1vw,15px);text-shadow:1px 1px 0 #000}
+  #disclaimer{color:rgba(255,255,255,0.45);font-family:"Mona Sans","Mona Sans FV",sans-serif;
+    font-size:clamp(7px,0.65vw,9.5px);line-height:1.25;text-align:center;text-shadow:1px 1px 0 #000;max-width:90vw}
   #version{position:absolute;z-index:61;right:3%;bottom:1.5%;
     color:var(--white);font-size:.6em;pointer-events:none;text-shadow:.08em .08em 0 #000}
 
@@ -136,8 +135,20 @@
   #lang-screen.show{opacity:1;pointer-events:auto}
   #lang-screen .title{color:var(--yellow);font-size:1.6em;margin-bottom:0.8em;text-shadow:.08em .08em 0 #000}
   #lang-screen .menu{display:flex;flex-direction:column;gap:0.3em;align-items:flex-start}
-  #lang-screen .item{color:var(--white);font-size:1.1em;cursor:pointer;padding:0.1em 0.5em;text-shadow:.06em .06em 0 #000}
-  #lang-screen .item.active{color:var(--yellow);text-shadow:.08em .08em 0 #800}
+  #lang-screen .item{color:var(--white);font-size:1.1em;cursor:pointer;padding:0.1em 0.5em;text-shadow:.06em .06em 0 #000;display:inline-block}
+  @keyframes undertaleShake {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(-1.5px, 1px); }
+    50% { transform: translate(1.5px, -1px); }
+    75% { transform: translate(-1px, 1.5px); }
+    100% { transform: translate(0, 0); }
+  }
+  #lang-screen .item.active,
+  #lang-screen .item:hover {
+    color:var(--yellow);
+    text-shadow:.08em .08em 0 #800;
+    animation: undertaleShake 0.12s infinite;
+  }
 </style>
 </head>
 <body>
@@ -177,17 +188,23 @@
     </div>
   </div>
 </div>
-<div id="disclaimer">
-  DELTARUNE © Toby Fox 2018-2026. All rights reserved.<br>
-  DELTARUNE, its characters, music, and assets belong to their respective owners. This project does not distribute the commercial files required to play the game.
+
+<div id="bottom-bar">
+  <div id="hint">↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar</div>
+  <div id="disclaimer">
+    DELTARUNE © Toby Fox 2018-2026. All rights reserved.<br>
+    DELTARUNE, its characters, music, and assets belong to their respective owners. This project does not distribute the commercial files required to play the game.
+  </div>
 </div>
-<div id="hint">↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar</div>
 
 <audio id="a-move" src="assets/snd_menumove.wav" preload="auto"></audio>
 <audio id="a-sel"  src="assets/snd-select.ogg" preload="auto"></audio>
 <audio id="a-swing" src="assets/snd_swing.wav" preload="auto"></audio>
 <audio id="a-text" src="assets/snd_text.wav" preload="auto"></audio>
 <audio id="a-lantern" src="assets/Lantern.ogg" loop preload="auto"></audio>
+<audio id="a-appearance" src="assets/AUDIO_APPEARANCE.wav" preload="auto"></audio>
+<audio id="a-drone" src="assets/AUDIO_DRONE.wav" loop preload="auto"></audio>
+<audio id="a-doorclose" src="assets/snd_doorclose.wav" preload="auto"></audio>
 
 <script src="manifest.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -226,7 +243,11 @@ function setSeam(state,holdMs){
 })();
 
 /* ================= sound ================= */
-const A = { move:$("a-move"), sel:$("a-sel"), swing:$("a-swing"), text:$("a-text"), lantern:$("a-lantern") };
+const A = { 
+  move:$("a-move"), sel:$("a-sel"), swing:$("a-swing"), text:$("a-text"), 
+  lantern:$("a-lantern"), appearance:$("a-appearance"), drone:$("a-drone"), 
+  doorclose:$("a-doorclose") 
+};
 function play(a){ 
   if(!sfxOn||!a)return; 
   a.currentTime=0; 
@@ -1137,13 +1158,24 @@ function renderLangScreen(){
 }
 
 function selectLangOption(idx){
+  if(!inLangScreen) return;
+  inLangScreen = false;
   langActive = idx;
   renderLangScreen();
   play(A.sel);
-  inLangScreen = false;
+  if(A.drone){ A.drone.pause(); A.drone.currentTime = 0; }
+  
   $("lang-screen").classList.remove("show");
+  $("fade").classList.remove("gone"); // fade to black
   applyWebLanguage(LANG_CODES[langActive]);
-  startShop();
+
+  setTimeout(()=>{
+    play(A.doorclose);
+    setTimeout(()=>{
+      startShop();
+      startMusic();
+    }, 500);
+  }, 900);
 }
 
 function startLangSelect(){
@@ -1151,6 +1183,13 @@ function startLangSelect(){
   $("lang-screen").classList.add("show");
   inLangScreen = true;
   renderLangScreen();
+  play(A.appearance);
+  if(musicOn && A.drone){
+    A.drone.currentTime = 0;
+    A.drone.volume = 0.5;
+    const p = A.drone.play();
+    if(p !== undefined) p.catch(()=>{});
+  }
 }
 
 let shopStarted=false;
@@ -1169,7 +1208,7 @@ function startShop(){
 }
 function boot(){
   showDialog("single");                     // pronto por tras da splash
-  const go=()=>{ startMusic(); startLangSelect(); };
+  const go=()=>{ startLangSelect(); };
   $("splash").addEventListener("click",go,{once:true});
   window.addEventListener("keydown",go,{once:true});
 }

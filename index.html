@@ -992,11 +992,36 @@ function renderRows(box,list,onEnter,onClick){
     box.appendChild(row);
   });
 }
+function wrapText(text, maxChars, maxLines) {
+  if (!text) return "";
+  const words = text.replace(/\n/g, " ").split(" ");
+  let lines = [];
+  let currentLine = "";
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (!word) continue;
+    const space = currentLine ? " " : "";
+    if ((currentLine + space + word).length <= maxChars) {
+      currentLine += space + word;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+      while (currentLine.length > maxChars) {
+        lines.push(currentLine.substring(0, maxChars));
+        currentLine = currentLine.substring(maxChars);
+      }
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines.slice(0, maxLines).join("\n");
+}
+
 function showExplain(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   const it=subList()[active];
   const explainText = (T.explain && T.explain[itemKey(it)]) || (UI_TEXT.ptbr.explain && UI_TEXT.ptbr.explain[itemKey(it)]) || "";
-  $("plus").innerHTML='<div class="ptitle">' + (T.about_title || "* SOBRE") + '</div>'+explainText.replace(/\n/g,"<br>");
+  const wrapped = wrapText(explainText, 14, 6);
+  $("plus").innerHTML='<div class="ptitle">' + (T.about_title || "* SOBRE") + '</div>'+wrapped.replace(/\n/g,"<br>");
 }
 let confirmSel=0;   // 0 = Sim, 1 = Nao
 function renderConfirm(){
@@ -1112,9 +1137,9 @@ function back(){
 
 let doneState=false;
 document.addEventListener("keydown",e=>{
+  if(e.key === "Tab") { e.preventDefault(); return; }
   if(inTipScreen) { e.preventDefault(); dismissTipScreen(); return; }
   if(e.repeat) { e.preventDefault(); return; }
-  if(e.key === "Tab") { e.preventDefault(); return; }
   if(e.key === " " || e.key === "Spacebar") { e.preventDefault(); }
   if(inLangScreen){
     e.preventDefault();
@@ -1416,9 +1441,21 @@ function selectLangOption(idx){
   $("lang-screen").classList.remove("show");
   applyWebLanguage(LANG_CODES[langActive]);
 
-  setTimeout(()=>{
-    showTipScreen();
-  }, 300);
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 767;
+  if (isMobile) {
+    setTimeout(()=>{
+      showTipScreen();
+    }, 300);
+  } else {
+    $("fade").classList.remove("gone"); // fade to black
+    setTimeout(()=>{
+      play(A.doorclose);
+      setTimeout(()=>{
+        startShop();
+        startMusic();
+      }, 500);
+    }, 900);
+  }
 }
 
 function startLangSelect(){

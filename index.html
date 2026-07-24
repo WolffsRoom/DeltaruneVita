@@ -96,9 +96,11 @@
   .opt .pr{color:var(--white);font-size:.78em;margin-left:.4em}
 
   /* download / patch progress bar (in the speech box) */
-  #pbar{position:absolute;z-index:50;left:19%;top:86%;width:37%;height:2.4%;
-    display:none;border:.14em solid #fff;background:#000}
-  #pbar > i{display:block;height:100%;width:0;background:#fff;transition:width .08s linear}
+  #pbar{position:absolute;z-index:50;left:50%;top:73%;transform:translateX(-50%);width:55%;height:5%;
+    display:none;border:.15em solid var(--white);background:#000;box-sizing:border-box}
+  #pbar > i{display:block;height:100%;width:0;background:var(--yellow);transition:width .08s linear}
+  #pbar .ptext{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--white);font-family:"DTRune",monospace;font-size:0.8em;text-shadow:0.08em 0.08em 0 #000}
 
   .prompt{position:absolute;right:.2em;bottom:-.1em;color:var(--yellow);
     font-size:.7em;animation:blink 1s steps(1) infinite}
@@ -255,7 +257,7 @@
 <audio id="a-drone" src="assets/AUDIO_DRONE.wav" loop preload="auto"></audio>
 <audio id="a-doorclose" src="assets/snd_doorclose.wav" preload="auto"></audio>
 
-<script src="manifest.js"></script>
+<script src="manifest.js?v=0.63"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 "use strict";

@@ -1234,8 +1234,23 @@ async function getFile(dir,rel){
     return { size: buf.byteLength, arrayBuffer: async()=>buf };
   }
   const p=rel.split("/"); let h=dir;
-  for(let i=0;i<p.length-1;i++) h=await h.getDirectoryHandle(p[i]);
-  return (await h.getFileHandle(p[p.length-1])).getFile();
+  for(let i=0;i<p.length;i++){
+    const part=p[i].toLowerCase();
+    let found=null;
+    for await(const entry of h.values()){
+      if(entry.name.toLowerCase()===part){
+        found=entry;
+        break;
+      }
+    }
+    if(!found) throw new Error("Not found: "+rel);
+    if(i===p.length-1){
+      if(found.kind!=="file") throw new Error("Not a file: "+rel);
+      return await found.getFile();
+    }
+    if(found.kind!=="directory") throw new Error("Not a dir: "+rel);
+    h=found;
+  }
 }
 
 async function pickSteam(){

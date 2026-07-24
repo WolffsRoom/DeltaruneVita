@@ -5548,5 +5548,4 @@ const manifestData = {
       "patch": "0556.bsdiff"
     }
   ]
-}
-;
+};

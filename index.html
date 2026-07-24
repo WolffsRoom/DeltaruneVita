@@ -143,6 +143,7 @@
   <img id="borda" class="layer" src="assets/borda.png" alt="">
   <div id="vignette"></div>
   <div id="version">Patcher v0.62</div>
+  <input type="file" id="zipInput" accept=".zip" style="display:none">
   <div id="fade"></div>
   <div id="splash">
     <img src="assets/LogoDeltaruneVita.png" alt="DELTARUNE Vita">
@@ -548,13 +549,31 @@ async function loadManifest(){
 }
 async function sha256(buf){ const h=await crypto.subtle.digest("SHA-256",buf);
   return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
-async function getFile(dir,rel){ const p=rel.split("/"); let h=dir;
+async function getFile(dir,rel){
+  if(dir.isZip){
+    let zf=dir.zip.file(rel);
+    if(!zf){
+      const keys=Object.keys(dir.zip.files);
+      const match=keys.find(k=>k.endsWith(rel)||k.toLowerCase().endsWith(rel.toLowerCase()));
+      if(match) zf=dir.zip.file(match);
+    }
+    if(!zf) throw new Error("Missing in zip: "+rel);
+    const buf=await zf.async("arraybuffer");
+    return { size: buf.byteLength, arrayBuffer: async()=>buf };
+  }
+  const p=rel.split("/"); let h=dir;
   for(let i=0;i<p.length-1;i++) h=await h.getDirectoryHandle(p[i]);
-  return (await h.getFileHandle(p[p.length-1])).getFile(); }
+  return (await h.getFileHandle(p[p.length-1])).getFile();
+}
 
 async function pickSteam(){
   play(A.sel);
-  if(!window.showDirectoryPicker){ setSeam("oh",1200); speech(SEAM_LINES.nopicker); return; }
+  if(!window.showDirectoryPicker){
+    setSeam("oh",1800);
+    speech("* Você gosta de maças, hein? Vai ser preciso compactar o arquivo antes de me enviar.");
+    $("zipInput").click();
+    return;
+  }
   try{
     let dir=await window.showDirectoryPicker({id:"deltarune-steam"});
     try{ await dir.getFileHandle("DELTARUNE.exe"); }
@@ -565,6 +584,24 @@ async function pickSteam(){
   }catch(err){ steamHandle=null; setSeam("oh",900); speech(SEAM_LINES.steambad); }
   render();
 }
+
+$("zipInput").addEventListener("change", async (e)=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  try{
+    setLine($("speech"), "* Lendo o arquivo .zip...");
+    const zip=await JSZip.loadAsync(file);
+    const keys=Object.keys(zip.files);
+    const hasExe=keys.some(k=>k.toLowerCase().endsWith("deltarune.exe"));
+    const hasData=keys.some(k=>k.toLowerCase().endsWith("data.win"));
+    if(!hasExe||!hasData) throw new Error("Zip invalido");
+    steamHandle={ isZip:true, zip:zip, name:file.name };
+    setSeam("laugh",900); speech(SEAM_LINES.steamok);
+  }catch(err){
+    steamHandle=null; setSeam("oh",900); speech(SEAM_LINES.steambad);
+  }
+  render();
+});
 
 /* ================= Aplicar (comenta + gera no dialog1) ================= */
 function toSingle(){                 // troca para o dialog1 (caixa unica)

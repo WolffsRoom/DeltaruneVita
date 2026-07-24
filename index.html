@@ -133,21 +133,45 @@
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     opacity:0;pointer-events:none;transition:opacity .6s ease}
   #lang-screen.show{opacity:1;pointer-events:auto}
-  #lang-screen .title{color:var(--yellow);font-size:1.6em;margin-bottom:0.8em;text-shadow:.08em .08em 0 #000}
+  #lang-screen .title{color:var(--white);font-size:1.6em;margin-bottom:0.8em;text-shadow:.08em .08em 0 #000}
   #lang-screen .menu{display:flex;flex-direction:column;gap:0.3em;align-items:flex-start}
-  #lang-screen .item{color:var(--white);font-size:1.1em;cursor:pointer;padding:0.1em 0.5em;text-shadow:.06em .06em 0 #000;display:inline-block}
-  @keyframes undertaleShake {
-    0% { transform: translate(0, 0); }
-    25% { transform: translate(-1.5px, 1px); }
-    50% { transform: translate(1.5px, -1px); }
-    75% { transform: translate(-1px, 1.5px); }
-    100% { transform: translate(0, 0); }
+  #lang-screen .item {
+    position: relative;
+    padding-left: 1.5em;
+    color: var(--white);
+    font-size: 1.1em;
+    cursor: pointer;
+    text-shadow: .06em .06em 0 #000;
+    display: inline-block;
+  }
+  #lang-screen .item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.05em;
+    height: 1.05em;
+    background: url("assets/hearth1.png") no-repeat center;
+    background-size: contain;
+    opacity: 0;
+    image-rendering: pixelated;
+  }
+  #lang-screen .item.active::before {
+    opacity: 1;
   }
   #lang-screen .item.active,
   #lang-screen .item:hover {
     color:var(--yellow);
     text-shadow:.08em .08em 0 #800;
-    animation: undertaleShake 0.12s infinite;
+  }
+  #lang-screen .lang-note {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.55em;
+    margin-top: 2em;
+    text-align: center;
+    max-width: 80%;
+    font-family: "Mona Sans", sans-serif;
   }
 </style>
 </head>
@@ -176,9 +200,9 @@
     <div class="press">Clique ou pressione uma tecla</div>
   </div>
   <div id="lang-screen">
-    <div class="title">Select Your Language</div>
+    <div class="title">SELECT YOUR LANGUAGE</div>
     <div class="menu" id="lang-items">
-      <div class="item active" data-lang="ptbr">PTBR</div>
+      <div class="item active" data-lang="ptbr">PORTUGUESE</div>
       <div class="item" data-lang="es">SPANISH</div>
       <div class="item" data-lang="en">ENGLISH</div>
       <div class="item" data-lang="fr">FRENCH</div>
@@ -186,11 +210,12 @@
       <div class="item" data-lang="ru">RUSSIAN</div>
       <div class="item" data-lang="ja">JAPONES</div>
     </div>
+    <div class="lang-note">Isso altera somente a linguagem do site, não dos arquivos gerados por ele.</div>
   </div>
 </div>
 
 <div id="bottom-bar">
-  <div id="hint">↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar</div>
+  <div id="hint">↑↓ move &nbsp; Z/Enter confirm &nbsp; X back</div>
   <div id="disclaimer">
     DELTARUNE © Toby Fox 2018-2026. All rights reserved.<br>
     DELTARUNE, its characters, music, and assets belong to their respective owners. This project does not distribute the commercial files required to play the game.
@@ -890,7 +915,7 @@ function renderRows(box,list,onEnter,onClick){
     row.className="opt"+(idx===active?" active":"");
     row.innerHTML='<img class="h" src="assets/hearth1.png">'+it.label;
     row.onmouseenter=()=>{ if(!busy&&!pending&&active!==idx) onEnter(idx); };
-    row.onclick=()=>{ if(busy)return; onClick(idx); };
+    row.onclick=(e)=>{ if(busy)return; row.blur(); onClick(idx); };
     box.appendChild(row);
   });
 }
@@ -1015,6 +1040,7 @@ function back(){
 let doneState=false;
 document.addEventListener("keydown",e=>{
   if(e.repeat) { e.preventDefault(); return; }
+  if(e.key === " " || e.key === "Spacebar") { e.preventDefault(); }
   if(inLangScreen){
     e.preventDefault();
     if(e.key==="ArrowDown"){ langActive=(langActive+1)%7; play(A.move); renderLangScreen(); return; }
@@ -1264,7 +1290,7 @@ const LANG_CODES = ["ptbr", "es", "en", "fr", "de", "ru", "ja"];
 
 function renderLangScreen(){
   const items = document.querySelectorAll("#lang-items .item");
-  const labels = ["PTBR", "SPANISH", "ENGLISH", "FRENCH", "GERMANY", "RUSSIAN", "JAPONES"];
+  const labels = ["PORTUGUESE", "SPANISH", "ENGLISH", "FRENCH", "GERMANY", "RUSSIAN", "JAPONES"];
   items.forEach((el, idx) => {
     if (idx === langActive) {
       el.classList.add("active");
@@ -1276,7 +1302,7 @@ function renderLangScreen(){
     el.onmouseenter = () => {
       if(langActive !== idx){ langActive = idx; play(A.move); renderLangScreen(); }
     };
-    el.onclick = () => { selectLangOption(idx); };
+    el.onclick = (e) => { el.blur(); selectLangOption(idx); };
   });
 }
 

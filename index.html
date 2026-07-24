@@ -349,29 +349,8 @@ const MAIN=[
 ];
 const SAIR={id:"sair", label:"Sair"};
 const STEAM_VERSION="v0.0.247 Patch";
-function talkItems(){
-  return [
-    {id:"about",   label:"Sobre você"},
-    {id:"project", label:"Sobre o DeltaruneVita"},
-    {id:"wolff",   label:"Quem é Wolff?"},
-    {id:"butter",  label:"O que é Butterscotch?"},
-    SAIR,
-  ];
-}
-function langItems(){
-  return LANGS.map(L=>{
-    let label=L.label;
-    if(L.base) label+="  (base)";
-    else if(!L.ready) label+="  (em breve)";
-    else if(selectedExtra===L.code) label="» "+L.label;
-    return {...L, label};
-  }).concat(SAIR);
-}
-function settingsItems(){
-  return [
-    {id:"sfx",   label:(sfxOn?"Desligar":"Ligar")+" som"},
-    {id:"music", label:(musicOn?"Desligar":"Ligar")+" música"},
-    {id:"cache", label:(cacheOn?"[x]":"[  ]")+" Incluir cachelet webLang = "ptbr";
+
+let webLang = "ptbr";
 const UI_TEXT = {
   ptbr: {
     hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar",

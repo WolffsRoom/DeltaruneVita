@@ -328,7 +328,7 @@ const SEAM_LINES={
   rem:"* Sem esse idioma extra, então.Fica só o original.",
   soon:"* Esse idioma ainda nãochegou à prateleira...",
   needsteam:"* Primeiro me mostre sua cópia original do DELTARUNE da Steam.",
-  steamok:"* DELTARUNE encontrado! Versão "+STEAM_VERSION+", correto? Clique em Aplicar para gerar os dados PS Vita.",
+  steamok:"* DELTARUNE selecionado! Certifique-se de ser a versão "+STEAM_VERSION+", beleza? Clique em Aplicar para gerar os dados PS Vita.",
   steambad:"* Hmm... isso não me parece com DELTARUNE...Verifique o arquivo informado.",
   nopicker:"* Seu navegador não abre pastas.Use Chrome ou Edge, viajante.",
   ajustes:"* Deixe-me abrir a gavetados ajustes...",
@@ -620,7 +620,8 @@ async function generate(){
       if(i%2===0||i===req.length-1){ setLine(el,"* Verificando Steam... "+(i+1)+"/"+req.length+" (SHA-256)"); await sleep(0); }
     }
     if(bad){ showBar(false); setSeam("oh",1800);
-      await typeAsync(el,"* "+bad+" arquivo(s) não conferem.\n* Não posso continuar assim, viajante.");
+      await typeAsync(el,"* "+bad+" arquivo(s) não conferem.\n* Não posso continuar assim, viajante.\n* Por favor, atualize seu jogo na Steam e confira se a versão é "+STEAM_VERSION+".");
+      doneState=true;
       busy=false; return; }
 
     // FASE 3 — aplicar o patch

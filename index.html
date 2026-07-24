@@ -304,18 +304,43 @@ function play(a){
   const p = a.play();
   if(p !== undefined) p.catch(()=>{});
 }
-let blipPool = null;
-let blipIdx = 0;
+let audioCtx = null;
+let blipBuffer = null;
+async function initAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const res = await fetch("assets/snd_text.wav");
+    const ab = await res.arrayBuffer();
+    audioCtx.decodeAudioData(ab, 
+      (buffer) => { blipBuffer = buffer; },
+      (err) => { console.error("decodeAudioData error", err); }
+    );
+  } catch (e) {
+    console.error("initAudio error", e);
+  }
+}
+
 function blip(){ 
   if(!sfxOn)return; 
-  if(!blipPool){
-    blipPool = [A.text, A.text.cloneNode(true), A.text.cloneNode(true)];
+  if(audioCtx && blipBuffer) {
+    try {
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const source = audioCtx.createBufferSource();
+      source.buffer = blipBuffer;
+      const gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0.4;
+      source.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      source.start(0);
+      return;
+    } catch(e) {
+      console.warn("Web Audio blip failed, falling back", e);
+    }
   }
-  const a = blipPool[blipIdx];
-  blipIdx = (blipIdx + 1) % blipPool.length;
-  a.currentTime=0; 
-  a.volume=.4;
-  const p = a.play();
+  A.text.currentTime=0; 
+  A.text.volume=.4;
+  const p = A.text.play();
   if(p !== undefined) p.catch(()=>{});
 }
 let sfxOn=true, musicOn=true, cacheOn=false;   // som ligado por padrão

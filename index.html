@@ -207,7 +207,7 @@
 
   <div id="single" class="text-layer"></div>
   <div id="speech" class="text-layer"></div>
-  <div id="pbar"><i></i></div>
+  <div id="pbar"><i></i><div class="ptext">0%</div></div>
   <div id="options" class="text-layer"></div>
   <div id="plus"    class="text-layer"></div>
 
@@ -386,7 +386,8 @@ const LANGS=[
 let PORT_VERSION="0.51";
 let steamHandle=null, manifest=null;
 let screen="main";        // "main" | "lang" | "ajustes"
-let selectedExtra=null;   // idioma extra alem de EN/JP (unico)
+let selectedExtra=null;
+let pendingAction=null;   // idioma extra alem de EN/JP (unico)
 let active=0, busy=false, pending=false;   // pending = aguardando OK
 
 const MAIN=[
@@ -402,6 +403,7 @@ const STEAM_VERSION="v0.0.247 Patch";
 let webLang = "ptbr";
 const UI_TEXT = {
   ptbr: {
+    confirm_apply: "* Então vou aplicar:\n* {lang}\n* na versão v{ver}\n* em {dir}{cache}.\n* Confirma?",
     portrait_tip: "* Se estiver no celular, use-o no modo retrato para evitar que os textos fiquem sobrepostos.",
     press_continue: "Clique ou pressione uma tecla para continuar",
     hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar",
@@ -426,6 +428,7 @@ const UI_TEXT = {
     base_tag: "  (base)",
     soon_tag: "  (em breve)",
     lang_names: {
+    confirm_apply: "* Entonces aplicaré:\n* {lang}\n* en la versión v{ver}\n* en {dir}{cache}.\n* ¿Confirmar?",
     portrait_tip: "* Si estás en el móvil, utilízalo en modo retrato para evitar la superposición de texto.",
     press_continue: "Haz clic o presiona una tecla para continuar", CORE: "Original", PTBR: "Português (BR)", ES: "Español", DE: "Alemão" },
     questions: {
@@ -534,6 +537,7 @@ const UI_TEXT = {
     }
   },
   en: {
+    confirm_apply: "* Then I will apply:\n* {lang}\n* on version v{ver}\n* in {dir}{cache}.\n* Confirm?",
     portrait_tip: "* If on mobile, please use portrait mode to prevent text overlap.",
     press_continue: "Click or press a key to continue",
     hint: "↑↓ move &nbsp; Z/Enter confirm &nbsp; X back",
@@ -600,6 +604,7 @@ const UI_TEXT = {
     }
   },
   fr: {
+    confirm_apply: "* Je vais donc appliquer :\n* {lang}\n* sur la version v{ver}\n* dans {dir}{cache}.\n* Confirmer ?",
     portrait_tip: "* Sur mobile, veuillez utiliser le mode portrait pour éviter la superposition de texte.",
     press_continue: "Cliquez ou appuyez sur une touche pour continuer",
     hint: "↑↓ déplacer &nbsp; Z/Entrée confirmer &nbsp; X retour",
@@ -666,6 +671,7 @@ const UI_TEXT = {
     }
   },
   de: {
+    confirm_apply: "* Dann werde ich Folgendes anwenden:\n* {lang}\n* auf Version v{ver}\n* in {dir}{cache}.\n* Bestätigen?",
     portrait_tip: "* Auf dem Handy nutzen Sie bitte das Hochformat, um Textüberlagerungen zu vermeiden.",
     press_continue: "Klicken oder drücken Sie eine Taste, um fortzufahren",
     hint: "↑↓ bewegen &nbsp; Z/Enter bestätigen &nbsp; X zurück",
@@ -732,6 +738,7 @@ const UI_TEXT = {
     }
   },
   ru: {
+    confirm_apply: "* Тогда я применю:\n* {lang}\n* на версию v{ver}\n* в {dir}{cache}.\n* Подтвердить?",
     portrait_tip: "* На мобильном телефоне используйте портретный режим, чтобы избежать наложения текста.",
     press_continue: "Нажмите или коснитесь клавиши для продолжения",
     hint: "↑↓ перемыкать &nbsp; Z/Enter подтв &nbsp; X назад",
@@ -798,6 +805,7 @@ const UI_TEXT = {
     }
   },
   ja: {
+    confirm_apply: "* それでは適用します：\n* {lang}\n* バージョン v{ver}\n* ファイル {dir}{cache}.\n* 決定しますか？",
     portrait_tip: "* モバイル端末の場合は、テキストの重なりを防ぐために縦向き（ポートレート）モードでご利用ください。",
     press_continue: "クリックまたはキーを押して続行します",
     hint: "↑↓ 移動 &nbsp; Z/Enter 決定 &nbsp; X 戻る",
@@ -935,7 +943,12 @@ function getQuestionText(sc){
 /* ================= progress bar ================= */
 const pbar=$("pbar"), pfill=pbar.firstElementChild;
 function showBar(on){ pbar.style.display=on?"block":"none"; if(!on)pfill.style.width="0"; }
-function setBar(p){ pfill.style.width=Math.max(0,Math.min(100,p))+"%"; }
+function setBar(p){
+  const rounded = Math.round(Math.max(0,Math.min(100,p)));
+  pfill.style.width=rounded+"%";
+  const ptext = pbar.querySelector(".ptext");
+  if(ptext) ptext.textContent = rounded+"%";
+}
 
 /* ================= render =================
    MAIN:     menu na direita (#options), fala do Seam na esquerda (#speech)
@@ -1068,7 +1081,15 @@ function resolveConfirm(){
 }
 function cancelConfirm(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  pending=false; play(A.swing); setSeam("idle");
+  pending=false; 
+  if(pendingAction === "apply") {
+    pendingAction = null;
+    setSeam("idle");
+    speech(SEAM_LINES.choose);
+    render();
+    return;
+  }
+  play(A.swing); setSeam("idle");
   sayQ((T.questions && T.questions[screen]) || T.choose); render();
 }
 /* Conversar: resultado ocupa o dialog1 (caixa unica); ao terminar volta as opcoes */
@@ -1103,6 +1124,7 @@ function back(){
 let doneState=false;
 document.addEventListener("keydown",e=>{
   if(e.key === "Tab") { e.preventDefault(); return; }
+  if(busy) { e.preventDefault(); return; }
   if(e.repeat) { e.preventDefault(); return; }
   if(e.key === " " || e.key === "Spacebar") { e.preventDefault(); }
   if(inLangScreen){
@@ -1214,14 +1236,24 @@ function toSingle(){                 // troca para o dialog1 (caixa unica)
 }
 function apply(){
   if(!steamHandle){ play(A.swing); setSeam("oh",900); speech(SEAM_LINES.needsteam); return; }
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   const L=selectedExtra?LANGS.find(x=>x.code===selectedExtra):null;
-  const langName=L?L.label:"Original";
+  const langName=L? ((T.lang_names && T.lang_names[L.code]) || L.label) : ((T.lang_names && T.lang_names.CORE) || "Original");
   const dir="'"+steamHandle.name+"'";
-  play(A.sel); setSeam("laugh",1200);
-  toSingle();
-  type($("single"),
-    "* Então vou aplicar:\n* "+langName+"\n* na versão v"+PORT_VERSION+"\n* em "+dir+(cacheOn?"  (+cache)":"")+".",
-    ()=>setTimeout(generate,700));
+  
+  let qText = T.confirm_apply || UI_TEXT.ptbr.confirm_apply;
+  qText = qText.replace("{lang}", langName)
+               .replace("{ver}", PORT_VERSION)
+               .replace("{dir}", dir)
+               .replace("{cache}", cacheOn ? " (+cache)" : "");
+
+  play(A.sel); setSeam("talk");
+  pending = true;
+  pendingAction = "apply";
+  confirmSel = 0; // default to Yes (Sim)
+  
+  speech(qText);
+  renderConfirm();
 }
 
 async function generate(){

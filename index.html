@@ -173,18 +173,18 @@
   <div id="splash">
     <img src="assets/LogoDeltaruneVita.png" alt="DELTARUNE Vita">
     <div class="by">Patcher by Wolff</div>
-    <div class="press">▸ Clique ou pressione uma tecla</div>
+    <div class="press">Clique ou pressione uma tecla</div>
   </div>
   <div id="lang-screen">
     <div class="title">Select Your Language</div>
     <div class="menu" id="lang-items">
-      <div class="item active" data-lang="ptbr">▸ PTBR</div>
-      <div class="item" data-lang="es">  SPANISH</div>
-      <div class="item" data-lang="en">  ENGLISH</div>
-      <div class="item" data-lang="fr">  FRENCH</div>
-      <div class="item" data-lang="de">  GERMANY</div>
-      <div class="item" data-lang="ru">  RUSSIAN</div>
-      <div class="item" data-lang="ja">  JAPONES</div>
+      <div class="item active" data-lang="ptbr">PTBR</div>
+      <div class="item" data-lang="es">SPANISH</div>
+      <div class="item" data-lang="en">ENGLISH</div>
+      <div class="item" data-lang="fr">FRENCH</div>
+      <div class="item" data-lang="de">GERMANY</div>
+      <div class="item" data-lang="ru">RUSSIAN</div>
+      <div class="item" data-lang="ja">JAPONES</div>
     </div>
   </div>
 </div>
@@ -697,59 +697,6 @@ function langItems(){
     let label = (T.lang_names && T.lang_names[L.code]) || L.label;
     if(L.base) label += (T.base_tag || "  (base)");
     else if(!L.ready) label += (T.soon_tag || "  (em breve)");
-    else if(selectedExtra===L.code) label = "» " + label;
-    return {...L, label};
-  }).concat(getSairItem());
-}けよう…",
-    cacheon:"* それは良いね。プレイ中の時間を節約できるよ。",
-    cacheoff:"* キャッシュなしだね。",
-    sair:"* 全ては然るべき時に…",
-    done:"* 完了だよ！ \n* 'deltarune/deltarunevita' フォルダを 'ux0:/data' に配置してね。 \n* 楽しんで！",
-  }
-};
-let SEAM_LINES = UI_TEXT.ptbr;
-
-function applyWebLanguage(code) {
-  webLang = code;
-  const T = UI_TEXT[code] || UI_TEXT.ptbr;
-  SEAM_LINES = T;
-  $("hint").innerHTML = T.hint;
-}
-function versionLine(L){
-  return "* "+L.label+", ótima escolha.A versão suportada é a v"+PORT_VERSION+".";
-}
-function speech(t){ type($("speech"),t); }
-
-function mainItems(){
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  return [
-    {id:"lang", label: T.btn_lang},
-    {id:"steam", label: T.btn_steam},
-    {id:"apply", label: T.btn_apply},
-    {id:"ajustes", label: T.btn_ajustes},
-    {id:"talk", label: T.btn_talk},
-  ];
-}
-function getSairItem(){
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  return {id:"sair", label: T.btn_sair};
-}
-function talkItems(){
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  return [
-    {id:"about",   label: T.talk_about},
-    {id:"project", label: T.talk_project},
-    {id:"wolff",   label: T.talk_wolff},
-    {id:"butter",  label: T.talk_butter},
-    getSairItem(),
-  ];
-}
-function langItems(){
-  return LANGS.map(L=>{
-    let label=L.label;
-    if(L.base) label+="  (base)";
-    else if(!L.ready) label+="  (em breve)";
-    else if(selectedExtra===L.code) label="» "+L.label;
     return {...L, label};
   }).concat(getSairItem());
 }
@@ -768,10 +715,7 @@ function getQuestionText(sc){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return (T.questions && T.questions[sc]) || T.choose;
 }
-function versionLine(L){
-  return "* "+L.label+", ótima escolha.A versão suportada é a v"+PORT_VERSION+".";
-}
-function speech(t){ type($("speech"),t); }
+
 
 /* pergunta do Seam (vai para a caixa da direita) e explicacao (dialogplus) */
 const QUESTION={
@@ -1193,10 +1137,10 @@ function renderLangScreen(){
   items.forEach((el, idx) => {
     if (idx === langActive) {
       el.classList.add("active");
-      el.textContent = "▸ " + labels[idx];
+      el.textContent = labels[idx];
     } else {
       el.classList.remove("active");
-      el.textContent = "  " + labels[idx];
+      el.textContent = labels[idx];
     }
     el.onmouseenter = () => {
       if(langActive !== idx){ langActive = idx; play(A.move); renderLangScreen(); }

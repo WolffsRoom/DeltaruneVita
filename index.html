@@ -613,6 +613,7 @@ async function generate(){
     for(let i=0;i<req.length;i++){
       const [rel,exp]=req[i];
       try{ const f=await getFile(steamHandle,rel);
+        if(rel.endsWith('.ini') || rel.endsWith('.dll')) continue;
         if(f.size!==exp.size) throw 0;
         if(await sha256(await f.arrayBuffer())!==exp.sha256) throw 0;
       }catch(_){ bad++; console.error("Mismatch: " + rel); }

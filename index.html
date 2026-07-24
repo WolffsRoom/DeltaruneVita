@@ -261,13 +261,16 @@ function stripStars(t){ return t.split("\n").map(l=>l.replace(/^\*\s*/,"")).join
 let typeState=null;   // {el,text,after}
 function type(el,text,after){
   text=oneStar(text);
-  clearInterval(typing); el.textContent=""; let i=0;
+  clearInterval(typing); el.textContent=""; let i=0, blipCnt=0;
   setSeam("talk"); typeState={el,text,after};
   typing=setInterval(()=>{
     if(i>=text.length){ finishType(); return; }
     const ch=text[i++]; el.textContent+=ch;
-    if(ch!==" "&&ch!=="\n"&&ch!=="*") blip();   // som por letra
-  },26);
+    if(ch!==" "&&ch!=="\n"&&ch!=="*"){
+      blipCnt++;
+      if(blipCnt%2===0) blip();   // alterna os blips para evitar travamento da thread de audio no WebKit (iOS)
+    }
+  },32);
 }
 function finishType(){
   if(!typeState) return;
@@ -848,7 +851,7 @@ async function generate(){
 
 /* ================= ocioso (Seam cutuca) ================= */
 let idleTimer=null;
-const IDLE_MS=15000;
+const IDLE_MS=45000;
 const NUDGES=[
   "* Vamos, não tenho o dia todo...",
   "* Estou esperando, viajante.",

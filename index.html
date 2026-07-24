@@ -124,6 +124,15 @@
     text-shadow:.06em .06em 0 #000;opacity:.9}
   #splash .press{color:var(--orange);font-size:.85em;margin-top:1.4em;
     text-shadow:.06em .06em 0 #000;animation:blink 1.1s steps(1) infinite}
+  /* language selection screen */
+  #lang-screen{position:absolute;inset:0;z-index:95;background:#000;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .6s ease}
+  #lang-screen.show{opacity:1;pointer-events:auto}
+  #lang-screen .title{color:var(--yellow);font-size:1.6em;margin-bottom:0.8em;text-shadow:.08em .08em 0 #000}
+  #lang-screen .menu{display:flex;flex-direction:column;gap:0.3em;align-items:flex-start}
+  #lang-screen .item{color:var(--white);font-size:1.1em;cursor:pointer;padding:0.1em 0.5em;text-shadow:.06em .06em 0 #000}
+  #lang-screen .item.active{color:var(--yellow);text-shadow:.08em .08em 0 #800}
 </style>
 </head>
 <body>
@@ -149,6 +158,18 @@
     <img src="assets/LogoDeltaruneVita.png" alt="DELTARUNE Vita">
     <div class="by">Patcher by Wolff</div>
     <div class="press">▸ Clique ou pressione uma tecla</div>
+  </div>
+  <div id="lang-screen">
+    <div class="title">Select Your Language</div>
+    <div class="menu" id="lang-items">
+      <div class="item active" data-lang="ptbr">▸ PTBR</div>
+      <div class="item" data-lang="es">  SPANISH</div>
+      <div class="item" data-lang="en">  ENGLISH</div>
+      <div class="item" data-lang="fr">  FRENCH</div>
+      <div class="item" data-lang="de">  GERMANY</div>
+      <div class="item" data-lang="ru">  RUSSIAN</div>
+      <div class="item" data-lang="ja">  JAPONES</div>
+    </div>
   </div>
 </div>
 <div id="hint">↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar</div>
@@ -322,22 +343,129 @@ function settingsItems(){
   ];
 }
 
-const SEAM_LINES={
-  intro:"* Hee Heee... Um viajante do outro mundo. O que deseja hoje?",
-  choose:"* Escolha um idioma nas prateleiras, ou o que quiser.Você que sabe...",
-  core:"* Inglês e Japonês são originais. Já vêm junto, viajante.",
-  rem:"* Sem esse idioma extra, então.Fica só o original.",
-  soon:"* Esse idioma ainda nãochegou à prateleira...",
-  needsteam:"* Primeiro me mostre sua cópia original do DELTARUNE da Steam.",
-  steamok:"* DELTARUNE selecionado! Certifique-se de ser a versão "+STEAM_VERSION+", beleza? Clique em Aplicar para gerar os dados PS Vita.",
-  steambad:"* Hmm... isso não me parece com DELTARUNE...Verifique o arquivo informado.",
-  nopicker:"* Seu navegador não abre pastas.Use Chrome ou Edge, viajante.",
-  ajustes:"* Deixe-me abrir a gavetados ajustes...",
-  cacheon:"* Bom, isso é bom.Poupará seu tempo durante o jogo.",
-  cacheoff:"* Sem cache, então.",
-  sair:"* Tudo no seu tempo...",
-  done:"* Pronto! \n* Agora é só extrair e colocar a pasta 'deltarune/deltarunevita' em 'ux0:/data'. \n* Bom jogo!",
+let webLang = "ptbr";
+const UI_TEXT = {
+  ptbr: {
+    intro:"* Hee Heee... Um viajante do outro mundo. O que deseja hoje?",
+    choose:"* Escolha um idioma nas prateleiras, ou o que quiser. Você que sabe...",
+    core:"* Inglês e Japonês são originais. Já vêm junto, viajante.",
+    rem:"* Sem esse idioma extra, então. Fica só o original.",
+    soon:"* Esse idioma ainda não chegou à prateleira...",
+    needsteam:"* Primeiro me mostre sua cópia original do DELTARUNE da Steam.",
+    steamok:"* DELTARUNE selecionado! Certifique-se de ser a versão "+STEAM_VERSION+", beleza? Clique em Aplicar para gerar os dados PS Vita.",
+    steambad:"* Hmm... isso não me parece com DELTARUNE... Verifique o arquivo informado.",
+    nopicker:"* Seu navegador não abre pastas. Use Chrome ou Edge, viajante.",
+    ajustes:"* Deixe-me abrir a gaveta dos ajustes...",
+    cacheon:"* Bom, isso é bom. Poupará seu tempo durante o jogo.",
+    cacheoff:"* Sem cache, então.",
+    sair:"* Tudo no seu tempo...",
+    done:"* Pronto! \n* Agora é só extrair e colocar a pasta 'deltarune/deltarunevita' em 'ux0:/data'. \n* Bom jogo!",
+  },
+  es: {
+    intro:"* Jua Jua... Un viajero de otro mundo. ¿Qué deseas hoy?",
+    choose:"* Elige un idioma de los estantes, o lo que quieras. Tú decides...",
+    core:"* Inglés y Japonés son originales. Ya vienen incluidos, viajero.",
+    rem:"* Sin ese idioma extra, entonces. Solo queda el original.",
+    soon:"* Este idioma aún no ha llegado al estante...",
+    needsteam:"* Primero muéstrame tu copia original de DELTARUNE de Steam.",
+    steamok:"* ¡DELTARUNE seleccionado! Asegúrate de que sea la versión "+STEAM_VERSION+", ¿vale? Haz clic en Aplicar.",
+    steambad:"* Hmm... esto no me parece DELTARUNE... Comprueba el archivo.",
+    nopicker:"* Tu navegador no abre carpetas. Usa Chrome o Edge, viajero.",
+    ajustes:"* Déjame abrir el cajón de ajustes...",
+    cacheon:"* Bueno, eso es bueno. Te ahorrará tiempo durante el juego.",
+    cacheoff:"* Sin caché, entonces.",
+    sair:"* Todo a su tiempo...",
+    done:"* ¡Listo! \n* Ahora extrae y coloca la carpeta 'deltarune/deltarunevita' en 'ux0:/data'. \n* ¡Buen juego!",
+  },
+  en: {
+    intro:"* Hee Heee... A traveler from another world. What do you wish for today?",
+    choose:"* Choose a language on the shelves, or whatever you want. It's up to you...",
+    core:"* English and Japanese are original. They come bundled, traveler.",
+    rem:"* Without that extra language then. Just the original stays.",
+    soon:"* That language hasn't arrived on the shelf yet...",
+    needsteam:"* First show me your original copy of DELTARUNE from Steam.",
+    steamok:"* DELTARUNE selected! Make sure it's version "+STEAM_VERSION+", alright? Click Apply to generate PS Vita data.",
+    steambad:"* Hmm... that doesn't look like DELTARUNE to me... Check the specified file.",
+    nopicker:"* Your browser cannot open folders. Use Chrome or Edge, traveler.",
+    ajustes:"* Let me open the settings drawer...",
+    cacheon:"* Well, that's good. It will save you time during the game.",
+    cacheoff:"* No cache then.",
+    sair:"* Everything in due time...",
+    done:"* All set! \n* Now just extract and place the 'deltarune/deltarunevita' folder in 'ux0:/data'. \n* Have fun!",
+  },
+  fr: {
+    intro:"* Hee Heee... Un voyageur d'un autre monde. Que désires-tu aujourd'hui ?",
+    choose:"* Choisissez une langue sur les étagères. C'est comme vous voulez...",
+    core:"* L'anglais et le japonais sont originaux. Ils sont inclus, voyageur.",
+    rem:"* Pas de langue supplémentaire alors. Il ne reste que l'original.",
+    soon:"* Cette langue n'est pas encore arrivée en rayon...",
+    needsteam:"* Montrez-moi d'abord votre copie originale de DELTARUNE sur Steam.",
+    steamok:"* DELTARUNE sélectionné ! Assurez-vous qu'il s'agit de la version "+STEAM_VERSION+", d'accord ?",
+    steambad:"* Hmm... cela ne ressemble pas à DELTARUNE... Vérifiez le fichier.",
+    nopicker:"* Votre navigateur ne peut pas ouvrir de dossiers. Utilisez Chrome ou Edge.",
+    ajustes:"* Laissez-moi ouvrir le tiroir des paramètres...",
+    cacheon:"* C'est une bonne chose. Cela vous fera gagner du temps pendant le jeu.",
+    cacheoff:"* Pas de cache alors.",
+    sair:"* Chaque chose en son temps...",
+    done:"* Terminé ! \n* Extrayez et placez le dossier 'deltarune/deltarunevita' dans 'ux0:/data'. \n* Bon jeu !",
+  },
+  de: {
+    intro:"* Hee Heee... Ein Reisender aus einer anderen Welt. Was wünschst du dir heute?",
+    choose:"* Wähle eine Sprache aus den Regalen, ganz wie du willst...",
+    core:"* Englisch und Japanisch sind im Original enthalten, Reisender.",
+    rem:"* Ohne diese Zusatzsprache also. Es bleibt beim Original.",
+    soon:"* Diese Sprache ist noch nicht im Regal eingetroffen...",
+    needsteam:"* Zeige mir zuerst deine Originalkopie von DELTARUNE auf Steam.",
+    steamok:"* DELTARUNE ausgewählt! Stelle sicher, dass es Version "+STEAM_VERSION+" ist, in Ordnung?",
+    steambad:"* Hmm... das sieht mir nicht nach DELTARUNE aus... Überprüfe die Datei.",
+    nopicker:"* Dein Browser kann keine Ordner öffnen. Nutze Chrome oder Edge.",
+    ajustes:"* Lass mich die Einstellungsschublade öffnen...",
+    cacheon:"* Nun, das ist gut. Es spart dir Zeit beim Spielen.",
+    cacheoff:"* Dann ohne Cache.",
+    sair:"* Alles zu seiner Zeit...",
+    done:"* Fertig! \n* Entpacke und platziere den Ordner 'deltarune/deltarunevita' in 'ux0:/data'. \n* Viel Spaß!",
+  },
+  ru: {
+    intro:"* Хе-хе... Путешественник из другого мира. Чего ты желаешь сегодня?",
+    choose:"* Выбери язык на полках, или что угодно. Решать тебе...",
+    core:"* Английский и японский оригинальные. Они идут в комплекте.",
+    rem:"* Без дополнительного языка. Остаётся оригинал.",
+    soon:"* Этот язык ещё не появился на полке...",
+    needsteam:"* Сначала покажи мне оригинальную копию DELTARUNE из Steam.",
+    steamok:"* DELTARUNE выбран! Убедись, что это версия "+STEAM_VERSION+", ладно?",
+    steambad:"* Хмм... это не похоже на DELTARUNE... Проверь файл.",
+    nopicker:"* Ваш браузер не может открывать папки. Используйте Chrome или Edge.",
+    ajustes:"* Открою-ка я ящик настроек...",
+    cacheon:"* Что ж, это хорошо. Сэкономит время в игре.",
+    cacheoff:"* Тогда без кэша.",
+    sair:"* Всему свое время...",
+    done:"* Готово! \n* Распакуй и помести папку 'deltarune/deltarunevita' в 'ux0:/data'. \n* Приятной игры!",
+  },
+  ja: {
+    intro:"* ヒッヒッヒ… 異世界からの旅人よ。今日は何を望むのかな？",
+    choose:"* 棚から言語を選びなさい。君の自由だよ…",
+    core:"* 英語と日本語はオリジナル版に含まれているよ。",
+    rem:"* 追加言語なしだね。オリジナルのみが残るよ。",
+    soon:"* その言語はまだ棚に届いていないようだね…",
+    needsteam:"* まずSteamのDELTARUNEオリジナル版を見せておくれ。",
+    steamok:"* DELTARUNEが選択されたよ！バージョン"+STEAM_VERSION+"であることを確認してね。",
+    steambad:"* ふーむ… これはDELTARUNEではないようだね… ファイルを確認しておくれ。",
+    nopicker:"* お使いのブラウザではフォルダを開けません。ChromeかEdgeをご利用ください。",
+    ajustes:"* 設定の引き出しを開けよう…",
+    cacheon:"* それは良いね。プレイ中の時間を節約できるよ。",
+    cacheoff:"* キャッシュなしだね。",
+    sair:"* 全ては然るべき時に…",
+    done:"* 完了だよ！ \n* 'deltarune/deltarunevita' フォルダを 'ux0:/data' に配置してね。 \n* 楽しんで！",
+  }
 };
+let SEAM_LINES = UI_TEXT.ptbr;
+
+function applyWebLanguage(code) {
+  webLang = code;
+  if (UI_TEXT[code]) {
+    SEAM_LINES = UI_TEXT[code];
+  }
+}
 function versionLine(L){
   return "* "+L.label+", ótima escolha.A versão suportada é a v"+PORT_VERSION+".";
 }
@@ -509,6 +637,13 @@ function back(){
 let doneState=false;
 document.addEventListener("keydown",e=>{
   if(e.repeat) { e.preventDefault(); return; }
+  if(inLangScreen){
+    e.preventDefault();
+    if(e.key==="ArrowDown"){ langActive=(langActive+1)%7; play(A.move); renderLangScreen(); return; }
+    if(e.key==="ArrowUp"){ langActive=(langActive+6)%7; play(A.move); renderLangScreen(); return; }
+    if(e.key==="Enter"||e.key==="z"||e.key==="Z"){ selectLangOption(langActive); return; }
+    return;
+  }
   if(typeState){ e.preventDefault(); skipType(); return; }     // adianta a fala do Seam
   if(introPlaying){
       e.preventDefault();
@@ -745,11 +880,48 @@ window.addEventListener("click",e=>{
   }
 });
 
-/* ================= boot ================= */
+/* ================= language screen & boot ================= */
+let inLangScreen = false, langActive = 0;
+const LANG_CODES = ["ptbr", "es", "en", "fr", "de", "ru", "ja"];
+
+function renderLangScreen(){
+  const items = document.querySelectorAll("#lang-items .item");
+  const labels = ["PTBR", "SPANISH", "ENGLISH", "FRENCH", "GERMANY", "RUSSIAN", "JAPONES"];
+  items.forEach((el, idx) => {
+    if (idx === langActive) {
+      el.classList.add("active");
+      el.textContent = "▸ " + labels[idx];
+    } else {
+      el.classList.remove("active");
+      el.textContent = "  " + labels[idx];
+    }
+    el.onmouseenter = () => {
+      if(langActive !== idx){ langActive = idx; play(A.move); renderLangScreen(); }
+    };
+    el.onclick = () => { selectLangOption(idx); };
+  });
+}
+
+function selectLangOption(idx){
+  langActive = idx;
+  renderLangScreen();
+  play(A.sel);
+  inLangScreen = false;
+  $("lang-screen").classList.remove("show");
+  applyWebLanguage(LANG_CODES[langActive]);
+  startShop();
+}
+
+function startLangSelect(){
+  $("splash").classList.add("gone");
+  $("lang-screen").classList.add("show");
+  inLangScreen = true;
+  renderLangScreen();
+}
+
 let shopStarted=false;
 function startShop(){
   if(shopStarted) return; shopStarted=true;
-  $("splash").classList.add("gone");        // logo some
   introPlaying=true;
   setTimeout(()=>{
     $("fade").classList.add("gone");        // loja aparece do preto
@@ -759,12 +931,11 @@ function startShop(){
           showDialog("split"); speech(SEAM_LINES.choose); render(); resetIdle(); 
       },3700);
     });
-  },900);
+  },600);
 }
 function boot(){
   showDialog("single");                     // pronto por tras da splash
-  // aguarda um gesto: desbloqueia audio (musica + fala) ANTES da 1a fala do Seam
-  const go=()=>{ startMusic(); startShop(); };
+  const go=()=>{ startMusic(); startLangSelect(); };
   $("splash").addEventListener("click",go,{once:true});
   window.addEventListener("keydown",go,{once:true});
 }

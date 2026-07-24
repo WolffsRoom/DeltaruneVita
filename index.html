@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEAM'S SHOP — DELTARUNE Vita Patcher</title>
+<link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+<style>
+  :root{
+    --white:#ffffff;
+    --yellow:#ffd94a;
+    --orange:#ff8f2b;
+    --gray:#9a9a9a;
+    --heart:#ff2b2b;
+  }
+  @font-face{
+    font-family:"DTRune";
+    src:url("assets/undertale-deltarune-extended-fixed.otf") format("opentype");
+    font-display:swap;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#000;
+    color:var(--white);
+    font-family:"DTRune","Courier New",ui-monospace,monospace;
+    font-weight:normal;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;overflow:hidden;
+  }
+  img{image-rendering:pixelated;-webkit-user-drag:none;user-select:none}
+
+  /* frame authored at 1920x1080 — all layers overlap perfectly */
+  #frame{
+    position:relative;
+    width:min(80vw, 142.2vh);
+    aspect-ratio:16/9;
+    background:#000;
+    overflow:hidden;
+    /* text scales with the frame */
+    font-size:min(1.78vw, 3.16vh);
+    line-height:1.35;
+  }
+  .layer{position:absolute;inset:0;width:100%;height:100%}
+  #borda{z-index:5;pointer-events:none}
+  /* black vignette fades the border edges into the black background */
+  #vignette{position:absolute;inset:0;z-index:7;pointer-events:none;
+    box-shadow:inset 0 0 7vw 2.2vw #000}
+  #fundo{z-index:10}
+  #shopbg{z-index:20}
+  #seam-wrap{
+    position:absolute;z-index:30;
+    left:50%;bottom:52%;transform:translate(-50%,30px);   /* acima do dialog2, 30px pra baixo */
+    width:25.7%;                 /* 135% do tamanho anterior (19%) */
+    transition:left .35s ease;
+  }
+  #seam-wrap.left{ left:35%; }
+  #seam{width:100%;display:block;filter:drop-shadow(0 .35vw 0 rgba(0,0,0,.55))}
+  #dialog{z-index:40;pointer-events:none}
+
+  /* text overlays live above the dialog art */
+  .text-layer{position:absolute;z-index:50;color:var(--white);
+    text-shadow:.08em .08em 0 #000;white-space:pre-wrap}
+
+  /* single wide box (intro / final) */
+  #single{left:19.5%;right:19.5%;top:55.5%;bottom:8%;display:none}
+
+  /* split: SAM speech (left) */
+  #speech{left:19%;top:56%;width:37%;height:34%;display:none}
+
+  /* split: options (right) */
+  #options{left:61.5%;top:57%;width:20%;height:32%;display:none;
+    flex-direction:column;gap:.15em}
+
+  /* dialogplus (explanation panel, upper-right) — slides up from below */
+  #plusbg{z-index:44;opacity:0;visibility:hidden;transform:translateY(7%);
+    transition:opacity .3s ease, transform .3s ease}
+  #plusbg.show{opacity:1;visibility:visible;transform:translateY(0)}
+  #plus{left:60.5%;top:13%;width:22%;height:37%;
+    display:flex;flex-direction:column;gap:.12em;
+    opacity:0;visibility:hidden;transform:translateY(7%);
+    transition:opacity .3s ease, transform .3s ease}
+  #plus.show{opacity:1;visibility:visible;transform:translateY(0)}
+  #plus .ptitle{color:var(--orange);font-size:.68em;letter-spacing:.1em;margin-bottom:.15em}
+  #plus .okrow{position:relative;padding-left:1.5em;margin-top:.4em;color:var(--white)}
+  #plus .okrow .h{position:absolute;left:0;top:.06em;width:1.05em;height:1.05em;image-rendering:pixelated}
+
+  /* all options are white; the heart pointer is the only highlight */
+  .opt{position:relative;padding-left:1.5em;cursor:pointer;color:var(--white);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .opt .h{position:absolute;left:0;top:.08em;width:1.05em;height:1.05em;
+    opacity:0;image-rendering:pixelated}
+  .opt.active .h{opacity:1}
+  .opt .pr{color:var(--white);font-size:.78em;margin-left:.4em}
+
+  /* download / patch progress bar (in the speech box) */
+  #pbar{position:absolute;z-index:50;left:19%;top:86%;width:37%;height:2.4%;
+    display:none;border:.14em solid #fff;background:#000}
+  #pbar > i{display:block;height:100%;width:0;background:#fff;transition:width .08s linear}
+
+  .prompt{position:absolute;right:.2em;bottom:-.1em;color:var(--yellow);
+    font-size:.7em;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* hint fica no viewport (parte preta abaixo do frame) */
+  #hint{position:fixed;z-index:100;left:0;right:0;bottom:1.2vh;text-align:center;
+    color:var(--white);font-family:"DTRune","Courier New",monospace;
+    font-size:clamp(9px,1.1vw,15px);pointer-events:none;text-shadow:1px 1px 0 #000}
+  #version{position:absolute;z-index:61;right:3%;bottom:1.5%;
+    color:var(--white);font-size:.6em;pointer-events:none;text-shadow:.08em .08em 0 #000}
+
+  /* black fade-in on load */
+  #fade{position:absolute;inset:0;z-index:80;background:#000;
+    opacity:1;pointer-events:none;transition:opacity 1.2s ease}
+  #fade.gone{opacity:0}
+
+  /* splash screen (logo) before the shop opens */
+  #splash{position:absolute;inset:0;z-index:90;background:#000;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2em;
+    transition:opacity 1s ease}
+  #splash.gone{opacity:0;pointer-events:none}
+  #splash img{width:58%;max-width:60vw;height:auto;image-rendering:auto}
+  #splash .by{color:var(--white);font-size:1.1em;letter-spacing:.06em;
+    text-shadow:.06em .06em 0 #000;opacity:.9}
+  #splash .press{color:var(--orange);font-size:.85em;margin-top:1.4em;
+    text-shadow:.06em .06em 0 #000;animation:blink 1.1s steps(1) infinite}
+</style>
+</head>
+<body>
+<div id="frame">
+  <img id="fundo"  class="layer" src="assets/fundo.png"   alt="">
+  <img id="shopbg" class="layer" src="assets/shop_bg.png" alt="">
+  <div id="seam-wrap"><img id="seam" src="assets/seam/idle_0.png" alt="Seam"></div>
+  <img id="dialog" class="layer" src="assets/dialog1.png" alt="">
+  <img id="plusbg" class="layer" src="assets/dialogplus.png" alt="">
+
+  <div id="single" class="text-layer"></div>
+  <div id="speech" class="text-layer"></div>
+  <div id="pbar"><i></i></div>
+  <div id="options" class="text-layer"></div>
+  <div id="plus"    class="text-layer"></div>
+
+  <img id="borda" class="layer" src="assets/borda.png" alt="">
+  <div id="vignette"></div>
+  <div id="version">Patcher v0.62</div>
+  <div id="fade"></div>
+  <div id="splash">
+    <img src="assets/LogoDeltaruneVita.png" alt="DELTARUNE Vita">
+    <div class="by">Patcher by Wolff</div>
+    <div class="press">▸ Clique ou pressione uma tecla</div>
+  </div>
+</div>
+<div id="hint">↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar</div>
+
+<audio id="a-move" src="assets/snd_menumove.wav" preload="auto"></audio>
+<audio id="a-sel"  src="assets/snd-select.ogg" preload="auto"></audio>
+<audio id="a-swing" src="assets/snd_swing.wav" preload="auto"></audio>
+<audio id="a-text" src="assets/snd_text.wav" preload="auto"></audio>
+<audio id="a-lantern" src="assets/Lantern.ogg" loop preload="auto"></audio>
+
+<script src="manifest.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+
+/* ================= Seam animation engine ================= */
+const SEAM={
+  idle:["idle_0","idle_1","idle_2","idle_3"],
+  talk:["talk_0","talk_1","talk_2"],
+  laugh:["laugh_0","laugh_1"],
+  oh:["oh"],
+};
+const seamImg=$("seam");
+let seamState="idle", seamFrame=0, seamHold=0;
+function setSeam(state,holdMs){
+  seamState=state; seamFrame=0; seamHold=holdMs?performance.now()+holdMs:0;
+}
+// variable-speed animation ticker
+(function ticker(){
+  const speeds={idle:170,talk:85,laugh:130,oh:400};
+  let last=0;
+  function loop(t){
+    const spd=speeds[seamState]||160;
+    if(t-last>=spd){
+      last=t;
+      if(seamHold && t>seamHold && seamState!=="talk") setSeam("idle");
+      const frames=SEAM[seamState]||SEAM.idle;
+      seamFrame=(seamFrame+1)%frames.length;
+      seamImg.src="assets/seam/"+frames[seamFrame]+".png";
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+
+/* ================= sound ================= */
+const A = { move:$("a-move"), sel:$("a-sel"), swing:$("a-swing"), text:$("a-text"), lantern:$("a-lantern") };
+function play(a){ 
+  if(!sfxOn||!a)return; 
+  a.currentTime=0; 
+  a.volume=.55;
+  const p = a.play();
+  if(p !== undefined) p.catch(()=>{});
+}
+function blip(){ 
+  if(!sfxOn)return; 
+  A.text.currentTime=0; 
+  A.text.volume=.4;
+  const p = A.text.play();
+  if(p !== undefined) p.catch(()=>{});
+}
+let sfxOn=true, musicOn=true, cacheOn=false;   // som ligado por padrão
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let musicRamp=null;
+function rampMusic(){
+  const target=.4, step=.015;
+  clearInterval(musicRamp);
+  musicRamp=setInterval(()=>{
+    A.lantern.volume=Math.min(target, A.lantern.volume+step);
+    if(A.lantern.volume>=target-1e-6) clearInterval(musicRamp);
+  },80);
+}
+function startMusic(){
+  if(!musicOn)return;
+  A.lantern.volume=0;
+  const p=A.lantern.play();
+  if(p&&p.then) p.then(rampMusic).catch(()=>{}); else rampMusic();
+}
+function stopMusic(){ clearInterval(musicRamp); A.lantern.pause(); }
+
+/* ================= typewriter ================= */
+let typing=null;
+// mantem apenas UM "* " no inicio; remove das demais linhas
+function oneStar(t){
+  return t.split("\n").map((ln,i)=>{ ln=ln.replace(/^\*\s*/,""); return i===0?"* "+ln:ln; }).join("\n");
+}
+function stripStars(t){ return t.split("\n").map(l=>l.replace(/^\*\s*/,"")).join("\n"); }
+let typeState=null;   // {el,text,after}
+function type(el,text,after){
+  text=oneStar(text);
+  clearInterval(typing); el.textContent=""; let i=0;
+  setSeam("talk"); typeState={el,text,after};
+  typing=setInterval(()=>{
+    if(i>=text.length){ finishType(); return; }
+    const ch=text[i++]; el.textContent+=ch;
+    if(ch!==" "&&ch!=="\n"&&ch!=="*") blip();   // som por letra
+  },26);
+}
+function finishType(){
+  if(!typeState) return;
+  clearInterval(typing); typing=null;
+  const {el,text,after}=typeState; typeState=null;
+  el.textContent=text; setSeam("idle");
+  if(after) after();
+}
+function skipType(){ if(typeState) finishType(); }        // adianta a fala atual
+function typeAsync(el,text){ return new Promise(res=>type(el,text,res)); }
+function setLine(el,t){ el.textContent=oneStar(t); }   // para atualizacoes diretas (barras)
+
+/* ================= dialog art switching ================= */
+const dialogImg=$("dialog");
+function showDialog(kind){ // 'single' | 'split'
+  dialogImg.src = kind==="single" ? "assets/dialog1.png" : "assets/dialog2.png";
+  $("single").style.display = kind==="single" ? "block":"none";
+  $("speech").style.display = kind==="split" ? "block":"none";
+  $("options").style.display= kind==="split" ? "flex":"none";
+}
+function showPlus(on){
+  $("plus").style.display = on? "flex":"none";
+}
+
+/* ================= data ================= */
+const LANGS=[
+  {code:"CORE",label:"Original",size:8.2, base:true, ready:true},
+  {code:"PTBR",label:"Português (BR)",     size:218.8,base:false,ready:true},
+  {code:"ES",  label:"Español",            size:0,   base:false,ready:false},
+  {code:"DE",  label:"Deutsch",            size:0,   base:false,ready:false},
+];
+
+/* ================= state ================= */
+let PORT_VERSION="0.51";
+let steamHandle=null, manifest=null;
+let screen="main";        // "main" | "lang" | "ajustes"
+let selectedExtra=null;   // idioma extra alem de EN/JP (unico)
+let active=0, busy=false, pending=false;   // pending = aguardando OK
+
+const MAIN=[
+  {id:"lang",    label:"Idioma"},
+  {id:"steam",   label:"Arquivos"},
+  {id:"apply",   label:"Aplicar"},
+  {id:"ajustes", label:"Ajustes"},
+  {id:"talk",    label:"Conversar"},
+];
+const SAIR={id:"sair", label:"Sair"};
+const STEAM_VERSION="v0.0.247 Patch";
+function talkItems(){
+  return [
+    {id:"about",   label:"Sobre você"},
+    {id:"project", label:"Sobre o DeltaruneVita"},
+    {id:"wolff",   label:"Quem é Wolff?"},
+    {id:"butter",  label:"O que é Butterscotch?"},
+    SAIR,
+  ];
+}
+function langItems(){
+  return LANGS.map(L=>{
+    let label=L.label;
+    if(L.base) label+="  (base)";
+    else if(!L.ready) label+="  (em breve)";
+    else if(selectedExtra===L.code) label="» "+L.label;
+    return {...L, label};
+  }).concat(SAIR);
+}
+function settingsItems(){
+  return [
+    {id:"sfx",   label:(sfxOn?"Desligar":"Ligar")+" som"},
+    {id:"music", label:(musicOn?"Desligar":"Ligar")+" música"},
+    {id:"cache", label:(cacheOn?"[x]":"[  ]")+" Incluir cache?"},
+    SAIR,
+  ];
+}
+
+const SEAM_LINES={
+  intro:"* Hee Heee... Um viajante do outro mundo. O que deseja hoje?",
+  choose:"* Escolha um idioma nas prateleiras, ou o que quiser.Você que sabe...",
+  core:"* Inglês e Japonês são originais. Já vêm junto, viajante.",
+  rem:"* Sem esse idioma extra, então.Fica só o original.",
+  soon:"* Esse idioma ainda nãochegou à prateleira...",
+  needsteam:"* Primeiro me mostre sua cópia original do DELTARUNE da Steam.",
+  steamok:"* DELTARUNE encontrado! Versão "+STEAM_VERSION+", correto? Clique em Aplicar para gerar os dados PS Vita.",
+  steambad:"* Hmm... isso não me parece com DELTARUNE...Verifique o arquivo informado.",
+  nopicker:"* Seu navegador não abre pastas.Use Chrome ou Edge, viajante.",
+  ajustes:"* Deixe-me abrir a gavetados ajustes...",
+  cacheon:"* Bom, isso é bom.Poupará seu tempo durante o jogo.",
+  cacheoff:"* Sem cache, então.",
+  sair:"* Tudo no seu tempo...",
+  done:"* Pronto! \n* Agora é só extrair e colocar a pasta 'deltarune/deltarunevita' em 'ux0:/data'. \n* Bom jogo!",
+};
+function versionLine(L){
+  return "* "+L.label+", ótima escolha.A versão suportada é a v"+PORT_VERSION+".";
+}
+function speech(t){ type($("speech"),t); }
+
+/* pergunta do Seam (vai para a caixa da direita) e explicacao (dialogplus) */
+const QUESTION={
+  lang:"* Qual língua desejac onfigurar?",
+  ajustes:"* O que deseja ajustar?",
+  talk:"* Sobre o que deseja conversar, viajante?",
+};
+const TALK={
+  about:"* Eu? Já fui muitas coisas... Um brinquedo. Um guardião. Hoje, só um velho lojista num canto esquecido do mundo.",
+  project:"* O DeltaruneVita é um projeta que leva o jogo 'Deltarune' ao portátil PS Vita.Um port feito com carinho e que só foi possível graças a projetos como o VitaGL e ao Butterscotch.",
+  wolff:"* Wolff... Também conhecido como 'WolffsRoom'... é o responsável por trás deste port e deste patcher, ou melhor, dessa loja? \n* Hee Hee... já nem sei mais.",
+  butter:"* Butterscotch? Hmm...Se não me engano é o que faz as engrenagens do DeltaruneVita girarem por dentro de tudo. \n* Doce, e essencial.",
+};
+const EXPLAIN={
+  CORE:"Inglês e Japonês sempre estarão incluídos nos arquivos gerados.",
+  PTBR:"* Baixará o mod 'PTBR' da TEIARRUMA nos arquivos gerados pelo Patcher.",
+  ES:"* Tradução em espanhol.Ainda não disponível.",
+  DE:"* Tradução em alemão.Ainda não disponível.",
+  sfx:"* Liga ou desliga os efeitos sonoros do menu.",
+  music:"* Liga ou desliga a música ambiente da loja.",
+  cache:"* Arquivo opcional de cache para reduzir os loading no jogo.",
+  sair:"* Voltar ao menu anterior.",
+  about:"* Deixe o velho Seamfalar de si mesmo.",
+  project:"* Sobre este portepara o PS Vita.",
+  wolff:"* O criador por trásde tudo isto.",
+  butter:"* Uma curiosidadesobre o motor do porte.",
+};
+
+/* ================= progress bar ================= */
+const pbar=$("pbar"), pfill=pbar.firstElementChild;
+function showBar(on){ pbar.style.display=on?"block":"none"; if(!on)pfill.style.width="0"; }
+function setBar(p){ pfill.style.width=Math.max(0,Math.min(100,p))+"%"; }
+
+/* ================= render =================
+   MAIN:     menu na direita (#options), fala do Seam na esquerda (#speech)
+   SUBMENU:  lista na esquerda (#speech), pergunta do Seam na direita (#options),
+             explicacao no dialogplus (#plus) que sobe de baixo. */
+function subList(){ return screen==="lang"? langItems() : screen==="ajustes"? settingsItems() : talkItems(); }
+const RET_INDEX={lang:0, ajustes:3, talk:4};
+function itemKey(it){ return it.code||it.id; }
+function sayQ(t){ type($("options"), t); }   // fala/pergunta do Seam -> caixa direita
+
+function renderRows(box,list,onEnter,onClick){
+  box.innerHTML="";
+  list.forEach((it,idx)=>{
+    const row=document.createElement("div");
+    row.className="opt"+(idx===active?" active":"");
+    row.innerHTML='<img class="h" src="assets/hearth1.png">'+it.label;
+    row.onmouseenter=()=>{ if(!busy&&!pending&&active!==idx) onEnter(idx); };
+    row.onclick=()=>{ if(busy)return; onClick(idx); };
+    box.appendChild(row);
+  });
+}
+function showExplain(){
+  const it=subList()[active];
+  $("plus").innerHTML='<div class="ptitle">* SOBRE</div>'+(EXPLAIN[itemKey(it)]||"").replace(/\n/g,"<br>");
+}
+let confirmSel=0;   // 0 = Sim, 1 = Nao
+function renderConfirm(){
+  const box=$("options"); box.innerHTML="";
+  const q=document.createElement("div"); q.textContent="* Confirma?"; q.style.marginBottom=".25em";
+  box.appendChild(q);
+  ["Sim","Não"].forEach((lbl,idx)=>{
+    const row=document.createElement("div");
+    row.className="opt"+(idx===confirmSel?" active":"");
+    row.innerHTML='<img class="h" src="assets/hearth1.png">'+lbl;
+    row.onmouseenter=()=>{ if(!busy&&confirmSel!==idx){confirmSel=idx;play(A.move);renderConfirm();} };
+    row.onclick=()=>{ if(busy)return; confirmSel=idx; resolveConfirm(); };
+    box.appendChild(row);
+  });
+}
+function render(){
+  const sub = screen!=="main";
+  const showPlus = sub && screen!=="talk";   // Conversar nao usa o dialogplus
+  $("seam-wrap").classList.toggle("left", sub);
+  $("plusbg").classList.toggle("show", showPlus);
+  $("plus").classList.toggle("show", showPlus);
+  if(!showPlus) $("plus").innerHTML="";       // limpa o texto que ficava la
+  if(!sub){
+    renderRows($("options"), MAIN,
+      idx=>{active=idx;play(A.move);render();},
+      idx=>{active=idx;activate();});
+    return;
+  }
+  renderRows($("speech"), subList(),
+    idx=>{active=idx;play(A.move);render();},
+    idx=>{active=idx;activate();});
+  if(showPlus) showExplain();
+  if(pending) renderConfirm();
+}
+
+/* ================= interaction ================= */
+function enterSub(which){
+  screen=which; active=0; pending=false; play(A.sel);
+  setSeam("talk"); sayQ(QUESTION[which]); render();
+}
+function activate(){
+  if(screen==="main"){
+    const it=MAIN[active];
+    if(it.id==="lang") enterSub("lang");
+    else if(it.id==="steam") pickSteam();
+    else if(it.id==="apply") apply();
+    else if(it.id==="ajustes") enterSub("ajustes");
+    else if(it.id==="talk") enterSub("talk");
+    return;
+  }
+  // submenu
+  if(pending) return resolveConfirm();
+  const it=subList()[active];
+  if(it.id==="sair") return exitSub();
+  if(screen==="talk"){ return talkSpeak(it.id); }   // resultado no dialog1
+  if(screen==="lang"){
+    if(it.base){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.core); return; }
+    if(!it.ready){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.soon); return; }
+  }
+  pending=true; confirmSel=0; play(A.sel); setSeam("talk"); render();   // Confirma? Sim ou Nao
+}
+function resolveConfirm(){
+  if(confirmSel===1) return cancelConfirm();   // Nao
+  pending=false; play(A.sel);
+  const it=subList()[active];
+  if(screen==="lang"){
+    const L=LANGS[active];
+    if(selectedExtra===L.code){ selectedExtra=null; setSeam("idle"); sayQ(SEAM_LINES.rem); }
+    else{ selectedExtra=L.code; setSeam("laugh",1200); sayQ(versionLine(L)); }
+  }else{
+    if(it.id==="sfx") sfxOn=!sfxOn;
+    else if(it.id==="music"){ musicOn=!musicOn; musicOn?startMusic():stopMusic(); }
+    else if(it.id==="cache") cacheOn=!cacheOn;
+    if(it.id==="cache"&&cacheOn){ setSeam("laugh",1500); sayQ(SEAM_LINES.cacheon); }
+    else { setSeam("idle"); sayQ(QUESTION[screen]); }
+  }
+  render();
+}
+function cancelConfirm(){
+  pending=false; play(A.swing); setSeam("idle");
+  sayQ(QUESTION[screen]); render();
+}
+/* Conversar: resultado ocupa o dialog1 (caixa unica); ao terminar volta as opcoes */
+let talking=false, talkTimer=null;
+function talkSpeak(id){
+  play(A.sel); setSeam("laugh",1600); talking=true;
+  showDialog("single");                        // mostra dialog1, esconde speech/options
+  $("plus").classList.remove("show"); $("plusbg").classList.remove("show");
+  $("seam-wrap").classList.remove("left");     // Seam volta ao centro
+  type($("single"), TALK[id], ()=>{ talkTimer=setTimeout(returnToTalk,2600); });
+}
+function returnToTalk(){
+  clearTimeout(talkTimer); talking=false;
+  showDialog("split"); screen="talk"; pending=false;
+  sayQ(QUESTION.talk); render();
+}
+function exitSub(){
+  play(A.sel); setSeam("idle");
+  const ret = RET_INDEX[screen] ?? 0;
+  screen="main"; active=ret; pending=false;
+  render(); speech(SEAM_LINES.sair);
+}
+function back(){
+  if(screen==="main"){ play(A.swing); return; }
+  if(pending) return cancelConfirm();
+  exitSub();
+}
+
+let doneState=false;
+document.addEventListener("keydown",e=>{
+  if(e.repeat) { e.preventDefault(); return; }
+  if(typeState){ e.preventDefault(); skipType(); return; }     // adianta a fala do Seam
+  if(introPlaying){
+      e.preventDefault();
+      if(introTimer){
+          clearTimeout(introTimer); introTimer=null; introPlaying=false;
+          showDialog("split"); speech(SEAM_LINES.choose); render(); resetIdle();
+      }
+      return;
+  }
+  if(doneState){
+      e.preventDefault();
+      if(["Enter", "z", "Z", "x", "X"].includes(e.key)){
+          doneState=false;
+          showDialog("split"); screen="main"; active=0;
+          speech(SEAM_LINES.choose); render(); resetIdle();
+      }
+      return;
+  }
+  if(busy){ e.preventDefault(); return; }
+  resetIdle();
+  if(talking){ e.preventDefault(); returnToTalk(); return; }   // pular resultado do Conversar
+  if(["ArrowDown","ArrowUp","ArrowLeft","ArrowRight"].includes(e.key)){ e.preventDefault();
+    if(pending){ confirmSel=(confirmSel+1)%2; play(A.move); renderConfirm(); return; }
+    if(e.key==="ArrowLeft"||e.key==="ArrowRight") return;
+    const n = screen==="main"? MAIN.length : subList().length;
+    active=(active+(e.key==="ArrowDown"?1:n-1))%n; play(A.move); render(); }
+  else if(e.key==="Enter"||e.key==="z"||e.key==="Z"){ e.preventDefault(); activate(); }
+  else if(e.key==="x"||e.key==="X"){ e.preventDefault(); back(); }
+});
+
+/* ================= File System Access + SHA-256 ================= */
+async function loadManifest(){ 
+  if(!manifest){ 
+    manifest=typeof manifestData!=='undefined'?manifestData:null; 
+    if(manifest) PORT_VERSION=manifest.port_version||PORT_VERSION; 
+  } 
+  return manifest; 
+}
+async function sha256(buf){ const h=await crypto.subtle.digest("SHA-256",buf);
+  return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
+async function getFile(dir,rel){ const p=rel.split("/"); let h=dir;
+  for(let i=0;i<p.length-1;i++) h=await h.getDirectoryHandle(p[i]);
+  return (await h.getFileHandle(p[p.length-1])).getFile(); }
+
+async function pickSteam(){
+  play(A.sel);
+  if(!window.showDirectoryPicker){ setSeam("oh",1200); speech(SEAM_LINES.nopicker); return; }
+  try{
+    let dir=await window.showDirectoryPicker({id:"deltarune-steam"});
+    try{ await dir.getFileHandle("DELTARUNE.exe"); }
+    catch(_){ dir=await dir.getDirectoryHandle("DELTARUNE"); }
+    await dir.getFileHandle("DELTARUNE.exe");
+    await dir.getFileHandle("data.win");
+    steamHandle=dir; setSeam("laugh",900); speech(SEAM_LINES.steamok);
+  }catch(err){ steamHandle=null; setSeam("oh",900); speech(SEAM_LINES.steambad); }
+  render();
+}
+
+/* ================= Aplicar (comenta + gera no dialog1) ================= */
+function toSingle(){                 // troca para o dialog1 (caixa unica)
+  showDialog("single");
+  $("plus").classList.remove("show"); $("plusbg").classList.remove("show");
+  $("seam-wrap").classList.remove("left");
+}
+function apply(){
+  if(!steamHandle){ play(A.swing); setSeam("oh",900); speech(SEAM_LINES.needsteam); return; }
+  const L=selectedExtra?LANGS.find(x=>x.code===selectedExtra):null;
+  const langName=L?L.label:"Original";
+  const dir="'"+steamHandle.name+"'";
+  play(A.sel); setSeam("laugh",1200);
+  toSingle();
+  type($("single"),
+    "* Então vou aplicar:\n* "+langName+"\n* na versão v"+PORT_VERSION+"\n* em "+dir+(cacheOn?"  (+cache)":"")+".",
+    ()=>setTimeout(generate,700));
+}
+
+async function generate(){
+  if(busy||!steamHandle) return;
+  busy=true;
+  const el=$("single");
+  showBar(true); setBar(0);
+  try{
+    // manifesto: em file:// o fetch e bloqueado (CORS)
+    let m=await loadManifest();
+    if(!m) throw new Error("Não foi possível carregar o manifest.json (CORS ou erro de rede). Você abriu como file://? Tente rodar um servidor web local.");
+
+    // FASE 1 — baixar idioma
+    if(selectedExtra){
+      const L=LANGS.find(x=>x.code===selectedExtra);
+      await typeAsync(el,"* Baixando o idioma "+L.label+"...");
+      for(let p=0;p<=100;p+=4){ setBar(p);
+        setLine(el,"* Baixando "+L.label+"... "+p+"%  ("+(L.size*p/100).toFixed(1)+" / "+L.size.toFixed(1)+" MB)");
+        await sleep(45); }
+    }
+    if(cacheOn){
+      await typeAsync(el,"* Baixando o cache...");
+      for(let p=0;p<=100;p+=8){ setBar(p); setLine(el,"* Baixando o cache... "+p+"%"); await sleep(35); }
+    }
+
+    // FASE 2 — verificar a Steam
+    await typeAsync(el,"* Verificando os arquivos da Steam...");
+    const req=Object.entries(m.required_sources||{}); let bad=0;
+    for(let i=0;i<req.length;i++){
+      const [rel,exp]=req[i];
+      try{ const f=await getFile(steamHandle,rel);
+        if(f.size!==exp.size) throw 0;
+        if(await sha256(await f.arrayBuffer())!==exp.sha256) throw 0;
+      }catch(_){ bad++; }
+      setBar((i+1)/req.length*100);
+      if(i%2===0||i===req.length-1){ setLine(el,"* Verificando Steam... "+(i+1)+"/"+req.length+" (SHA-256)"); await sleep(0); }
+    }
+    if(bad){ showBar(false); setSeam("oh",1800);
+      await typeAsync(el,"* "+bad+" arquivo(s) não conferem.\n* Não posso continuar assim, viajante.");
+      busy=false; return; }
+
+    // FASE 3 — aplicar o patch
+    await typeAsync(el,"* Aplicando o patch nos arquivos...");
+    const zip = new JSZip();
+    const wanted=m.files.filter(r=>{ const mm=/deltarunevita\/mods\/([^/]+)\//.exec(r.output);
+      return mm? (selectedExtra===mm[1]) : true; });
+    let copies=0,patches=0;
+    for(let i=0;i<wanted.length;i++){
+      let fObj = wanted[i];
+      if(fObj.mode==="copy"){
+        copies++;
+        try {
+          const f = await getFile(steamHandle, fObj.source);
+          const arrayBuf = await f.arrayBuffer();
+          zip.file(fObj.output, arrayBuf);
+        } catch(e) { console.error("Faltando:", fObj.source); }
+      } else {
+        patches++;
+      }
+      setBar((i+1)/wanted.length*100);
+      if(i%15===0||i===wanted.length-1){ setLine(el,"* Aplicando patch... "+(i+1)+"/"+wanted.length+" arquivos"); await sleep(5); }
+    }
+    console.log("lang:",selectedExtra||"EN/JP","| copy:",copies,"| bspatch(pendente):",patches,"| cache:",cacheOn);
+    
+    showBar(true); setBar(100);
+    setLine(el,"* Empacotando arquivos (ZIP)... Isso pode demorar.");
+    await sleep(100);
+    
+    const blob = await zip.generateAsync({type:"blob"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "deltarune_vita_patch.zip";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    showBar(false);
+    setSeam("laugh",2400);
+    type(el,SEAM_LINES.done);
+    doneState = true;
+  }catch(err){
+    showBar(false); setSeam("oh",1800);
+    type(el,"* Algo deu errado ao gerar.\n* "+((err&&err.message)||err));
+    doneState = true;
+  }
+  busy=false;
+}
+
+/* ================= ocioso (Seam cutuca) ================= */
+let idleTimer=null;
+const IDLE_MS=15000;
+const NUDGES=[
+  "* Vamos, não tenho o dia todo...",
+  "* Estou esperando, viajante.",
+  "* Hm? Ainda está aí?",
+  "* Decida-se... eu tenho outras coisas para fazer, sabe?",
+];
+function resetIdle(){
+  clearTimeout(idleTimer);
+  if(!shopStarted||busy||talking||introPlaying) return;
+  idleTimer=setTimeout(()=>{
+    if(busy||talking||introPlaying) return;
+    setSeam("talk");
+    const t=NUDGES[Math.floor(Math.random()*NUDGES.length)];
+    (screen==="main")? speech(t) : sayQ(t);
+    resetIdle();
+  }, IDLE_MS);
+}
+window.addEventListener("click",resetIdle);
+window.addEventListener("mousemove",resetIdle);
+
+let introPlaying=false, introTimer=null;
+
+// clique adianta a fala do Seam (menos ao clicar numa opção do menu)
+window.addEventListener("click",e=>{ 
+  if(typeState && !e.target.closest(".opt")) { skipType(); return; }
+  if(introPlaying && introTimer) {
+      clearTimeout(introTimer); introTimer=null; introPlaying=false;
+      showDialog("split"); speech(SEAM_LINES.choose); render(); resetIdle();
+  }
+});
+
+/* ================= boot ================= */
+let shopStarted=false;
+function startShop(){
+  if(shopStarted) return; shopStarted=true;
+  $("splash").classList.add("gone");        // logo some
+  introPlaying=true;
+  setTimeout(()=>{
+    $("fade").classList.add("gone");        // loja aparece do preto
+    type($("single"),SEAM_LINES.intro,()=>{
+      introTimer = setTimeout(()=>{ 
+          introTimer=null; introPlaying=false; 
+          showDialog("split"); speech(SEAM_LINES.choose); render(); resetIdle(); 
+      },3700);
+    });
+  },900);
+}
+function boot(){
+  showDialog("single");                     // pronto por tras da splash
+  // aguarda um gesto: desbloqueia audio (musica + fala) ANTES da 1a fala do Seam
+  const go=()=>{ startMusic(); startShop(); };
+  $("splash").addEventListener("click",go,{once:true});
+  window.addEventListener("keydown",go,{once:true});
+}
+boot();
+</script>
+</body>
+</html>

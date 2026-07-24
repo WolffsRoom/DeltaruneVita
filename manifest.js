@@ -1,0 +1,5552 @@
+const manifestData = {
+  "format": 3,
+  "game": "DELTARUNE",
+  "port_version": "0.63",
+  "output_folder": "deltarune",
+  "steam_folder": "DELTARUNE",
+  "optimizations": {
+    "console_borders": "RGBA PNG 960x544"
+  },
+  "required_sources": {
+    "chapter1_windows/options.ini": {
+      "size": 40,
+      "sha256": "26e34ad8f1f4d5aabe3b32a44847cdbe86adbf94a5c05eefb1f3e578c53a64c6"
+    },
+    "chapter1_windows/AUDIO_INTRONOISE.ogg": {
+      "size": 259154,
+      "sha256": "39e9dd180519d1929d280799ea8bff77ba899653de79e0954221fec14b1eca7b"
+    },
+    "chapter1_windows/audiogroup1.dat": {
+      "size": 8648200,
+      "sha256": "f007d82c5e133b56b9c068fac8e83211c9b6b6b4a4264a956c83edf929132182"
+    },
+    "chapter1_windows/data.win": {
+      "size": 13072876,
+      "sha256": "82c2bb61b8d78cd287120f6301588fecba34ec5a890bac711b7a8774c760ec70"
+    },
+    "chapter1_windows/lang/lang_en.json": {
+      "size": 542800,
+      "sha256": "6a1d6cfd166bc7220a8440e19a4dfbde923056e2af333bc00b1084a11953c08f"
+    },
+    "chapter1_windows/lang/lang_ja.json": {
+      "size": 700438,
+      "sha256": "63a096fb5ffb5b90df0a9e86530fd3a527f9b342263d5cbfa3249b6bd38fa17e"
+    },
+    "chapter1_windows/snd_closet_fall.ogg": {
+      "size": 119120,
+      "sha256": "49ade98cb1534fad9ff07b18b448d1b67563365f606275a8a230b279d1b5a3d2"
+    },
+    "chapter1_windows/snd_closet_impact.ogg": {
+      "size": 80298,
+      "sha256": "a041d05cf35d235e2bf9fde25a71e06d6e11efce33d4246b30c5d562556d848f"
+    },
+    "chapter1_windows/snd_great_shine.ogg": {
+      "size": 19635,
+      "sha256": "5e678b307b8639db0322db6023266d4fcc9e033788cf40cff11bf2234b4a115e"
+    },
+    "chapter1_windows/snd_paper_rumble.ogg": {
+      "size": 31366,
+      "sha256": "2a063a900e21794fadf11f7d8f3d17c7bcbf8cc90dec11975163078ce084e6ff"
+    },
+    "chapter1_windows/snd_paper_surf.ogg": {
+      "size": 31533,
+      "sha256": "8bc383e9cd6d40891304bee271da152af16a2293af1289f66d222a48c592a1b3"
+    },
+    "chapter1_windows/snd_revival.ogg": {
+      "size": 41340,
+      "sha256": "6ae4f3b0ae7da2ca6dec6754ed536e6ac2048d6515a3003f1cb4db4d03c7c42a"
+    },
+    "chapter1_windows/snd_rurus_appear.ogg": {
+      "size": 61668,
+      "sha256": "a55f77023e0bcb6181094cbc844cc04a7130aaebcaa07766a0a7afa7892223fc"
+    },
+    "chapter1_windows/snd_usefountain.ogg": {
+      "size": 101998,
+      "sha256": "62581259c63876700fbd339b0d7ba49aa7a39a6b74ba49dbbb341e48d96c5018"
+    },
+    "chapter2_windows/audiogroup1.dat": {
+      "size": 7048232,
+      "sha256": "560f46eca4b88d1273e5abb31aee65733e71bf39105b5283025d9e18b6905179"
+    },
+    "chapter2_windows/data.win": {
+      "size": 66951062,
+      "sha256": "116dcb1dda3517634571417fbe1db862d6381008526a4bf8ebde8ca88b7dc5f1"
+    },
+    "chapter2_windows/lang/lang_ja.json": {
+      "size": 1439144,
+      "sha256": "d8c3b929a46c470502ecece6a86648d384bc85ad3b201b576cc5a2cfa9e085a5"
+    },
+    "chapter2_windows/options.ini": {
+      "size": 63,
+      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49"
+    },
+    "chapter2_windows/snd_bigcar_yelp.ogg": {
+      "size": 7778,
+      "sha256": "7227d899a1d8712dc069f3b3bc7229899865e425e21256636bc8c5605ea77ba8"
+    },
+    "chapter2_windows/snd_dtrans_drone.ogg": {
+      "size": 192776,
+      "sha256": "f800be1425e584bfb3a602401d7213a83a137d2dd3872ae6cd062aece8eaef2b"
+    },
+    "chapter2_windows/snd_dtrans_flip.ogg": {
+      "size": 38277,
+      "sha256": "53c83f9a19ad956a22312941dcf6492e48bd43bf7de22fc2683dded6ac0e35b8"
+    },
+    "chapter2_windows/snd_dtrans_heavypassing.ogg": {
+      "size": 27935,
+      "sha256": "7af68ffbf6fff282f839e40dbb6fd0cc44f72a0c48d372aaf4d6ca39b908b8e3"
+    },
+    "chapter2_windows/snd_dtrans_lw.ogg": {
+      "size": 82329,
+      "sha256": "693a127d51c1ffdf2c196496cf0b95aefe0c8365bae39ead34a20645882ce5c5"
+    },
+    "chapter2_windows/snd_dtrans_square.ogg": {
+      "size": 27509,
+      "sha256": "bed1ee68a913c8900ef63fe6032728833362706f0e98b72e7a5b53965bc9b1cd"
+    },
+    "chapter2_windows/snd_dtrans_twinkle.ogg": {
+      "size": 53497,
+      "sha256": "af31b48ba91d8932728027d5f5fac8e4a47e4f0ca88e68827ccb1be1376209e5"
+    },
+    "chapter2_windows/snd_fountain_make.ogg": {
+      "size": 86934,
+      "sha256": "523da55498ad60313855e2befefb6659ef7eb79c78a5e0b9e194bb4027e66379"
+    },
+    "chapter2_windows/snd_fountain_target.ogg": {
+      "size": 4619,
+      "sha256": "aed05ae33c93d24da26f34b13b477c194ae963a2a1b511a232a61c5496d90eb0"
+    },
+    "chapter2_windows/snd_ghostappear.ogg": {
+      "size": 18349,
+      "sha256": "aa1855e7494c691056ebf8db149fc8cb292fbaa925f547e1373f761964432ca3"
+    },
+    "chapter2_windows/snd_great_shine.ogg": {
+      "size": 20854,
+      "sha256": "8f5a5053cd175683cdfa3830b73f7fe1b7203b679c4809dfdc08b4c761624de3"
+    },
+    "chapter2_windows/snd_him_quick.ogg": {
+      "size": 35156,
+      "sha256": "0ef382d5298b2d8daba246a46db398cb4dfc626a57c9c6f9595f1d9358442d36"
+    },
+    "chapter2_windows/snd_hitcar.ogg": {
+      "size": 10331,
+      "sha256": "b86b266cc572933a8882d26a0729225d6e308f5daefbc5fdf3a28c2e645992e3"
+    },
+    "chapter2_windows/snd_hitcar_little.ogg": {
+      "size": 8540,
+      "sha256": "559bed038778c622a85aa718fdc7ed713a8316b62ee84acccd56dfeaea2aee6b"
+    },
+    "chapter2_windows/snd_icespell.ogg": {
+      "size": 35258,
+      "sha256": "b1768b33d89ef31c72ea113d46cb6d4cf7038dc81490aca3efa7c500c633ce43"
+    },
+    "chapter2_windows/snd_power": {
+      "size": 31486,
+      "sha256": "5001978fb85cc92d61136b69b4aebf3ddaa979f26851d1fdc9a82e4829e7734d"
+    },
+    "chapter2_windows/snd_revival.ogg": {
+      "size": 45846,
+      "sha256": "e9dc59893281d2fd3cd06b38376f1d3de2f060ae1e144cb0f584916aee73b0b3"
+    },
+    "chapter2_windows/snd_smallcar_yelp.ogg": {
+      "size": 6008,
+      "sha256": "7bbb80dc81429345569d7eb6567f1068015cfa12012b85ee954d24b73458cc28"
+    },
+    "chapter2_windows/snd_snowgrave.ogg": {
+      "size": 44747,
+      "sha256": "e34f9737fb330ca8e32e10842b1fff51fcf19d94ddb3e63294864d2ccfcefa34"
+    },
+    "chapter2_windows/snd_spell_pacify.ogg": {
+      "size": 18420,
+      "sha256": "7cdd4890c8c6e134f5f37f4635447fe3ba0d108545ba030f968c212b0c119752"
+    },
+    "chapter2_windows/snd_usefountain.ogg": {
+      "size": 112368,
+      "sha256": "f1aa3197d0ee44afe3c58fb72dc9daf18c2a92abeb9e5cb0b11bca49445fbc3e"
+    },
+    "chapter3_windows/audiogroup1.dat": {
+      "size": 7444716,
+      "sha256": "d64444c103155c30c3bdf96fa6a70af722ae25b4cb0ed57ca30e572068f1968d"
+    },
+    "chapter3_windows/data.win": {
+      "size": 126244594,
+      "sha256": "f24458adcd1faf8d8ba432addea03fc265adf831e7fd92c130d92a87bb858dc5"
+    },
+    "chapter3_windows/lang/lang_ja.json": {
+      "size": 1460118,
+      "sha256": "164ae8054d5bd6b1de9046ce3be9b264c9f35288e841798a83ab4c96b400e1c3"
+    },
+    "chapter3_windows/vid/tennaIntroF1_compressed_28.mp4": {
+      "size": 8095070,
+      "sha256": "e3a54a9c89e0c406f5cb5a33785b61c6b5870dd999d1f8ad2958414efcb1eb68"
+    },
+    "chapter3_windows/vid/tennaIntroJPf1_compressed_28.mp4": {
+      "size": 7713827,
+      "sha256": "534660ef0c99af7bacad7372ae75f2164f7d42b5d4cd4d6654606174b2950655"
+    },
+    "chapter4_windows/audiogroup1.dat": {
+      "size": 7025372,
+      "sha256": "c5e8216f340a2444dcd44dfd384b1018b2f9105b4b542506c8aebbbdd8154bca"
+    },
+    "chapter4_windows/mus_undynescary.ogg": {
+      "size": 337354,
+      "sha256": "3c045885f2f655aeabd3edcdf68765c73a7c3c40c9dc11da9fc3dd56e28c1712"
+    },
+    "chapter5_windows/execute_program_pipe_x64.dll": {
+      "size": 125440,
+      "sha256": "a594a7205f6a4ccff42cb460dfa08bb54442cb3317c7bdc0fa0437d636359402"
+    },
+    "chapter5_windows/options.ini": {
+      "size": 133,
+      "sha256": "f3a19e09adf2d9edd2cb08b64999baf296543c3ba04a71a725119bf0a2ea0fe7"
+    },
+    "chapter5_windows/shader_replace_simple_x64.dll": {
+      "size": 153600,
+      "sha256": "c10210e3cd619774d63947116bd22fb3f60f2d992b21f3ffb0121393e596b124"
+    },
+    "chapter5_windows/snd_churchbell.ogg": {
+      "size": 145287,
+      "sha256": "a381880c647c8f20082ce4fcac30a082e6aa0db6fc0c1ac0fde701fa7173e981"
+    },
+    "chapter5_windows/vid/ch5_intro_en.mp4": {
+      "size": 4520993,
+      "sha256": "fcbe0a2f78d2dd77987cd0cffeb2d75adfd1a46c78ec625118bb44c54101d778"
+    },
+    "chapter5_windows/vid/ch5_intro_jp.mp4": {
+      "size": 4482399,
+      "sha256": "7b7bc761a65685ea379cfc8389b396487351c6052d6396a461a504dde60b6a67"
+    },
+    "mus/4rd_sanctuary.ogg": {
+      "size": 1277118,
+      "sha256": "1e55bdf2f8f563d9470bdf2e11a7b194cb833ba333a461ed28a3213032191af0"
+    },
+    "mus/4rd_sanctuary_noguit.ogg": {
+      "size": 1276612,
+      "sha256": "f3b9e96939ad392b4917d1d0d2ac6924ce26d73fbea00a1177e24477e578355e"
+    },
+    "mus/acid_tunnel.ogg": {
+      "size": 1080250,
+      "sha256": "a5885437e7ec959bc49e07f03ec29d2396dc7326b76452cedc64ec71c3094d26"
+    },
+    "mus/afterrain_inside.ogg": {
+      "size": 171837,
+      "sha256": "01f01e52aee729ad1c49b71e236319a93dfbe993a9a9df497ec9c6666a3da7d9"
+    },
+    "mus/alarm_titlescreen.ogg": {
+      "size": 135921,
+      "sha256": "988ca27af02641debb39f2b1f7d3627239944d33623641bc8f6767b63f831721"
+    },
+    "mus/alley_ambience.ogg": {
+      "size": 154136,
+      "sha256": "de97e5f7ae12558e7f745dcd2d6b6729aa6346164791c110c359d489eae90709"
+    },
+    "mus/alt_church_lobby.ogg": {
+      "size": 173096,
+      "sha256": "be39128f184fbb2ab2efa55e60b47cf989e2f685a5150d15a136ec34debe82fb"
+    },
+    "mus/ambientwater_weird.ogg": {
+      "size": 77284,
+      "sha256": "eec120522b3478330ee1a8edb34fafbd1f6bd71300a7eae37e81eaf040649c9f"
+    },
+    "mus/annoying_prophecy.ogg": {
+      "size": 111648,
+      "sha256": "fdd18ec02190f5b0a3f7ce699c2a0418b6db27a967a28c4fcf7561dd79e814a4"
+    },
+    "mus/april_2012.ogg": {
+      "size": 254813,
+      "sha256": "a54c6916058beafd57b78b2c15fe54e26edabbb87e5cc364be572991f140a978"
+    },
+    "mus/asgore_conspiracy.ogg": {
+      "size": 1464398,
+      "sha256": "dbc2dfd4d2cb335779448fc8805cc3dd7d8008e20451eea0a3f9b3b145e40663"
+    },
+    "mus/asgore_serious.ogg": {
+      "size": 641207,
+      "sha256": "bcdfe43b7d93dd6a533c4350c34caa3b8caaeff285959fa65217ae5b4f529d53"
+    },
+    "mus/asgore_serious_drum_only_flowery_version.ogg": {
+      "size": 388901,
+      "sha256": "3443e9d53389880cd851ec66fa6b0172944f666dcf7b8032ca43d582325503f2"
+    },
+    "mus/asgore_serious_drum_only_low.ogg": {
+      "size": 252984,
+      "sha256": "877cad383236e2dd3731420e7ee21b63b50b0de78d6e26bf9cf539a2c31e0741"
+    },
+    "mus/AUDIO_ANOTHERHIM.ogg": {
+      "size": 1169321,
+      "sha256": "b1561440e1e28256dfc225c3000e29c4f47e545f23b0b548e7608c8d01ec045d"
+    },
+    "mus/AUDIO_DARKNESS.ogg": {
+      "size": 709036,
+      "sha256": "5bfc97d97284e2c9d0f0b958e1c1242746c36524fb2b8acf6fea7a7aeaed1a40"
+    },
+    "mus/AUDIO_DEFEAT.ogg": {
+      "size": 361145,
+      "sha256": "6e9b9b354aa888f18d5f2e65625c4f4b8908afed10722fba6ba78cb831559d4b"
+    },
+    "mus/AUDIO_DRONE.ogg": {
+      "size": 186541,
+      "sha256": "2775a00f8fe492efe5ecc7a513e32b0ce407d1848db16ef9686caf9a2c8f54f2"
+    },
+    "mus/AUDIO_STORY.ogg": {
+      "size": 2149167,
+      "sha256": "1e16688900311c3be1a7d4243de5d4c82a7c52db6d8801b98507166c9f76fd43"
+    },
+    "mus/baci_distort.ogg": {
+      "size": 227624,
+      "sha256": "9d3ec3de55af443833ad7c65310aaf6a8de5282ceea44946bddcf0c283b9c570"
+    },
+    "mus/baci_perugina.ogg": {
+      "size": 322615,
+      "sha256": "2c9f6d6154340311c7c9a4c519a0ab4a870041ee5ff47412a32770627b1f77b9"
+    },
+    "mus/basement.ogg": {
+      "size": 642627,
+      "sha256": "c7ed445709f6e95e49cff548a0e8d2f68beca3ad7b273962ef88950905fc379f"
+    },
+    "mus/battle.ogg": {
+      "size": 1835051,
+      "sha256": "888c10611589bf38d540a472dedb43e25baed165fdcc77ff39fec37beeab3cd2"
+    },
+    "mus/battle_preview.ogg": {
+      "size": 810154,
+      "sha256": "e0f0ab02eb7652ebb7780fcd18f3a3e5a72ac8832609656efedbb480ff34954d"
+    },
+    "mus/battle_preview_crisp.ogg": {
+      "size": 830983,
+      "sha256": "b144f0ae8a82e828264df5bd8def289f5fe50abeb5672b5bde740b14f50e4803"
+    },
+    "mus/battle_vapor.ogg": {
+      "size": 1871203,
+      "sha256": "7e4c4ea18785bd84dffae7006db01812b6664b64f12fabbf9531da2e5ce0a540"
+    },
+    "mus/bell_ambience.ogg": {
+      "size": 318912,
+      "sha256": "e75c31b959ed2ab2644614286676e654dc0024f7f7b122f1765ff7c89616a51e"
+    },
+    "mus/berdly_audience.ogg": {
+      "size": 20501,
+      "sha256": "04ba3a20fa0215af79f1e5d5bf55aabda1933db478b89787f711332ae3708905"
+    },
+    "mus/berdly_battle_heartbeat_true.ogg": {
+      "size": 180749,
+      "sha256": "d35a5e419fdde1fb060184b612c6c2ed14de314bbf5018a715f8418f9704f6b8"
+    },
+    "mus/berdly_chase.ogg": {
+      "size": 913570,
+      "sha256": "f6e61a27e91fcd4cfdb5330ef1fac4c899ddb8ccd825108128081f34d0e5a975"
+    },
+    "mus/berdly_descend.ogg": {
+      "size": 62101,
+      "sha256": "d0b6a705e1409f8dbf0bb4bd875222e4b5e1ed742a34fe66ab5c267071a83675"
+    },
+    "mus/berdly_flashback.ogg": {
+      "size": 394150,
+      "sha256": "9223a89c45fb635e668e5d6c1105d8c85a0d64942ce4569140b8aaa69c637984"
+    },
+    "mus/berdly_theme.ogg": {
+      "size": 822325,
+      "sha256": "37607654b59ae56bce25eb242daf281dfffb82f2db5def3ffb494007513b990a"
+    },
+    "mus/bird.ogg": {
+      "size": 160948,
+      "sha256": "1067ae035a82e2884ac4f563cf9ab2af3da1453a4173a45e21422df417bef361"
+    },
+    "mus/birds_ch5.ogg": {
+      "size": 130833,
+      "sha256": "faedc48a9320fadaf2d1355a11b1fd5fff50b3408cf52d4a64eb38d5dd3da28d"
+    },
+    "mus/blue_flower.ogg": {
+      "size": 2131749,
+      "sha256": "6523589f7980e003bbaa41f1226afa59f5ed45021979db2b106749c477859c0e"
+    },
+    "mus/board4_rhythm.ogg": {
+      "size": 279404,
+      "sha256": "cd1e28119081029052cbffd112aec8331e8e748df8924083f78ac224422f3319"
+    },
+    "mus/board_4.ogg": {
+      "size": 373844,
+      "sha256": "ab38a519038d1227684880b162e5a02b576b22f8e27edf0920078e2397669692"
+    },
+    "mus/board_4_challenge.ogg": {
+      "size": 374063,
+      "sha256": "d6d4e68470bce1af95a7084729916d69ad6cca08c349064eb53c5d6b903aa6f6"
+    },
+    "mus/board_lancer_dig.ogg": {
+      "size": 86056,
+      "sha256": "9cc773502021c4ac8a0c46a19b333dd3e21999609d3c5a4b57f17705b6f07662"
+    },
+    "mus/board_ocean.ogg": {
+      "size": 80285,
+      "sha256": "6c115db065f47091820bfbb707c885b90ceee4af6028acc1ca3ab349db4819c1"
+    },
+    "mus/board_sword_music.ogg": {
+      "size": 1069618,
+      "sha256": "a3e871a40ea33d721b4a4028d0b73ae19dce5424e8ec73ce1fc2295768b206c0"
+    },
+    "mus/board_zelda.ogg": {
+      "size": 725447,
+      "sha256": "0973ef6e0d75863df58003f834087ce60382f3f9b21da3d6ce1d3285bfa87027"
+    },
+    "mus/boxing_boss.ogg": {
+      "size": 1447802,
+      "sha256": "b748216307bcd291993c5f28db330d8a87ba34d14ea06a8c96bb407fa29a3cfb"
+    },
+    "mus/boxing_boss_preview.ogg": {
+      "size": 757579,
+      "sha256": "d4edd4ddb2cd4ce44e390606dd266f8eb3991787fed68fd42339ddb01fab738d"
+    },
+    "mus/boxing_boss_preview_crisp.ogg": {
+      "size": 615205,
+      "sha256": "90b7dc60b6d4def77e41798014b2ed16773bd8541d26c4e5f662c4e809d9a2e7"
+    },
+    "mus/boxing_game.ogg": {
+      "size": 183278,
+      "sha256": "1166725cfe9da3d7450d414991766bd6214b0bbc84f5c237d2a7ab327b431804"
+    },
+    "mus/bratty_confession.ogg": {
+      "size": 646901,
+      "sha256": "5df861c02cc8731aca7cf721cdfa1cdd0bd710acb251ecb919e64dc92f449478"
+    },
+    "mus/card_castle.ogg": {
+      "size": 625137,
+      "sha256": "fbcdf4c29e14a2ab1566d3179faee537551effbed89e554cfbf1de63c953170c"
+    },
+    "mus/carol_appeared.ogg": {
+      "size": 595184,
+      "sha256": "39feaa3bc118850d59da709d274d79bfa1d0218a463100824b050b1e3a5b38a5"
+    },
+    "mus/castle_foyer.ogg": {
+      "size": 851577,
+      "sha256": "39307fe5055e98246e5edfd2e4bca118ed3d985c12c6c7c9b9978cd20074bb30"
+    },
+    "mus/castle_funk_long.ogg": {
+      "size": 1439371,
+      "sha256": "fd6a1caf1a0c73b43618e46281f0f04ecc049636d79d72c75772cf44682e8f7d"
+    },
+    "mus/castle_intro.ogg": {
+      "size": 375274,
+      "sha256": "f4244abb4b82f4bcebb7c09edd5e329d1853cb6997abeb1d4aa57954d70f3b78"
+    },
+    "mus/castle_loop.ogg": {
+      "size": 933516,
+      "sha256": "a0999107881d907ae9094c3babbbc284c26966aff3dc457eb0bb5f0b192dc39b"
+    },
+    "mus/castle_top.ogg": {
+      "size": 2882175,
+      "sha256": "3c72afbd27bc4ac3c3be69fcde5a0795c0d0e44a1ede0a0bf0c0c36191cf13ea"
+    },
+    "mus/castletown.ogg": {
+      "size": 1537218,
+      "sha256": "82edd8d4590e1fe849dc3ef57565826608567cfa79387eaeb6b0537a7dc79ccf"
+    },
+    "mus/castletown_empty.ogg": {
+      "size": 1020494,
+      "sha256": "14476fe1d21706394ee2871d909e309a12c9122610818787743ad46638baa048"
+    },
+    "mus/catti_confession.ogg": {
+      "size": 486366,
+      "sha256": "9f68d173845a81c2fb118cef5e580d37a2dde61e703661bbb9b8a33ac1caf98a"
+    },
+    "mus/ch2_credits.ogg": {
+      "size": 747431,
+      "sha256": "7e9ebd7c1a70f6ff5e05aad82428dccd5bf0ff4b6bfa6d1cf0609dd757281b99"
+    },
+    "mus/ch3-practice_song_combined.ogg": {
+      "size": 527947,
+      "sha256": "37d9d14ba29d5a40bceaaa9ce65c7dd49dd091fb414ba51a4f5e0c448413a714"
+    },
+    "mus/ch3-practice_song_noguit.ogg": {
+      "size": 528047,
+      "sha256": "26e3141313df1cf6b8446002f34c2961ac9c8236f16fb3eb9eeb6de1270dff53"
+    },
+    "mus/ch3_board1.ogg": {
+      "size": 1221629,
+      "sha256": "73bfd2ec08c4803505dc8b319ded2e3967af6bb435ce01e6e6d415e02e0f8051"
+    },
+    "mus/ch3_board2.ogg": {
+      "size": 705128,
+      "sha256": "9ef0362b727a2faf6a983f659f59f8efe17d53e00027d68f936b46c5f284232e"
+    },
+    "mus/ch3_board3.ogg": {
+      "size": 839644,
+      "sha256": "d93027c8d564ad1802735c6a88f559eddcb1215f7c08da2a284918415b97578f"
+    },
+    "mus/ch3_karaoke_example_guit_only.ogg": {
+      "size": 116057,
+      "sha256": "dbf9386c0e6eae9cf29ebdcd2b61292d23dfd4c7fceac235aece019e8fabb57b"
+    },
+    "mus/ch3_karaoke_example_guitar_only_v2.ogg": {
+      "size": 1208860,
+      "sha256": "d453023eb0062c887067ae11b5394bfb8f10e917eb0dd9644db342e45875dbe7"
+    },
+    "mus/ch3_karaoke_example_noguit.ogg": {
+      "size": 257316,
+      "sha256": "8257e334eaacf649bf0914c0761d31b9bc240ae9c7a25c03a877de3d1c120f66"
+    },
+    "mus/ch3_karaoke_example_noguitar_v2.ogg": {
+      "size": 1652649,
+      "sha256": "3ec47da7ae2a88b6af7cc655ab24926b38314918091778d4eb94bba016252dfc"
+    },
+    "mus/ch3_karaoke_example_together_ex.ogg": {
+      "size": 1375309,
+      "sha256": "5cfe85a1afd6e245df809abbd6ccd70ed61c6a75c75ba099a15969d94f8c579d"
+    },
+    "mus/ch3_karaoke_full.ogg": {
+      "size": 2118413,
+      "sha256": "6486f0246fba0714e181aff4e294accf0cdf687bf902d7cdf698e39cd49c6658"
+    },
+    "mus/ch3_karaoke_no_guitar.ogg": {
+      "size": 2118843,
+      "sha256": "1e5a215eb91fd558066459aab6679e315ff27a06e32f654628e52b5e6fb809de"
+    },
+    "mus/ch3_karaoke_preview.ogg": {
+      "size": 693522,
+      "sha256": "40971f813253dba96434595f29b803a4b495b54e26b0e1c87b4ad63ab4b4e3be"
+    },
+    "mus/ch3_karaoke_preview_crisp.ogg": {
+      "size": 674202,
+      "sha256": "137454b3a91ada227992dd58b27c86b67655691324853f61119f1f66da527242"
+    },
+    "mus/ch3_south_of_the_border.ogg": {
+      "size": 52620,
+      "sha256": "9c36c1214c81390800163e7bf0b7cf9f59d9618b5b2a52aa8ab8bdd6047a08ad"
+    },
+    "mus/ch3_tvtime.ogg": {
+      "size": 336395,
+      "sha256": "d46a6c8bd598870573d4659bc0ddcafbe039f899dbf3c444bdb23023913c9bbd"
+    },
+    "mus/ch3_tvtime_guitar.ogg": {
+      "size": 237893,
+      "sha256": "14eb1a518be71f54a20e96407e8031054c09a682f9200e3b6818d0847d26cf77"
+    },
+    "mus/ch4_battle.ogg": {
+      "size": 2205886,
+      "sha256": "e6d33a873612f714a57b0545af58ca809df1ae146a8ab0a873222233b4459e79"
+    },
+    "mus/ch4_credits.ogg": {
+      "size": 1202576,
+      "sha256": "cabd353fd34397049173dfacc39b9e6879e2c5678953eacc4b3b58438cb00687"
+    },
+    "mus/ch4_extra_boss.ogg": {
+      "size": 3241909,
+      "sha256": "28b10e5483a42201eeafbe60dea657dd2ccdb1a8c8ac105135f31cda9218c56a"
+    },
+    "mus/ch4_first_intro.ogg": {
+      "size": 219338,
+      "sha256": "66d7ba4f7fc687ac99b52f54b065e8c0085b3fbe222e06a6a0f6b81d2d8a0716"
+    },
+    "mus/ch4_first_intro_breaking.ogg": {
+      "size": 48049,
+      "sha256": "802b737eb22841bec3663354782aec55b424c03261a12768b4f3cb4f41c15348"
+    },
+    "mus/ch5_credits.ogg": {
+      "size": 1575449,
+      "sha256": "33ddf5f70a7548503dfdb3ba51dbf811b5503faa2a021b355fe6a0b59b1d0744"
+    },
+    "mus/ch5_intro_audio.ogg": {
+      "size": 1238981,
+      "sha256": "f0379bd46bc9c783f391f8efb8775e3cca9917eef5b2d68dcde894c4b3395ead"
+    },
+    "mus/ch5_inversion_lake_chant.ogg": {
+      "size": 104565,
+      "sha256": "f3635fd310a979a6581bade7a7709b7a2d19a07fac86406459368f6cb4ab3392"
+    },
+    "mus/ch5_weird_monologue.ogg": {
+      "size": 653390,
+      "sha256": "583e43fdef696c9353b2c4c0d4448500c4f5e3dd8cb0631d23e5ef7e0e71a610"
+    },
+    "mus/ch5_weird_monologue_deep.ogg": {
+      "size": 634405,
+      "sha256": "6a0e5b3abd1415a6d1a4fd2750ead1c338c152c90656c8a9307829a3f2ba6861"
+    },
+    "mus/charjoined.ogg": {
+      "size": 76995,
+      "sha256": "7cf32a420acb036d45da9621b5695a2810dde2f9e9c28d6990b718da7753600d"
+    },
+    "mus/checkers.ogg": {
+      "size": 1496742,
+      "sha256": "44641263d1a7689a5fe7ec8ea864f039aa62a4829a2a67c25a453a4539868ad2"
+    },
+    "mus/church_dark_study.ogg": {
+      "size": 1920411,
+      "sha256": "a865bc5225c7faf7955f2c96277c3b220c2a643c4baa3566fa53c4277b2eeaa3"
+    },
+    "mus/church_hymn.ogg": {
+      "size": 344954,
+      "sha256": "7e81f8d496d3d2531720fdaf360d136601c43b08b7a996b7bb6c1c3042b5ed1c"
+    },
+    "mus/church_lightning.ogg": {
+      "size": 128809,
+      "sha256": "3ef405f1a32d2250a1218b5e25e3cc463511b2a567d790d277901024457b46b7"
+    },
+    "mus/church_lw.ogg": {
+      "size": 311960,
+      "sha256": "aecde43e34e33eb83773f7de49f828c8e38070bd1b60174c2569203b11ca8a2d"
+    },
+    "mus/church_lw_night.ogg": {
+      "size": 203717,
+      "sha256": "9748a515e9e2e09ea0ddae83508fccc155b389bdbf54c824421ec8a97541cb09"
+    },
+    "mus/church_wip.ogg": {
+      "size": 1294322,
+      "sha256": "466d855c9aff02a94b2bcb6525d63396f7db65f6807b496a64ffff56ad928d8a"
+    },
+    "mus/church_zone2_alt_longer_test.ogg": {
+      "size": 1773024,
+      "sha256": "00530061b2b4afad4a57871bf623b0b74c87558843b6e12156566a789be40b70"
+    },
+    "mus/church_zone3.ogg": {
+      "size": 4015406,
+      "sha256": "94186ca4a095cf4b1ff8f7739fa033c9d54f8ce3279edb53e50acb22eba89341"
+    },
+    "mus/cliff.ogg": {
+      "size": 4262926,
+      "sha256": "8ce0a91f950048d104d06e768c4804bb9f2645d14bc1b1d690bab7d2cb1735a3"
+    },
+    "mus/cliff_jump_ambience.ogg": {
+      "size": 246327,
+      "sha256": "9726e035f1d1b30c1821b75ebd082470f6246964957c0a855eb43fcaf4472341"
+    },
+    "mus/cliff_jump_ambience_nowind.ogg": {
+      "size": 244308,
+      "sha256": "38e984f58222a121dd1c67f84fd088da7159fbbf326b01d0ab8a21f5cf96b433"
+    },
+    "mus/climb.ogg": {
+      "size": 886187,
+      "sha256": "e8221960fcaba9a5259fabbcc7d439d4d2b2370436533f50085f40f0e7e8209a"
+    },
+    "mus/coolbeat.ogg": {
+      "size": 30374,
+      "sha256": "fb89f5e5887921dc626cc09f717f936b4797115513cef644e365b159f75a2e1c"
+    },
+    "mus/cowboy_song.ogg": {
+      "size": 124543,
+      "sha256": "0549be5e9f933f94c5560c7c3fa3ba1ba7453618c0d87fbe7e3c7fe3724b8ea8"
+    },
+    "mus/creepychase.ogg": {
+      "size": 826779,
+      "sha256": "d8efb5dfafd973ebbdc7bf367b0c8fdb76a12df9e416ff2b8bd26ba2deec903d"
+    },
+    "mus/creepydoor.ogg": {
+      "size": 1017491,
+      "sha256": "bd925c7e0aa46768cd7e4232a019e42ae4611b73dfc6fcbfbc54321d555077e9"
+    },
+    "mus/creepylandscape.ogg": {
+      "size": 856835,
+      "sha256": "875664e99e20dfa51fc85b7545074d957a5ae6540bc4cac730dcbafe2d37838b"
+    },
+    "mus/cyber.ogg": {
+      "size": 2000305,
+      "sha256": "ad67f509309ef6940d9c8e8513f7acf90daf7b1b848997c17785b1819b57a9b0"
+    },
+    "mus/cyber_battle.ogg": {
+      "size": 247149,
+      "sha256": "2c4d2e73370a0559b11f4181e44c2914be4a075a70ec6996c8181fcc408f4219"
+    },
+    "mus/cyber_battle_end.ogg": {
+      "size": 198362,
+      "sha256": "8dc8419ebd2ea93e05be6575f23eb991a3b21808135e5fe5468920c3379490de"
+    },
+    "mus/cyber_battle_prelude.ogg": {
+      "size": 206375,
+      "sha256": "4a66ee5f35d1f4cbb6cb83d5474ecb9458ae1dedf13436f636e091b37f0dee9f"
+    },
+    "mus/cyber_shop.ogg": {
+      "size": 548966,
+      "sha256": "6b6bd5179960c8a9b76e75d58e2cbf26d9995327256b33b2afb8ee82f32bf4c6"
+    },
+    "mus/cybercity.ogg": {
+      "size": 1575262,
+      "sha256": "8977006c6e41ae17ae7c482f919b1bf177cc6cc7fe11570e8e8fe5accc8570b3"
+    },
+    "mus/cybercity_alt.ogg": {
+      "size": 1008835,
+      "sha256": "69169f48eaa5ec03f1b035c4264b39b8ab50117274cc2d61aeb077071603b74d"
+    },
+    "mus/cybercity_old.ogg": {
+      "size": 1281025,
+      "sha256": "1744359850c2309edcfa43a75e33e527e0a4257f2ae56d23b34d2ecbe002b31a"
+    },
+    "mus/cyberhouse.ogg": {
+      "size": 356629,
+      "sha256": "73988c94d300bc6fc4d97fdcdc0108550feffea8cf35f7dacdff0e67d0b31e9f"
+    },
+    "mus/cybershop_christmas.ogg": {
+      "size": 479829,
+      "sha256": "fb9779e9b96be09fe4a4794d8ebd718e7b17ec03ccb1111b87138dc85f08b16b"
+    },
+    "mus/d.ogg": {
+      "size": 71666,
+      "sha256": "ea147c081b1e09e532731feecbf4f06899fb412ad69b1a7fb49e09b203b1dcf7"
+    },
+    "mus/dark_place.ogg": {
+      "size": 599200,
+      "sha256": "a74196f519b5e98545c05a40183b7e7ad3f3b1ef221783a8c0145ad35e976fd0"
+    },
+    "mus/darkchurch_intro.ogg": {
+      "size": 471291,
+      "sha256": "5e3f0bc7a7081c584446a2600351adba790833bd75532af37734247031a12e6c"
+    },
+    "mus/deep_noise.ogg": {
+      "size": 36147,
+      "sha256": "277e609b1fe5927d9b4355ced2206dd6eb0c51b3235b9b25ccafe3a2c06c2fae"
+    },
+    "mus/deltarune_logo_ch5_itoki.ogg": {
+      "size": 169833,
+      "sha256": "c306fdf10d3fa2cab44e545a2ba29d5ad1fd59e59cd987433cca889256a8379c"
+    },
+    "mus/deltarune_piano_collections_by_trevor_alan_gomes.ogg": {
+      "size": 633167,
+      "sha256": "28b87253a777cd9a3a363de9af72512ba0d3ef80b840d4a8f897d93250e82801"
+    },
+    "mus/dog_balloon.ogg": {
+      "size": 705617,
+      "sha256": "3cedf9522ae31562a0bd8cd6753585d5bf20766d3643d55faa78db3c26c2191e"
+    },
+    "mus/dogcheck.ogg": {
+      "size": 1002631,
+      "sha256": "0c74a92577a1828e4bfaea7578e0b3d5275b5c026d08d8031b446d00aeff0861"
+    },
+    "mus/dogroom.ogg": {
+      "size": 353905,
+      "sha256": "56e4cb91fe197bbfa09c25c59cfc28a2c87ff31ed7c454a3aeeb1b504020628b"
+    },
+    "mus/dontforget.ogg": {
+      "size": 1668222,
+      "sha256": "eba4b8a6c23d43100029d7f1fe5618d56d1e116f74ddc50b4604805aeb8878d7"
+    },
+    "mus/elevator.ogg": {
+      "size": 337320,
+      "sha256": "41f9d37b59c1bce64dc22c757dd1056595f1277fae90870aaf9717b935ff9572"
+    },
+    "mus/fanfare.ogg": {
+      "size": 317705,
+      "sha256": "decb5cc2aa07e949c88fe0e4dda03a1b0b481b831ffc79ee858d5e4ea26f9a63"
+    },
+    "mus/festival.ogg": {
+      "size": 1463550,
+      "sha256": "e71cc5128acd44d784b80f43e0891572dda8f2de3e8b8891f6f80cba1d4b17ab"
+    },
+    "mus/festival_after.ogg": {
+      "size": 2524463,
+      "sha256": "a58eaebe1ffbf1b14e742e29d9ba349c141f417ff3d36e95536a3bca74c336ef"
+    },
+    "mus/festival_night.ogg": {
+      "size": 2197002,
+      "sha256": "e0500ef8fe142b92233e3443aad29ea7e45a136b0e0cc62e3a2238d8a56166dc"
+    },
+    "mus/field_of_hopes.ogg": {
+      "size": 2626672,
+      "sha256": "5ac53e8aeb510f2df3117fdbfc38ae56dfb810f2ee40ae502ca285b2d7858d3b"
+    },
+    "mus/field_of_hopes_insaneintherain_intro.ogg": {
+      "size": 1892123,
+      "sha256": "642436fc6472322ce2f1a53f379e36186165733a50b90072c1fb9d1dd88b4cd0"
+    },
+    "mus/field_of_hopes_insaneintherain_loop.ogg": {
+      "size": 10179958,
+      "sha256": "67f750e78fa9d760743f15055b73b03f40b9d8ac87c9a5783292c09f82c31fad"
+    },
+    "mus/field_of_hopes_preview.ogg": {
+      "size": 807937,
+      "sha256": "1cfe088b3f4ffa87ec0c1f19863afdf89c2a086a21bd390e51ef4f52ccea1587"
+    },
+    "mus/field_of_hopes_preview_crisp.ogg": {
+      "size": 778147,
+      "sha256": "fe74936451db289460a722af0b2b66c8b1bd229f01529f324f383ac152ecacf6"
+    },
+    "mus/findher.ogg": {
+      "size": 450225,
+      "sha256": "c0f55add29c085615ac309a1ac4ba224cbf5c4d3e74b0b25cc6276d083b0a5d1"
+    },
+    "mus/flashback_excerpt.ogg": {
+      "size": 190018,
+      "sha256": "6caa0cba85eee933efea6e109db25361ca01fc002b1037c100b3bfe2e53d1774"
+    },
+    "mus/flower_cafe.ogg": {
+      "size": 1811026,
+      "sha256": "013c53f2cd2a00c05f0960bc9f9a47f327e7b42741111703e20aff0345b95e4b"
+    },
+    "mus/flower_castle.ogg": {
+      "size": 6561923,
+      "sha256": "7107a9a2f912f54aacaad053765af30b04557061cc8ad71a1c359f27fb6c16ad"
+    },
+    "mus/Flowerman_Arrangement.ogg": {
+      "size": 4664906,
+      "sha256": "62800fc9e65ca9854fe8618109087fa9d4ceeb3a87b80b9b3d71046b41795fde"
+    },
+    "mus/flowery.ogg": {
+      "size": 813850,
+      "sha256": "7222bb5bdc73c018735da7645eb629c9dcbe66a52668f3b890f7a8d2cb73d605"
+    },
+    "mus/flowery_diner_romantic.ogg": {
+      "size": 1045682,
+      "sha256": "6335f1f19b91cf2e806d201e1137d53317dfad13f854767df6db0166136c9b68"
+    },
+    "mus/flowery_iog.ogg": {
+      "size": 271809,
+      "sha256": "1da4cc13c44b7d59182fc5767f48acebb9777e4d880f28359c5aa8e7e6dcf8e1"
+    },
+    "mus/flowery_iog_extended.ogg": {
+      "size": 1526505,
+      "sha256": "9254bca9979d290019f6f92c7e727bb929b473f43167e88a3168c3601819eb01"
+    },
+    "mus/flowery_sad.ogg": {
+      "size": 2067296,
+      "sha256": "0d40a02f9e32bd7b901ff9ad635d554d11937e6811460836b354d159d6cb8275"
+    },
+    "mus/flowery_skateboard.ogg": {
+      "size": 173116,
+      "sha256": "60ada87726455c07fdc6b993584a7515442f5e92c28c0b6be8f9c428fcdc17fc"
+    },
+    "mus/forest.ogg": {
+      "size": 1818757,
+      "sha256": "1b23b35edc20c563422e124214f468ca54973ef04c35e3da00382f6382906186"
+    },
+    "mus/friendship.ogg": {
+      "size": 1614731,
+      "sha256": "4d9ab9b026f1ade5adf12cfac69f8ea71293cb3a617c1cb5c7249bb734515394"
+    },
+    "mus/GALLERY.ogg": {
+      "size": 418561,
+      "sha256": "c40529f38f2575318c7d8e6f17a28509a2994e2a4d8136badb2f89dd8169ffea"
+    },
+    "mus/gameover_short.ogg": {
+      "size": 97567,
+      "sha256": "22440da982485215421982f265bafc217444d15545a9cf7465fa8ae8921e31ff"
+    },
+    "mus/gerson_defeated.ogg": {
+      "size": 434907,
+      "sha256": "6272c45e6f840d676732cc62cbcfaf93abc74ce38b4df8f1923ed27b0c5f106d"
+    },
+    "mus/gerson_theme_intro.ogg": {
+      "size": 1797648,
+      "sha256": "10a3c00a335072806289f18879b341cb55d8cbd713ea2ce0cf0f719dcc5a8060"
+    },
+    "mus/gerson_theme_nointro.ogg": {
+      "size": 1601832,
+      "sha256": "bb11b8922298904fa8ea13330e90a21da53b0e9531199c1211c9a2491d65e779"
+    },
+    "mus/giant_queen_appears.ogg": {
+      "size": 1826658,
+      "sha256": "98a2511eed9dc6ab5545cae5208ce92e71625bcdd4c1f68317465698f4223674"
+    },
+    "mus/gigaqueen_pre.ogg": {
+      "size": 137652,
+      "sha256": "1ba3786a72ea19816ed4aebada13ff2609c13ecf0238674467e25dc2cd1bd139"
+    },
+    "mus/glacier.ogg": {
+      "size": 549188,
+      "sha256": "6210e1f5d79ff40480ce03a835ba9499c89d98e4173e418a4987bbf3cd857380"
+    },
+    "mus/greenroom_detune.ogg": {
+      "size": 554483,
+      "sha256": "6e1bd13d3fbdfcf260fee8a3dfdde76602b93e70296a77aed42d7ea12955f4dc"
+    },
+    "mus/happy_town.ogg": {
+      "size": 813473,
+      "sha256": "5d10415f028b5781e49c043327e5229148d95730c78ecc636b8f394c98dcf865"
+    },
+    "mus/heartbeat.ogg": {
+      "size": 18685,
+      "sha256": "fe77eeda88e8518f66f551782aa651fb15015582b0be76f061b4a3593e628550"
+    },
+    "mus/hip_shop.ogg": {
+      "size": 965356,
+      "sha256": "62acd3d2de7e4ad81e99a2b31e40b90b1b121d93fc0c79ec724a7f1a47892a66"
+    },
+    "mus/home.ogg": {
+      "size": 1638859,
+      "sha256": "cee36ec188a840317f7d6918e78ebfe82e7e9762f6ba235c118606e1b595dbe4"
+    },
+    "mus/honksong.ogg": {
+      "size": 464704,
+      "sha256": "e652c2c1cfec6dc9981a6d5dddd1adbd839d91869e5a2ed9df9631b8a6400e08"
+    },
+    "mus/inappropriate_recycling.ogg": {
+      "size": 2723536,
+      "sha256": "67534f8e403c297a90771c42f2ccd99017fe1c621c0b071a2f00e4de93a219b1"
+    },
+    "mus/inukuma_wip.ogg": {
+      "size": 540813,
+      "sha256": "f00f046c93051a40bb688d8b86b73e609ba88616ee8e5e73a3bbae096b6e2dfd"
+    },
+    "mus/jitterbug.ogg": {
+      "size": 184784,
+      "sha256": "1564b5f833a05fc7f837bdd342a5fad1c43abb30bf10da1e3d8ae758c88a788c"
+    },
+    "mus/jitterbug_muffled.ogg": {
+      "size": 199000,
+      "sha256": "08a60480133f68bcedbe990fa923f32067cd28b700c6febf656f288cc4ab3f48"
+    },
+    "mus/joker.ogg": {
+      "size": 2457357,
+      "sha256": "59aa09ed117bb057112befa4f740143e207d8f8d8a7d03e5b0f37f44240fe74d"
+    },
+    "mus/KEYGEN.ogg": {
+      "size": 65730,
+      "sha256": "b8e5151ab53a312ee9b3c449dbb9233f9509473453ecfd5b1ff3d5a12322cb74"
+    },
+    "mus/kikky_upgrade.ogg": {
+      "size": 89673,
+      "sha256": "78898c85c81a40d374603dfc29623cdc3347f32957b4df492ba270c058a9788c"
+    },
+    "mus/kingboss.ogg": {
+      "size": 2880251,
+      "sha256": "ed306f4c75c0384b446d0aabeb92ad1f91b72dbff10f87f0ce799887a22f3d9c"
+    },
+    "mus/knight.ogg": {
+      "size": 2220177,
+      "sha256": "e34eca856216e6b257bc253309fd51ccb969b0668b8a31d61a35c68cfd3fd554"
+    },
+    "mus/knight_appears.ogg": {
+      "size": 162695,
+      "sha256": "acfe9f7101cdfef4df5e5c2aea5a67a4748a93c82e5c3b49a5f98982d78f8a3e"
+    },
+    "mus/kris_piano_lancer_waltz.ogg": {
+      "size": 883293,
+      "sha256": "68a14530f38c3f540be968e687e731b5a5f73a132ddec966e6f6ecb31fbe25a3"
+    },
+    "mus/kris_piano_last_prophecy.ogg": {
+      "size": 644543,
+      "sha256": "63c6ab206e49fbc8f45f75efca593fd37e88306b9c16906cbf687526c61995ed"
+    },
+    "mus/kris_piano_lower.ogg": {
+      "size": 334484,
+      "sha256": "d1aa9e7f66968f3467d511e9e9d04dffe0c54a70574f8eb32b925eda51cb61dc"
+    },
+    "mus/kris_piano_prophecy.ogg": {
+      "size": 401480,
+      "sha256": "d86b2efa1eda120b83777995a02bba9717112c70f39ae131173e1026cdb31046"
+    },
+    "mus/kris_piano_quiz.ogg": {
+      "size": 161480,
+      "sha256": "d92f3d390d8afe3f699479a4c83099731cf291b6988178491496ef1240d8fd7c"
+    },
+    "mus/kris_piano_rouxls.ogg": {
+      "size": 556781,
+      "sha256": "762fe13329f108fa922cbddcc27cfcf818fb933f533ea3b2c65d807fd1d14752"
+    },
+    "mus/kris_piano_sevenfour.ogg": {
+      "size": 770501,
+      "sha256": "499b0361eb8852aaff9a9c1ed6310d1b6930f0acd07bbc24de64f0d7edaf313a"
+    },
+    "mus/kris_piano_shop.ogg": {
+      "size": 589078,
+      "sha256": "289f6bbcd9da8e04f3ce8a4b11302aae96c6dbd9db10881dfc25abc13b1a69e2"
+    },
+    "mus/kris_piano_waitingroom.ogg": {
+      "size": 1062415,
+      "sha256": "63607512c0ef8c25ed319736a71df48aad584131c810102cb41e4ff7bcd11378"
+    },
+    "mus/lancer.ogg": {
+      "size": 1155941,
+      "sha256": "ae73bc3799b3bc0ea719f0666dd79081c7631b88468155c01a3ec754d396752a"
+    },
+    "mus/lancer_annoying.ogg": {
+      "size": 348934,
+      "sha256": "1a375d7b16b0e9143927bd7ddaa0ca8206b6dabb15983c9c1962d8750c1ee220"
+    },
+    "mus/lancer_susie.ogg": {
+      "size": 295644,
+      "sha256": "5c80ffc8832f2935af08da86a247f3fec6b516eb438e9784b7033d9e3fece5e5"
+    },
+    "mus/lancerfight.ogg": {
+      "size": 508153,
+      "sha256": "e1b289476d673018bd70913f85ebe2cf59d1596e043343e9a621053074125b40"
+    },
+    "mus/legend.ogg": {
+      "size": 2631955,
+      "sha256": "09efcd184b3d358555b309b4b068b945747ca3a3620fcddbbc58706ab26e13bf"
+    },
+    "mus/legend_altered.ogg": {
+      "size": 213119,
+      "sha256": "4033ee4c9f577eff0c78aebb6f572d9c7764d07945cb735a149bc6a27e349de9"
+    },
+    "mus/man.ogg": {
+      "size": 140530,
+      "sha256": "99cd9d5462d4acaa2a24b76c0dbfe4e3f018a4bf33819cdca85138b079d7f46f"
+    },
+    "mus/man_2.ogg": {
+      "size": 189485,
+      "sha256": "4297f6fa76451288832cb034db660b8d6bfb8443c36b966b74b82566fef260b8"
+    },
+    "mus/man_nes.ogg": {
+      "size": 42084,
+      "sha256": "39f6527c27a8d20a9d6bee500853c1a101dbd600da4c5ad8cb8aef206ca47a3b"
+    },
+    "mus/mansion.ogg": {
+      "size": 1580329,
+      "sha256": "97833ac8f5aac3c17d1cfac6819e6bde14f5082345efeba91bd8c64059711ea7"
+    },
+    "mus/mansion_entrance.ogg": {
+      "size": 628633,
+      "sha256": "64d6594f3409a4791834ec818dbd5b9f830088f3162ef30e884ee4169ee7eaa6"
+    },
+    "mus/me.ogg": {
+      "size": 106067,
+      "sha256": "59dd2a72681f5baa14ed87b44900d82ff57a783ca8f3935c53e0c2256d3738d6"
+    },
+    "mus/meeting_flower.ogg": {
+      "size": 459520,
+      "sha256": "3185d676a104f0a9e66e137f0f41ea69df702c1e77f8bdefab0600687531ca98"
+    },
+    "mus/meeting_flower_cowboy.ogg": {
+      "size": 1936917,
+      "sha256": "7c89a55f68fa4717c488b7faaf533ea96cc8a5f4aace920d7b82ab6a83ae3833"
+    },
+    "mus/meeting_flower_orange.ogg": {
+      "size": 1948229,
+      "sha256": "30d8df3e9ca924665440f18ddcb970d0ec9d14479ebb3f493b2ab3179a66707d"
+    },
+    "mus/meeting_flower_orange_highpitch.ogg": {
+      "size": 1872337,
+      "sha256": "a20364dc9decfcf9b698c475e5bc68d313deb64ee64c6d656315af3ba6d064c6"
+    },
+    "mus/meeting_flower_upbeat_drum.ogg": {
+      "size": 737852,
+      "sha256": "8ff14bf354de3c6b14c5c041e534348316a27a8732afb471a99557d1eaaef13c"
+    },
+    "mus/menu.ogg": {
+      "size": 632609,
+      "sha256": "0da10a89a8b55a749d0dbab7348201fd34119f7c9ae93fcce506b63faf5ed497"
+    },
+    "mus/mike.ogg": {
+      "size": 1685179,
+      "sha256": "7de21c98c7f399dce16e961041a871e5eb124fa188591d96e6c916cdf1553d3b"
+    },
+    "mus/mike_zone.ogg": {
+      "size": 262525,
+      "sha256": "90090effd61b73ca45b5746b4eb32b1f0b9a511364c24803f9ea6fa036f0befd"
+    },
+    "mus/miniboss_new_section_idea_wip.ogg": {
+      "size": 1132888,
+      "sha256": "472926f4170c7f016f57d5620dacbd8f65d20a4b3158a6d8f4dca29e3687a9dc"
+    },
+    "mus/minigame_kart.ogg": {
+      "size": 1054221,
+      "sha256": "d32463755abcea1fbe498c06208151231a382540c406d1f827bef252c7e26699"
+    },
+    "mus/muffled_rain.ogg": {
+      "size": 1459007,
+      "sha256": "40e410e77a492d773547fa4b289fc344552a525c570219a17a0935856e813ac4"
+    },
+    "mus/mus_birdnoise.ogg": {
+      "size": 426534,
+      "sha256": "b91ea1eaa245a3a110ad5f1ecba120f35d36fc1859efce01ab95293693661e5a"
+    },
+    "mus/mus_confession.ogg": {
+      "size": 215747,
+      "sha256": "7db1a507c192075c2ee29d7d307bc95e1e485d9f56bf9afb84e8dff242700426"
+    },
+    "mus/mus_date_fight.ogg": {
+      "size": 389822,
+      "sha256": "74f07cbaf33ac499e125a7b52e980e281928693b16bdc31ac2e923a765f6f143"
+    },
+    "mus/mus_date_tense.ogg": {
+      "size": 294740,
+      "sha256": "6d42943b35c93309cea1820bf1fbbe45f78753ee4fe7ef9740a0afa3e92afd54"
+    },
+    "mus/mus_introcar.ogg": {
+      "size": 917893,
+      "sha256": "c560b1dbaa23aded54bba86eebc1bdc4e17bd3de7d8ad4855f0fc0822e9994d5"
+    },
+    "mus/mus_knightthought.ogg": {
+      "size": 41077,
+      "sha256": "f26e917375fd1bf5057617554287898926221130ce51b8dcce65f1e6cedd2785"
+    },
+    "mus/mus_race.ogg": {
+      "size": 497216,
+      "sha256": "e3e2fac9f7a92b5f5f127706dff2469cd7d9a72c42dd97dc548baa30b94427f6"
+    },
+    "mus/mus_school.ogg": {
+      "size": 1303031,
+      "sha256": "888d1f33c77e24ff7c16c5e5cf5c29fd5d4c91b944dfa40a5e7aee4279e39138"
+    },
+    "mus/mus_temloopshort.ogg": {
+      "size": 65099,
+      "sha256": "1e0fe6591fca6f2a5c8a44d1e72dec7298822682d2e10309b55896d263fb5103"
+    },
+    "mus/muscle.ogg": {
+      "size": 369225,
+      "sha256": "64bfeec27f0622a69e7329c47b26357bb725802d120e18224082ffe48d7064a2"
+    },
+    "mus/music_guys.ogg": {
+      "size": 68063,
+      "sha256": "e6663aa133228b9856ac39479408f03b3a5c13b67b29801f8cf102495920e42d"
+    },
+    "mus/music_guys_intro.ogg": {
+      "size": 75018,
+      "sha256": "c81beb9a29b435d531ebeac1e1746f9d9f14cfedceada7c000342ef85818b6b3"
+    },
+    "mus/napsta_alarm.ogg": {
+      "size": 141193,
+      "sha256": "8704f23e4c61e7738108e821dbe1756eb3160337b261a068baf2cd292ce4da7c"
+    },
+    "mus/nes_intro_extended_part2.ogg": {
+      "size": 201701,
+      "sha256": "b92e7b1987ddf885054b9f1d4e2fc7c523b0bbcf9dd9d29f9b5248e47da52376"
+    },
+    "mus/newscast.ogg": {
+      "size": 36745,
+      "sha256": "aca43b5aca1bc052bc5a701ec9a9a82377a182917604b0c6f63024dace1b9b6e"
+    },
+    "mus/night_ambience.ogg": {
+      "size": 252989,
+      "sha256": "563998bc2add216c0c292a7b21105d978eba656846344755b591bc54053b7d08"
+    },
+    "mus/nightmare_boss_heavy.ogg": {
+      "size": 798683,
+      "sha256": "9ca71f6d86a4d6e0081b00be4ed206a1d2f9702a93541f78048cc7d84ecadbf8"
+    },
+    "mus/nightmare_boss_links.ogg": {
+      "size": 421124,
+      "sha256": "38a1fd2fc197e26e110274dfcedf84690e92c38d53ab0edc5d958d093788bcea"
+    },
+    "mus/nightmare_nes.ogg": {
+      "size": 40303,
+      "sha256": "897a6e5928253c2cb59e5a6fc889f0f9ebbde1e8e2a42cdb47d2c556e1d579e9"
+    },
+    "mus/noelle.ogg": {
+      "size": 439613,
+      "sha256": "e88229201c37ca4ce9ca0b9efe3b37a755bb767ad59301f8c4f5f811843e774d"
+    },
+    "mus/noelle_distant.ogg": {
+      "size": 522645,
+      "sha256": "2ce98ca28f08c041640fe903a28893fe7de01110e2d3cf806168bf13be4a482d"
+    },
+    "mus/noelle_ferriswheel.ogg": {
+      "size": 1364368,
+      "sha256": "ed403f25bf26bb2d6cef15e0fb860894e160622281d3ce1bb26c7b1f21b4d074"
+    },
+    "mus/noelle_house_wip.ogg": {
+      "size": 1071916,
+      "sha256": "e4f6d37414bed437ea19906111b17e5a2b7ee042c3886f363c49c9e21c7277f5"
+    },
+    "mus/noelle_normal.ogg": {
+      "size": 1146089,
+      "sha256": "ada7b196658c1949987b63149793d44eda2ec8448a7b79f3a54d07bfe175d700"
+    },
+    "mus/noelle_school.ogg": {
+      "size": 440941,
+      "sha256": "a806c14cfbfc1e5847f904e5186bb1942752461a1d09258063f673fb8104f62d"
+    },
+    "mus/noelleshouseoutside.ogg": {
+      "size": 436754,
+      "sha256": "f6ebaa9beb462a3301f8efa31a219d6d8a60a92d16ee2876b7b9c94514309f02"
+    },
+    "mus/northernlight.ogg": {
+      "size": 70401,
+      "sha256": "26055e1e61254cf62b215a93e5ed82ef9e8d9d9ac0c45bb01c218578a71a6112"
+    },
+    "mus/ocean.ogg": {
+      "size": 149995,
+      "sha256": "0035deea016fe978a5359e6c1f2b17c997e18d716e64e27669cb96d34c3480a2"
+    },
+    "mus/oldman_helps_out.ogg": {
+      "size": 570148,
+      "sha256": "578b8d4c057b2140a28433c270ee56d3c85ecbcb9b064e8b5582693b66d59b06"
+    },
+    "mus/ominous_message.ogg": {
+      "size": 19591,
+      "sha256": "d52e6224dd7b35ee11622728788fb9a0ff0acd3181754e42468940d27d3ddac7"
+    },
+    "mus/ominous_stab_harsh.ogg": {
+      "size": 56078,
+      "sha256": "bde3676f6f0cceed5e1277779c0e5bfbbf868fa83cb0c71d375a83f096a21db8"
+    },
+    "mus/ominous_stab_harsh_2.ogg": {
+      "size": 37289,
+      "sha256": "83598223e578fe79cf29e5b9f357d44b74f09946c016e201297d08a5bb983a1d"
+    },
+    "mus/ominous_worse.ogg": {
+      "size": 63681,
+      "sha256": "2fd820d8ded220c06742705334142a8aa77a2a3edf61cf781b96450fbd477693"
+    },
+    "mus/piano_ambience.ogg": {
+      "size": 2811718,
+      "sha256": "38934872f4abce3f171ef5a2d2d6fcf93384edd0854878636dba6f49800af0d5"
+    },
+    "mus/pianpian.ogg": {
+      "size": 286479,
+      "sha256": "a6e1b944426051c91547f09d8acc8ea2113041b454f2b151522c5c7ca560f02d"
+    },
+    "mus/pink.ogg": {
+      "size": 4486049,
+      "sha256": "ac576c0be7daab01f3e87c2dc83b41bc0b4bc1239e4c53c6f417cf3a6cb9991c"
+    },
+    "mus/pink_theme.ogg": {
+      "size": 1202478,
+      "sha256": "61d57fca2d351efbda5a9f52d46757554bbd347cdc3a16c5fc084fd5304bb671"
+    },
+    "mus/pink_theme_mad.ogg": {
+      "size": 470203,
+      "sha256": "081e543495e7dacfa4e526f854cd551d57769180850ded114e8bda4de2ff6dc6"
+    },
+    "mus/pirate_zone.ogg": {
+      "size": 855186,
+      "sha256": "d0b9e40a7b05f1ba380b45843a8927fa080a0e82a5557f0a796f04442cdb4022"
+    },
+    "mus/prejoker.ogg": {
+      "size": 1252422,
+      "sha256": "921b59b3894054b0b8e98bb6c8122ba5609f2b16aac170a81a89cda7ccd98dc9"
+    },
+    "mus/pumpkin_boss.ogg": {
+      "size": 3349206,
+      "sha256": "6f585c5a14692b142e189e0ff2d31d4008a0540d7260b1d3caf9a5d9bede2e41"
+    },
+    "mus/queen.ogg": {
+      "size": 685601,
+      "sha256": "c88119118acdc251e70b7702085b02c672bb3bd88e6b8fc84a03a3b30130a229"
+    },
+    "mus/queen_boss.ogg": {
+      "size": 979888,
+      "sha256": "887c49c349e90a5a7a3c0b62ddaa8882663ef7df01ddab556b1208c40c1f7177"
+    },
+    "mus/queen_car_radio.ogg": {
+      "size": 158702,
+      "sha256": "b39ddfb035971e4f4d7d96e670f25b97516df0799eb761f65cfa3e27f0643190"
+    },
+    "mus/queen_intro.ogg": {
+      "size": 115226,
+      "sha256": "dfa6c5c95cdd4558804f407463ed3da1b16f07b31b2dc5ecf009e2dce6aef6f0"
+    },
+    "mus/quiet_autumn.ogg": {
+      "size": 709969,
+      "sha256": "8f5a6526d5b72342ed04de6fe7b68d0067312803d7801024b56876eb4c13a9a8"
+    },
+    "mus/quiet_church.ogg": {
+      "size": 2334441,
+      "sha256": "749fc75908f6d1a6da2643e142304b1d3b7de84db0e5b266e1aa77c6bf00780d"
+    },
+    "mus/rain.ogg": {
+      "size": 1748442,
+      "sha256": "7a39e5578852a660dabe0a08023edda0c45c2c3b2083c5d96680d087a4662edc"
+    },
+    "mus/raining.ogg": {
+      "size": 92289,
+      "sha256": "cc22e506ec68b68dc45f2b213b4b67b34c0f7a75da07ff989f0e53ad0f435ee6"
+    },
+    "mus/raining_in_church2.ogg": {
+      "size": 198598,
+      "sha256": "1c17c2dc0e72348676bc28f403309a0b35790ed337985346797637aac26059ac"
+    },
+    "mus/rakuichi_buster_wip.ogg": {
+      "size": 1468254,
+      "sha256": "272004bc9e9888ed162828a4639ee37b93835bb23cbb09fe695fe4aa99c6c495"
+    },
+    "mus/rhythm_3rd_sanctuary_guit.ogg": {
+      "size": 2156103,
+      "sha256": "003f75a71b14725c80f12008ebaadf5a06e2260c889e1cc9dd33b8b95624930d"
+    },
+    "mus/rhythm_3rd_sanctuary_noguit.ogg": {
+      "size": 2156439,
+      "sha256": "2ad039f77a0d6ed047aee13819dc256d0c7d955c2d8ef88c0e73c12f4e6bd2ab"
+    },
+    "mus/rhythm_knockdown_combined.ogg": {
+      "size": 1665113,
+      "sha256": "30f6b4b40bf2a9073293f3cbc1afab72a5891f0d9036a1cace2575e69028894a"
+    },
+    "mus/rhythm_knockdown_no_guit.ogg": {
+      "size": 1653960,
+      "sha256": "a6cc877f8501d0f5ea4bec10089f3210e86c46a3069c7d88c549500b36ad9682"
+    },
+    "mus/root_8bit.ogg": {
+      "size": 498682,
+      "sha256": "95cdec706006d7603bda279b30b6cbfad50978154b4cb1331b25d9d02ca59932"
+    },
+    "mus/rouxls_battle.ogg": {
+      "size": 718995,
+      "sha256": "c502041d7170d1b8511adb33cd7a2ecae5eb1bff2130acf26881cf43a2e31cd9"
+    },
+    "mus/rtenna_zoom.ogg": {
+      "size": 92865,
+      "sha256": "0fce277bbfbc93a1bee45e7a17cb2b573cdc8512181ed7682ff1bbbe898bb269"
+    },
+    "mus/rudebuster_boss.ogg": {
+      "size": 1473727,
+      "sha256": "7fa205bca2838f58133ce98498da94ee8c2e58ecd926ad1d794322c7e333cc43"
+    },
+    "mus/running_water.ogg": {
+      "size": 2516349,
+      "sha256": "372c7f9b5051a174b39583372aef8b45d26c26a42b2e273b270d4e6c76ccb9f9"
+    },
+    "mus/ruruskaado.ogg": {
+      "size": 470380,
+      "sha256": "39b76839e6699a26645f0a64b32a33518434423dcce6d413d915a474426adfdb"
+    },
+    "mus/s_neo.ogg": {
+      "size": 669566,
+      "sha256": "7e1e1e8fe4d1fcd8838dd9f8981cbabf2e1cb27cdd001303340777f46fd9624b"
+    },
+    "mus/s_neo_clip.ogg": {
+      "size": 53153,
+      "sha256": "bb7622b1e21f1e098650f0bc755c16e97a66add1962307286307b25b33f36597"
+    },
+    "mus/sadchord2.ogg": {
+      "size": 75149,
+      "sha256": "ae810783a336b92978e7125aa514bbada9ce8dc34219477ae1d394197367bb08"
+    },
+    "mus/second_church.ogg": {
+      "size": 2029506,
+      "sha256": "dbd4e8d381ee4d8bb97e25cb8da60a5e6e5d99db2f682375c62dcd28c7641544"
+    },
+    "mus/shinkansen.ogg": {
+      "size": 95656,
+      "sha256": "66c5170b1a32510831f120495d2c2058c2f8db2605345fb65d78ae5c05d1b776"
+    },
+    "mus/shop1.ogg": {
+      "size": 1121136,
+      "sha256": "a876ebfe1444b666c269ea27edbb04229294eabb8c832460de0f8cfe9dae20fc"
+    },
+    "mus/shop_3.ogg": {
+      "size": 1172894,
+      "sha256": "47d8b56f50283803035088a8a876c9e348a4f48d4ddcfee79dc2d02fd2b25642"
+    },
+    "mus/silly_printer.ogg": {
+      "size": 818190,
+      "sha256": "03816aa3a6428fa8dd5dbcc8a6600f79c1948301cf9f1e4db42f04b7d1c69584"
+    },
+    "mus/sinedrone_danger.ogg": {
+      "size": 16465,
+      "sha256": "ed7470be0ab7921b137145fe2119973ad061c8f5a4258496f0e8b2398d19eeb5"
+    },
+    "mus/sinedrone_danger_high.ogg": {
+      "size": 228474,
+      "sha256": "3d4172d91d6b3704f676a75ddb7238e584d6eb1006022cb42f9ccfe2f9693bca"
+    },
+    "mus/sink_noise.ogg": {
+      "size": 19069,
+      "sha256": "4f14188060e269d2f85fb2dd0db7f23e6fd85312e04d61ef49d0b922d0611998"
+    },
+    "mus/smallpiano_room.ogg": {
+      "size": 118861,
+      "sha256": "3b9ed71f8a605e62ada75212ccdd20a7448251ce804fb65ade6fd526acc1e418"
+    },
+    "mus/sound_battle_bg.ogg": {
+      "size": 93647,
+      "sha256": "b36890a3c09500e1660ce8c120bea1cd07f49bcd83cf2c6d6cc82cdd4f7373f0"
+    },
+    "mus/spamton_basement.ogg": {
+      "size": 106594,
+      "sha256": "d6b48e549162c5575165c530ebf191b0ee2b5bb6ec5d1520cad724f542f4c747"
+    },
+    "mus/spamton_battle.ogg": {
+      "size": 800168,
+      "sha256": "f3190f784b753e1c0734005c2cfac9e45b35980d0654fb6cecc6487c9abe3ae6"
+    },
+    "mus/spamton_dance.ogg": {
+      "size": 1926038,
+      "sha256": "5c2b9a5fb129aca58e401fac2e5cd507270d7a80a6c25f0a5eda9a1e9fa0d341"
+    },
+    "mus/spamton_happy.ogg": {
+      "size": 51584,
+      "sha256": "bb4afa427fcfbe906a09187d43a36a08cbfecda2270a8d8efa16e719e04a90f3"
+    },
+    "mus/spamton_house.ogg": {
+      "size": 101557,
+      "sha256": "cdc55ed801db3d20ebd82104aa85b6ca812c65c3ee2b128b34ca5eb9dd7ddbae"
+    },
+    "mus/spamton_laugh_noise.ogg": {
+      "size": 29060,
+      "sha256": "eb31192ee7bf987ff162f62a9b0a103b36cf30021ec1858d85d1e9fe251146ee"
+    },
+    "mus/spamton_meeting.ogg": {
+      "size": 332727,
+      "sha256": "4ebebabfc44758de25535eb3281696dc6eb292db770e1569f8c4a81c01dd0ab7"
+    },
+    "mus/spamton_meeting_intro.ogg": {
+      "size": 17409,
+      "sha256": "e5e65cafa501a1388bda038752ae2f7bcadf7001b0ca7e08797e0a8cb9b792da"
+    },
+    "mus/spamton_neo_after.ogg": {
+      "size": 317763,
+      "sha256": "854dbf0c611f8266a45387f62db515ca731265c434a4eb83cb8a1626ef0e848f"
+    },
+    "mus/spamton_neo_meeting.ogg": {
+      "size": 364174,
+      "sha256": "ad0cdca2ba3fa8d6bff8950f49dbf9ec2c61662ea45e189553b756c5d38dbfba"
+    },
+    "mus/spamton_neo_mix_ex_wip.ogg": {
+      "size": 2003139,
+      "sha256": "2189fbde55b87915fd8c7696528c16af5fec2ede3107c266b3c5785d2bc20b71"
+    },
+    "mus/static_placeholder.ogg": {
+      "size": 187157,
+      "sha256": "1736cb67b6a034ec05e81087a5ca069d77bf4c9239ab7b4901cc3e6e05578b94"
+    },
+    "mus/statue2_level1.ogg": {
+      "size": 214260,
+      "sha256": "7a16242e04091930997678e5ae65c1ce01628a425632eb449ef68e1dce282154"
+    },
+    "mus/statue2_level2.ogg": {
+      "size": 214299,
+      "sha256": "9b8346770a2a8d0cab33a1248dd1a4cea8661f941853ebd758f89baad8f1ca2e"
+    },
+    "mus/statue2_level3.ogg": {
+      "size": 214255,
+      "sha256": "080240128f3ee94276aef3b6095b5617fbff55a2d1dc3d7b185c9bc1641114be"
+    },
+    "mus/statue2_level4.ogg": {
+      "size": 214267,
+      "sha256": "3fb0eded14fff7aa39bf3bce2833e547bf5591ca028906ea69f41cecccd7585b"
+    },
+    "mus/statue2_level5.ogg": {
+      "size": 214537,
+      "sha256": "5b6e36d9f8d492eb6e8c2bc9561e7f5732794168f4610635337c383b38727cba"
+    },
+    "mus/statue_chord_basic.ogg": {
+      "size": 214226,
+      "sha256": "52f82ce4b03d5244ae39cf70cbe014d518c8623991ee2a7b2ba7e4c308303d1d"
+    },
+    "mus/statue_level1.ogg": {
+      "size": 165279,
+      "sha256": "3be5904f88561a18c848cebbefc03dfc2d7f20ccfa761f71457cebbb104947fa"
+    },
+    "mus/statue_level2.ogg": {
+      "size": 214163,
+      "sha256": "fe517bcbd5f0e85fc48066be9387579de3f40ea54e136f1bbeaf74a56444f976"
+    },
+    "mus/statue_level3.ogg": {
+      "size": 214360,
+      "sha256": "bba8df6903a214043f8601dc81aabd469c86a5b792f19ad59d5e885a747d06e6"
+    },
+    "mus/statue_level4.ogg": {
+      "size": 214198,
+      "sha256": "660fb203c30741f84378e9193941c6455901030f87d857fd769c39fa449e23e5"
+    },
+    "mus/stealth.ogg": {
+      "size": 1104903,
+      "sha256": "741cb1f1d9a61b3f16e24c5db99333cd23dbaf8c0493081b2f8ff72c974fa797"
+    },
+    "mus/strongwind_loop.ogg": {
+      "size": 160049,
+      "sha256": "47123901601b7366821c4a0256cd9c0a2e034426990235ce6fa7590e1356007f"
+    },
+    "mus/susie_diner.ogg": {
+      "size": 478433,
+      "sha256": "a1a3957a89d1f87e968f7eced798df029968f187e25798b99f5bbf2890f7d14d"
+    },
+    "mus/tenna_battle.ogg": {
+      "size": 2355092,
+      "sha256": "a0a6905edcf9cd9a4d3b7c6251e1fbf6e992d0accc58aef3d02b2a6028a93161"
+    },
+    "mus/tenna_battle_guitar.ogg": {
+      "size": 2353273,
+      "sha256": "fc902dd4565fa4dec666c02954551d57947433ad6e0c9672d489ae90cf4d4580"
+    },
+    "mus/tenna_battle_preview.ogg": {
+      "size": 682715,
+      "sha256": "b91ccb65e9747bf0d35f94c0e65a5c024c3e7a859b0d43b60ee0059dfde313ef"
+    },
+    "mus/tenna_battle_preview_crisp.ogg": {
+      "size": 634430,
+      "sha256": "bb9d2dfc50d3ea265dee612bc3aedd6ada7d95f2a0804dd8da2a358e35d08af0"
+    },
+    "mus/tenna_island.ogg": {
+      "size": 1520232,
+      "sha256": "5cd174620a7434fe9021743c0dc9f60b56866f33fbd0b04bb91cb944e58ec33f"
+    },
+    "mus/tense.ogg": {
+      "size": 489573,
+      "sha256": "3a9fc75742daa6e71d8949964f36802691cc8802916488c012f4e80bc9b86107"
+    },
+    "mus/the_dark_truth.ogg": {
+      "size": 481038,
+      "sha256": "a901ca49c42b83417fb25b7240425d75827eb555b974fc1141b0d4a6e52170c4"
+    },
+    "mus/THE_HOLY.ogg": {
+      "size": 1169629,
+      "sha256": "8b50a48f292321ca9382f35091da424e0388f2c3f3999aac580fe80692c3237e"
+    },
+    "mus/thrash_rating.ogg": {
+      "size": 155938,
+      "sha256": "7482258bfcd671e4dfb26ecc86409acf495b82898e29cc93c3e3b3f985dca2b3"
+    },
+    "mus/thrashmachine.ogg": {
+      "size": 1335798,
+      "sha256": "7721c2d07657ac74cc8cdb714b9d936c405607e1b30e15fa33140ea48cd500ff"
+    },
+    "mus/tin_night.ogg": {
+      "size": 287125,
+      "sha256": "de30a28579d1e0658032cefbd20af53ad79d80fe5579327a1ac0e20158f74ba5"
+    },
+    "mus/tinnitus.ogg": {
+      "size": 89857,
+      "sha256": "e7e44e3b4b96b00d852b5f0645ffe228b1c681f411647293b9e0bcf74d2bbca3"
+    },
+    "mus/titan_battle.ogg": {
+      "size": 5509107,
+      "sha256": "c24ee2ff7c0f90e0a385757c3f6040ddf4d6627255a6e846d42ff61a37f35e59"
+    },
+    "mus/titan_pre.ogg": {
+      "size": 471170,
+      "sha256": "95a7dcbdf2416204a3ef0a42996b43427460d6d30576633c9ca24b258e08ff6f"
+    },
+    "mus/titan_spawn.ogg": {
+      "size": 1732449,
+      "sha256": "840d4efcbfe4a268951df84504f2a554fed56f86bed13931ff295d657f17d657"
+    },
+    "mus/titan_tower.ogg": {
+      "size": 2033768,
+      "sha256": "b8ccf46b860029e1f48034db114881c7d734033b9a408b60f985c7dc8d0d47df"
+    },
+    "mus/town.ogg": {
+      "size": 2750649,
+      "sha256": "a9dc5fc33f2c9decd33dae143b9c3007cee589d1cf9fcbb123b441dc8d7bdfb7"
+    },
+    "mus/town_day.ogg": {
+      "size": 2252471,
+      "sha256": "6190ba3b3f753acfecb7c69900c9ccfa8be5148d65f953e4553fb8c490a9fce9"
+    },
+    "mus/trank.ogg": {
+      "size": 200561,
+      "sha256": "7830849f2d7df7406e16d7b56e11ac5e5abb3eed469b8bb0cf80bde05ba3577d"
+    },
+    "mus/tv_changingroom.ogg": {
+      "size": 665232,
+      "sha256": "91d4ca6f16cd84a50111c22f211092997e7b0567608fb7f9663794fe0bb5094e"
+    },
+    "mus/TV_GAME.ogg": {
+      "size": 1097353,
+      "sha256": "b20c71d651ec0f958f4a4c201bcfa62571e3958fced555f6f0dc1c9eecd9fa55"
+    },
+    "mus/tv_hall_of_fame.ogg": {
+      "size": 169469,
+      "sha256": "4564f94d12368eedea6d50cbffdaf35d688456bb685b57527578d43b36c148a2"
+    },
+    "mus/tv_infrontof.ogg": {
+      "size": 69629,
+      "sha256": "5a97ca20ea1847d8eecb343711fad1c98cc7817a113cb6532db2951e5566b34a"
+    },
+    "mus/tv_noise.ogg": {
+      "size": 36156,
+      "sha256": "48c8d7bc27b44934c27c02e921e4bc375b7783c5c9eb5f38eecf0d67b2ebe7b0"
+    },
+    "mus/tv_results_screen.ogg": {
+      "size": 423082,
+      "sha256": "0778f28918ec8f66473f4f789d8862abf4d88fadc08a91fcaebaa066d9688f33"
+    },
+    "mus/tv_static_bad.ogg": {
+      "size": 50220,
+      "sha256": "33b85fd3378252560dff3f39b758442da53769764f86701e48a1a293c1feb982"
+    },
+    "mus/tv_world.ogg": {
+      "size": 2096776,
+      "sha256": "a692ffa6eac0a3347513a0515bdd1ed833d8782d5d85972abaa20f116b127b57"
+    },
+    "mus/tvromance.ogg": {
+      "size": 144631,
+      "sha256": "395cef70606a09c6c1e0e2df4fff91e30ed0900fd158ab5e1327a722c1580a9d"
+    },
+    "mus/vs_susie.ogg": {
+      "size": 1643248,
+      "sha256": "5ab7a2f874896d9093d6d3091d15c280810879a8ac26417ff808521d4276d42a"
+    },
+    "mus/w.ogg": {
+      "size": 129148,
+      "sha256": "5eba96ce43d11285b5ca055c75a3f8eeae814751f69770bcd92a99cab4c0cac5"
+    },
+    "mus/wet_tapdancing.ogg": {
+      "size": 97526,
+      "sha256": "e22d267419008acbcc3a3262c5d149394c1adf5e63c86986bbf2f951a51140b7"
+    },
+    "mus/wet_tapdancing2.ogg": {
+      "size": 97616,
+      "sha256": "0eeb07bc03f940643f804cb1609d9988a23e5e86b59d38a59e0af6b2fc283c74"
+    },
+    "mus/wet_tapdancing_failed.ogg": {
+      "size": 57671,
+      "sha256": "c4eba28e7c121a5924f0f1416d5114bdda0b0303ba32c210566e8ee68d16f69f"
+    },
+    "mus/wind.ogg": {
+      "size": 141946,
+      "sha256": "983f0218e3d7876426cdd788821c7ea9d78860bb0fe8424faa3a942530482599"
+    },
+    "mus/wind_highplace.ogg": {
+      "size": 116241,
+      "sha256": "3df7b2d0e74e7af39be5402e8bf9d8ddb0f125989552af757d01d914f4440be1"
+    }
+  },
+  "files": [
+    {
+      "output": "borders/border_dw_blue_0.png",
+      "source": null,
+      "size": 85368,
+      "sha256": "051d11bed86d4160124e958556a3aa6a688c3851b60d6d07afe9f82ad6f9fc17",
+      "mode": "patch",
+      "patch": "0000.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_blue_light_0.png",
+      "source": null,
+      "size": 87847,
+      "sha256": "2912338c87e25eb2e952355b35593f67c3c7123b9c3c42128743595aa00d4996",
+      "mode": "patch",
+      "patch": "0001.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_blue_stars_0.png",
+      "source": null,
+      "size": 85806,
+      "sha256": "73f4f4df206d997483da39cb7249559a3f9a925bcced5d0843ea3621138acd8c",
+      "mode": "patch",
+      "patch": "0002.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_castle_cafe_0.png",
+      "source": null,
+      "size": 249371,
+      "sha256": "e0296ce49221dc979ac7d8704a6006232bded88e98dc3b3154e8479972581ee1",
+      "mode": "patch",
+      "patch": "0003.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_castle_left_0.png",
+      "source": null,
+      "size": 176645,
+      "sha256": "3e6c1a068535b01a884e12642f7c4aa3f2b3cab7ed12720fca5a61c39704dabd",
+      "mode": "patch",
+      "patch": "0004.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_castle_right_0.png",
+      "source": null,
+      "size": 193967,
+      "sha256": "855b0dfc48ae88e1ef45b4e88b9ced8f229318bf2256200095c63880853df8a7",
+      "mode": "patch",
+      "patch": "0005.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_castle_right_gold_0.png",
+      "source": null,
+      "size": 206142,
+      "sha256": "aa21845e3129de528120af448483c4243e2d52f08da7e2b7932ba22dedff3d11",
+      "mode": "patch",
+      "patch": "0006.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_castle_top_0.png",
+      "source": null,
+      "size": 183291,
+      "sha256": "05b224789e3cd2c2b26a3a784358dd9840bb45ac0f8435cedd6c9dc19258d0b1",
+      "mode": "patch",
+      "patch": "0007.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_castletown_0.png",
+      "source": null,
+      "size": 192334,
+      "sha256": "524a3ab8c78b74bf95b8786c2c57de6367dfe077b8727461661f9129b8f9deb9",
+      "mode": "patch",
+      "patch": "0008.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_church_a_0.png",
+      "source": null,
+      "size": 267469,
+      "sha256": "73bebf033e5b0e5eae5aabd19b092350bbb55f854be147db41e2e957952b34ca",
+      "mode": "patch",
+      "patch": "0009.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_church_b_0.png",
+      "source": null,
+      "size": 247769,
+      "sha256": "36f33a7f93bf1f7eb9ab781890ea73dff4607c14c60b58c41dffd5d099aa975a",
+      "mode": "patch",
+      "patch": "0010.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_church_c_0.png",
+      "source": null,
+      "size": 233517,
+      "sha256": "6ec13d689bc981c4b860a7f73dc320f3ecb0ee3f89f3b1858a0c1a9b5c52f688",
+      "mode": "patch",
+      "patch": "0011.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_city_0.png",
+      "source": null,
+      "size": 106676,
+      "sha256": "faba187cf06576b63a0398f130a585755e3ccecf6ebbfd45acab3869f3a98ca3",
+      "mode": "patch",
+      "patch": "0012.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_cyber_0.png",
+      "source": null,
+      "size": 139570,
+      "sha256": "9f6148bdec88f58de6fcc0105e1a722b3848a67e802e2d65e607b3ec43326dd4",
+      "mode": "patch",
+      "patch": "0013.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_garden_0.png",
+      "source": null,
+      "size": 129101,
+      "sha256": "c02a69e7a9d2773ae138fd2286c0968b611a72e632867f9e26285bf86e85fb5d",
+      "mode": "patch",
+      "patch": "0014.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_garden_cliff_0.png",
+      "source": null,
+      "size": 406924,
+      "sha256": "1107896689f3b2fc7b9e052d1be5d15a8aa97f170ab85a46a4e1d2d7c097fa92",
+      "mode": "patch",
+      "patch": "0015.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_garden_cliff_bottom_0.png",
+      "source": null,
+      "size": 191040,
+      "sha256": "f40a0d80024ba6dea97f3610d7fb6d1a9c42acfea6689a52f0902ec64fd81173",
+      "mode": "patch",
+      "patch": "0016.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_garden_cliff_bottom_frame_0.png",
+      "source": null,
+      "size": 93461,
+      "sha256": "c6785d69203bd581eab5bfefe7f7aa1523d9a7fa7500b8e6869ed1e9a9d4d84e",
+      "mode": "patch",
+      "patch": "0017.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_garden_cliff_frame_0.png",
+      "source": null,
+      "size": 110757,
+      "sha256": "bf0d2bee18cd30b51903e421f0ef25083abba78c78cbbe4a2602556e5d50c237",
+      "mode": "patch",
+      "patch": "0018.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_garden_cliff_lattice_0.png",
+      "source": null,
+      "size": 189588,
+      "sha256": "7cb27cbecda8ff129a47e09d4fe42c1a67614ae97e4f65469086c51f29b3ef67",
+      "mode": "patch",
+      "patch": "0019.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_garden_cliff_lattice_bottom_0.png",
+      "source": null,
+      "size": 68,
+      "sha256": "21dbd90119d3def6c42da4da8db80672b7cd791ff63633bcfd9a476a092e6f67",
+      "mode": "patch",
+      "patch": "0020.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_green_room_0.png",
+      "source": null,
+      "size": 84319,
+      "sha256": "4c05646aa0fcf09ad6424032bfda1b762fe91fb139e46426e023e83867242b25",
+      "mode": "patch",
+      "patch": "0021.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_green_sloppy_0.png",
+      "source": null,
+      "size": 84862,
+      "sha256": "9d428ebcea7ed94f387fc484f25fc0f6d55e009cfcf3e10e111790108b2bc796",
+      "mode": "patch",
+      "patch": "0022.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_green_sloppy_z_0.png",
+      "source": null,
+      "size": 74609,
+      "sha256": "ae2758ee9ebf1fc3e26c3aec90d5d93c68440734ef448f2ce641b8417c25d1f0",
+      "mode": "patch",
+      "patch": "0023.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_mansion_0.png",
+      "source": null,
+      "size": 157152,
+      "sha256": "c63f6241d916710d70df5262de188fb591849c2e20fc45b684f98adb8b538699",
+      "mode": "patch",
+      "patch": "0024.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_pink_0.png",
+      "source": null,
+      "size": 292623,
+      "sha256": "11abd48f3b7960e752d789a793cb5128b9308c796f321709f1977fffc002612f",
+      "mode": "patch",
+      "patch": "0025.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_pink_alt_0.png",
+      "source": null,
+      "size": 294520,
+      "sha256": "3a964b8c35071fd8af5d7274b496e21ede3b5f4532c2cf93c6bf8c2e9addd446",
+      "mode": "patch",
+      "patch": "0026.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_red_smiles_0.png",
+      "source": null,
+      "size": 102205,
+      "sha256": "206b4bc469039bcf90c28d38f19f6d8097a5af7bb07a68bdbffd64b4be80b53a",
+      "mode": "patch",
+      "patch": "0027.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_teevie_0.png",
+      "source": null,
+      "size": 202395,
+      "sha256": "f3c7df2aa3d2aa7fe7bdc73fb0f063e0b5513405e63ddc968d3eebb5f37a6b38",
+      "mode": "patch",
+      "patch": "0028.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_titan_base_0.png",
+      "source": null,
+      "size": 67689,
+      "sha256": "3d0598309c5cb64f5382082cd16e7924b2955d54433808c61727f8314394dd13",
+      "mode": "patch",
+      "patch": "0029.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_titan_eyes_0.png",
+      "source": null,
+      "size": 19007,
+      "sha256": "8156a2e37499a88bd8c878cfd3f37e161414d825e1e76bcc942d22cce17c736f",
+      "mode": "patch",
+      "patch": "0030.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_titan_eyes_red_0.png",
+      "source": null,
+      "size": 57019,
+      "sha256": "c88af78a5268dc4b13abbdabac5c689d74f38fcf57a7a2c3253b3e27abaa7653",
+      "mode": "patch",
+      "patch": "0031.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_tv_black_0.png",
+      "source": null,
+      "size": 48935,
+      "sha256": "038a5da6bc2b87262d90090f6de478dd4416ee2401fea0d63ffb51182481e69d",
+      "mode": "patch",
+      "patch": "0032.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_tv_blue_0.png",
+      "source": null,
+      "size": 46584,
+      "sha256": "31a371483c065b5a38c6b03122ddaf3fbcd9dc2e0cc4a40728f48e0bb042bfb4",
+      "mode": "patch",
+      "patch": "0033.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_tv_meta_0.png",
+      "source": null,
+      "size": 90925,
+      "sha256": "31404153a70f03169bd3da839c2a90cd5d10050455f162ec01e397100a7eef37",
+      "mode": "patch",
+      "patch": "0034.bsdiff"
+    },
+    {
+      "output": "borders/border_dw_word_0.png",
+      "source": null,
+      "size": 1342165,
+      "sha256": "5f2f109dbcefb563a17be72fe2a472f1d2dd1f7a9bcbd370dd9961b6c85383fe",
+      "mode": "patch",
+      "patch": "0035.bsdiff"
+    },
+    {
+      "output": "borders/border_ja_dw_word_0.png",
+      "source": null,
+      "size": 1313002,
+      "sha256": "e661ff2618af706568df48467e1ec0efef85b887362b9224d1cf42334e096e0b",
+      "mode": "patch",
+      "patch": "0036.bsdiff"
+    },
+    {
+      "output": "borders/border_line_1080_0.png",
+      "source": null,
+      "size": 3138,
+      "sha256": "7c816e99a83504c36254a56e3216b6fcc3db3ceed7a5459dc2d9ab7aef0da75e",
+      "mode": "patch",
+      "patch": "0037.bsdiff"
+    },
+    {
+      "output": "borders/border_lw_town_0.png",
+      "source": null,
+      "size": 206668,
+      "sha256": "902312c58aef5105371b9bc7a9d83feb42c9d8463782b0bb027fac6c9a4ee945",
+      "mode": "patch",
+      "patch": "0038.bsdiff"
+    },
+    {
+      "output": "borders/border_lw_town_morning_0.png",
+      "source": null,
+      "size": 219789,
+      "sha256": "2dd16a95be6009d51f6de98f4428a21bca581c290ff4f4a2f7def219e0733cde",
+      "mode": "patch",
+      "patch": "0039.bsdiff"
+    },
+    {
+      "output": "borders/border_lw_town_night_0.png",
+      "source": null,
+      "size": 131770,
+      "sha256": "99e821b6f68a6e829a81f94e4ec71e833430bf19b41bebae5d794bee507bc844",
+      "mode": "patch",
+      "patch": "0040.bsdiff"
+    },
+    {
+      "output": "borders/border_lw_town_sunset_0.png",
+      "source": null,
+      "size": 216507,
+      "sha256": "1128e5286111ba88e6f18df12acf00ccd257f3b3f09d3cdb32911d8795bb2d87",
+      "mode": "patch",
+      "patch": "0041.bsdiff"
+    },
+    {
+      "output": "chapter0/game.droid",
+      "source": null,
+      "size": 2952450,
+      "sha256": "579530459f9efaca58887e5ac36082d1d04ad914d6db3cade886ccb98da77113",
+      "mode": "patch",
+      "patch": "0042.bsdiff"
+    },
+    {
+      "output": "chapter0/options.ini",
+      "source": "chapter1_windows/options.ini",
+      "size": 40,
+      "sha256": "26e34ad8f1f4d5aabe3b32a44847cdbe86adbf94a5c05eefb1f3e578c53a64c6",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/AUDIO_INTRONOISE.ogg",
+      "source": "chapter1_windows/AUDIO_INTRONOISE.ogg",
+      "size": 259154,
+      "sha256": "39e9dd180519d1929d280799ea8bff77ba899653de79e0954221fec14b1eca7b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/audiogroup1.dat",
+      "source": "chapter1_windows/audiogroup1.dat",
+      "size": 8648200,
+      "sha256": "f007d82c5e133b56b9c068fac8e83211c9b6b6b4a4264a956c83edf929132182",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/game.droid",
+      "source": "chapter1_windows/data.win",
+      "size": 13072876,
+      "sha256": "82c2bb61b8d78cd287120f6301588fecba34ec5a890bac711b7a8774c760ec70",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/lang/lang_en.json",
+      "source": "chapter1_windows/lang/lang_en.json",
+      "size": 542800,
+      "sha256": "6a1d6cfd166bc7220a8440e19a4dfbde923056e2af333bc00b1084a11953c08f",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/lang/lang_ja.json",
+      "source": "chapter1_windows/lang/lang_ja.json",
+      "size": 700438,
+      "sha256": "63a096fb5ffb5b90df0a9e86530fd3a527f9b342263d5cbfa3249b6bd38fa17e",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/options.ini",
+      "source": "chapter1_windows/options.ini",
+      "size": 40,
+      "sha256": "26e34ad8f1f4d5aabe3b32a44847cdbe86adbf94a5c05eefb1f3e578c53a64c6",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/snd_closet_fall.ogg",
+      "source": "chapter1_windows/snd_closet_fall.ogg",
+      "size": 119120,
+      "sha256": "49ade98cb1534fad9ff07b18b448d1b67563365f606275a8a230b279d1b5a3d2",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/snd_closet_impact.ogg",
+      "source": "chapter1_windows/snd_closet_impact.ogg",
+      "size": 80298,
+      "sha256": "a041d05cf35d235e2bf9fde25a71e06d6e11efce33d4246b30c5d562556d848f",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/snd_great_shine.ogg",
+      "source": "chapter1_windows/snd_great_shine.ogg",
+      "size": 19635,
+      "sha256": "5e678b307b8639db0322db6023266d4fcc9e033788cf40cff11bf2234b4a115e",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/snd_paper_rumble.ogg",
+      "source": "chapter1_windows/snd_paper_rumble.ogg",
+      "size": 31366,
+      "sha256": "2a063a900e21794fadf11f7d8f3d17c7bcbf8cc90dec11975163078ce084e6ff",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/snd_paper_surf.ogg",
+      "source": "chapter1_windows/snd_paper_surf.ogg",
+      "size": 31533,
+      "sha256": "8bc383e9cd6d40891304bee271da152af16a2293af1289f66d222a48c592a1b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/snd_revival.ogg",
+      "source": "chapter1_windows/snd_revival.ogg",
+      "size": 41340,
+      "sha256": "6ae4f3b0ae7da2ca6dec6754ed536e6ac2048d6515a3003f1cb4db4d03c7c42a",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/snd_rurus_appear.ogg",
+      "source": "chapter1_windows/snd_rurus_appear.ogg",
+      "size": 61668,
+      "sha256": "a55f77023e0bcb6181094cbc844cc04a7130aaebcaa07766a0a7afa7892223fc",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter1/snd_usefountain.ogg",
+      "source": "chapter1_windows/snd_usefountain.ogg",
+      "size": 101998,
+      "sha256": "62581259c63876700fbd339b0d7ba49aa7a39a6b74ba49dbbb341e48d96c5018",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/AUDIO_INTRONOISE.ogg",
+      "source": "chapter1_windows/AUDIO_INTRONOISE.ogg",
+      "size": 259154,
+      "sha256": "39e9dd180519d1929d280799ea8bff77ba899653de79e0954221fec14b1eca7b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/audiogroup1.dat",
+      "source": "chapter2_windows/audiogroup1.dat",
+      "size": 7048232,
+      "sha256": "560f46eca4b88d1273e5abb31aee65733e71bf39105b5283025d9e18b6905179",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/game.droid",
+      "source": "chapter2_windows/data.win",
+      "size": 66951062,
+      "sha256": "116dcb1dda3517634571417fbe1db862d6381008526a4bf8ebde8ca88b7dc5f1",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/lang/lang_ja.json",
+      "source": "chapter2_windows/lang/lang_ja.json",
+      "size": 1439144,
+      "sha256": "d8c3b929a46c470502ecece6a86648d384bc85ad3b201b576cc5a2cfa9e085a5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/options.ini",
+      "source": "chapter2_windows/options.ini",
+      "size": 63,
+      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_bigcar_yelp.ogg",
+      "source": "chapter2_windows/snd_bigcar_yelp.ogg",
+      "size": 7778,
+      "sha256": "7227d899a1d8712dc069f3b3bc7229899865e425e21256636bc8c5605ea77ba8",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_closet_fall.ogg",
+      "source": "chapter1_windows/snd_closet_fall.ogg",
+      "size": 119120,
+      "sha256": "49ade98cb1534fad9ff07b18b448d1b67563365f606275a8a230b279d1b5a3d2",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_closet_impact.ogg",
+      "source": "chapter1_windows/snd_closet_impact.ogg",
+      "size": 80298,
+      "sha256": "a041d05cf35d235e2bf9fde25a71e06d6e11efce33d4246b30c5d562556d848f",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_dtrans_drone.ogg",
+      "source": "chapter2_windows/snd_dtrans_drone.ogg",
+      "size": 192776,
+      "sha256": "f800be1425e584bfb3a602401d7213a83a137d2dd3872ae6cd062aece8eaef2b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_dtrans_flip.ogg",
+      "source": "chapter2_windows/snd_dtrans_flip.ogg",
+      "size": 38277,
+      "sha256": "53c83f9a19ad956a22312941dcf6492e48bd43bf7de22fc2683dded6ac0e35b8",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_dtrans_heavypassing.ogg",
+      "source": "chapter2_windows/snd_dtrans_heavypassing.ogg",
+      "size": 27935,
+      "sha256": "7af68ffbf6fff282f839e40dbb6fd0cc44f72a0c48d372aaf4d6ca39b908b8e3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_dtrans_lw.ogg",
+      "source": "chapter2_windows/snd_dtrans_lw.ogg",
+      "size": 82329,
+      "sha256": "693a127d51c1ffdf2c196496cf0b95aefe0c8365bae39ead34a20645882ce5c5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_dtrans_square.ogg",
+      "source": "chapter2_windows/snd_dtrans_square.ogg",
+      "size": 27509,
+      "sha256": "bed1ee68a913c8900ef63fe6032728833362706f0e98b72e7a5b53965bc9b1cd",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_dtrans_twinkle.ogg",
+      "source": "chapter2_windows/snd_dtrans_twinkle.ogg",
+      "size": 53497,
+      "sha256": "af31b48ba91d8932728027d5f5fac8e4a47e4f0ca88e68827ccb1be1376209e5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_fountain_make.ogg",
+      "source": "chapter2_windows/snd_fountain_make.ogg",
+      "size": 86934,
+      "sha256": "523da55498ad60313855e2befefb6659ef7eb79c78a5e0b9e194bb4027e66379",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_fountain_target.ogg",
+      "source": "chapter2_windows/snd_fountain_target.ogg",
+      "size": 4619,
+      "sha256": "aed05ae33c93d24da26f34b13b477c194ae963a2a1b511a232a61c5496d90eb0",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_ghostappear.ogg",
+      "source": "chapter2_windows/snd_ghostappear.ogg",
+      "size": 18349,
+      "sha256": "aa1855e7494c691056ebf8db149fc8cb292fbaa925f547e1373f761964432ca3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_great_shine.ogg",
+      "source": "chapter2_windows/snd_great_shine.ogg",
+      "size": 20854,
+      "sha256": "8f5a5053cd175683cdfa3830b73f7fe1b7203b679c4809dfdc08b4c761624de3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_him_quick.ogg",
+      "source": "chapter2_windows/snd_him_quick.ogg",
+      "size": 35156,
+      "sha256": "0ef382d5298b2d8daba246a46db398cb4dfc626a57c9c6f9595f1d9358442d36",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_hitcar.ogg",
+      "source": "chapter2_windows/snd_hitcar.ogg",
+      "size": 10331,
+      "sha256": "b86b266cc572933a8882d26a0729225d6e308f5daefbc5fdf3a28c2e645992e3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_hitcar_little.ogg",
+      "source": "chapter2_windows/snd_hitcar_little.ogg",
+      "size": 8540,
+      "sha256": "559bed038778c622a85aa718fdc7ed713a8316b62ee84acccd56dfeaea2aee6b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_icespell.ogg",
+      "source": "chapter2_windows/snd_icespell.ogg",
+      "size": 35258,
+      "sha256": "b1768b33d89ef31c72ea113d46cb6d4cf7038dc81490aca3efa7c500c633ce43",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_paper_rumble.ogg",
+      "source": "chapter1_windows/snd_paper_rumble.ogg",
+      "size": 31366,
+      "sha256": "2a063a900e21794fadf11f7d8f3d17c7bcbf8cc90dec11975163078ce084e6ff",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_paper_surf.ogg",
+      "source": "chapter1_windows/snd_paper_surf.ogg",
+      "size": 31533,
+      "sha256": "8bc383e9cd6d40891304bee271da152af16a2293af1289f66d222a48c592a1b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_power",
+      "source": "chapter2_windows/snd_power",
+      "size": 31486,
+      "sha256": "5001978fb85cc92d61136b69b4aebf3ddaa979f26851d1fdc9a82e4829e7734d",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_revival.ogg",
+      "source": "chapter2_windows/snd_revival.ogg",
+      "size": 45846,
+      "sha256": "e9dc59893281d2fd3cd06b38376f1d3de2f060ae1e144cb0f584916aee73b0b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_rurus_appear.ogg",
+      "source": "chapter1_windows/snd_rurus_appear.ogg",
+      "size": 61668,
+      "sha256": "a55f77023e0bcb6181094cbc844cc04a7130aaebcaa07766a0a7afa7892223fc",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_smallcar_yelp.ogg",
+      "source": "chapter2_windows/snd_smallcar_yelp.ogg",
+      "size": 6008,
+      "sha256": "7bbb80dc81429345569d7eb6567f1068015cfa12012b85ee954d24b73458cc28",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_snowgrave.ogg",
+      "source": "chapter2_windows/snd_snowgrave.ogg",
+      "size": 44747,
+      "sha256": "e34f9737fb330ca8e32e10842b1fff51fcf19d94ddb3e63294864d2ccfcefa34",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_spell_pacify.ogg",
+      "source": "chapter2_windows/snd_spell_pacify.ogg",
+      "size": 18420,
+      "sha256": "7cdd4890c8c6e134f5f37f4635447fe3ba0d108545ba030f968c212b0c119752",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter2/snd_usefountain.ogg",
+      "source": "chapter2_windows/snd_usefountain.ogg",
+      "size": 112368,
+      "sha256": "f1aa3197d0ee44afe3c58fb72dc9daf18c2a92abeb9e5cb0b11bca49445fbc3e",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/AUDIO_INTRONOISE.ogg",
+      "source": "chapter1_windows/AUDIO_INTRONOISE.ogg",
+      "size": 259154,
+      "sha256": "39e9dd180519d1929d280799ea8bff77ba899653de79e0954221fec14b1eca7b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/audiogroup1.dat",
+      "source": "chapter3_windows/audiogroup1.dat",
+      "size": 7444716,
+      "sha256": "d64444c103155c30c3bdf96fa6a70af722ae25b4cb0ed57ca30e572068f1968d",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/game.droid",
+      "source": "chapter3_windows/data.win",
+      "size": 126244594,
+      "sha256": "f24458adcd1faf8d8ba432addea03fc265adf831e7fd92c130d92a87bb858dc5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/lang/lang_ja.json",
+      "source": "chapter3_windows/lang/lang_ja.json",
+      "size": 1460118,
+      "sha256": "164ae8054d5bd6b1de9046ce3be9b264c9f35288e841798a83ab4c96b400e1c3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/options.ini",
+      "source": "chapter2_windows/options.ini",
+      "size": 63,
+      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_bigcar_yelp.ogg",
+      "source": "chapter2_windows/snd_bigcar_yelp.ogg",
+      "size": 7778,
+      "sha256": "7227d899a1d8712dc069f3b3bc7229899865e425e21256636bc8c5605ea77ba8",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_closet_fall.ogg",
+      "source": "chapter1_windows/snd_closet_fall.ogg",
+      "size": 119120,
+      "sha256": "49ade98cb1534fad9ff07b18b448d1b67563365f606275a8a230b279d1b5a3d2",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_closet_impact.ogg",
+      "source": "chapter1_windows/snd_closet_impact.ogg",
+      "size": 80298,
+      "sha256": "a041d05cf35d235e2bf9fde25a71e06d6e11efce33d4246b30c5d562556d848f",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_dtrans_drone.ogg",
+      "source": "chapter2_windows/snd_dtrans_drone.ogg",
+      "size": 192776,
+      "sha256": "f800be1425e584bfb3a602401d7213a83a137d2dd3872ae6cd062aece8eaef2b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_dtrans_flip.ogg",
+      "source": "chapter2_windows/snd_dtrans_flip.ogg",
+      "size": 38277,
+      "sha256": "53c83f9a19ad956a22312941dcf6492e48bd43bf7de22fc2683dded6ac0e35b8",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_dtrans_heavypassing.ogg",
+      "source": "chapter2_windows/snd_dtrans_heavypassing.ogg",
+      "size": 27935,
+      "sha256": "7af68ffbf6fff282f839e40dbb6fd0cc44f72a0c48d372aaf4d6ca39b908b8e3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_dtrans_lw.ogg",
+      "source": "chapter2_windows/snd_dtrans_lw.ogg",
+      "size": 82329,
+      "sha256": "693a127d51c1ffdf2c196496cf0b95aefe0c8365bae39ead34a20645882ce5c5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_dtrans_square.ogg",
+      "source": "chapter2_windows/snd_dtrans_square.ogg",
+      "size": 27509,
+      "sha256": "bed1ee68a913c8900ef63fe6032728833362706f0e98b72e7a5b53965bc9b1cd",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_dtrans_twinkle.ogg",
+      "source": "chapter2_windows/snd_dtrans_twinkle.ogg",
+      "size": 53497,
+      "sha256": "af31b48ba91d8932728027d5f5fac8e4a47e4f0ca88e68827ccb1be1376209e5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_fountain_make.ogg",
+      "source": "chapter2_windows/snd_fountain_make.ogg",
+      "size": 86934,
+      "sha256": "523da55498ad60313855e2befefb6659ef7eb79c78a5e0b9e194bb4027e66379",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_fountain_target.ogg",
+      "source": "chapter2_windows/snd_fountain_target.ogg",
+      "size": 4619,
+      "sha256": "aed05ae33c93d24da26f34b13b477c194ae963a2a1b511a232a61c5496d90eb0",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_ghostappear.ogg",
+      "source": "chapter2_windows/snd_ghostappear.ogg",
+      "size": 18349,
+      "sha256": "aa1855e7494c691056ebf8db149fc8cb292fbaa925f547e1373f761964432ca3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_great_shine.ogg",
+      "source": "chapter2_windows/snd_great_shine.ogg",
+      "size": 20854,
+      "sha256": "8f5a5053cd175683cdfa3830b73f7fe1b7203b679c4809dfdc08b4c761624de3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_him_quick.ogg",
+      "source": "chapter2_windows/snd_him_quick.ogg",
+      "size": 35156,
+      "sha256": "0ef382d5298b2d8daba246a46db398cb4dfc626a57c9c6f9595f1d9358442d36",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_hitcar.ogg",
+      "source": "chapter2_windows/snd_hitcar.ogg",
+      "size": 10331,
+      "sha256": "b86b266cc572933a8882d26a0729225d6e308f5daefbc5fdf3a28c2e645992e3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_hitcar_little.ogg",
+      "source": "chapter2_windows/snd_hitcar_little.ogg",
+      "size": 8540,
+      "sha256": "559bed038778c622a85aa718fdc7ed713a8316b62ee84acccd56dfeaea2aee6b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_icespell.ogg",
+      "source": "chapter2_windows/snd_icespell.ogg",
+      "size": 35258,
+      "sha256": "b1768b33d89ef31c72ea113d46cb6d4cf7038dc81490aca3efa7c500c633ce43",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_paper_rumble.ogg",
+      "source": "chapter1_windows/snd_paper_rumble.ogg",
+      "size": 31366,
+      "sha256": "2a063a900e21794fadf11f7d8f3d17c7bcbf8cc90dec11975163078ce084e6ff",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_paper_surf.ogg",
+      "source": "chapter1_windows/snd_paper_surf.ogg",
+      "size": 31533,
+      "sha256": "8bc383e9cd6d40891304bee271da152af16a2293af1289f66d222a48c592a1b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_revival.ogg",
+      "source": "chapter2_windows/snd_revival.ogg",
+      "size": 45846,
+      "sha256": "e9dc59893281d2fd3cd06b38376f1d3de2f060ae1e144cb0f584916aee73b0b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_rurus_appear.ogg",
+      "source": "chapter1_windows/snd_rurus_appear.ogg",
+      "size": 61668,
+      "sha256": "a55f77023e0bcb6181094cbc844cc04a7130aaebcaa07766a0a7afa7892223fc",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_smallcar_yelp.ogg",
+      "source": "chapter2_windows/snd_smallcar_yelp.ogg",
+      "size": 6008,
+      "sha256": "7bbb80dc81429345569d7eb6567f1068015cfa12012b85ee954d24b73458cc28",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_snowgrave.ogg",
+      "source": "chapter2_windows/snd_snowgrave.ogg",
+      "size": 44747,
+      "sha256": "e34f9737fb330ca8e32e10842b1fff51fcf19d94ddb3e63294864d2ccfcefa34",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_spell_pacify.ogg",
+      "source": "chapter2_windows/snd_spell_pacify.ogg",
+      "size": 18420,
+      "sha256": "7cdd4890c8c6e134f5f37f4635447fe3ba0d108545ba030f968c212b0c119752",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/snd_usefountain.ogg",
+      "source": "chapter2_windows/snd_usefountain.ogg",
+      "size": 112368,
+      "sha256": "f1aa3197d0ee44afe3c58fb72dc9daf18c2a92abeb9e5cb0b11bca49445fbc3e",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/vid/tennaIntroF1_compressed_28.mp4",
+      "source": "chapter3_windows/vid/tennaIntroF1_compressed_28.mp4",
+      "size": 8095070,
+      "sha256": "e3a54a9c89e0c406f5cb5a33785b61c6b5870dd999d1f8ad2958414efcb1eb68",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter3/vid/tennaIntroJPf1_compressed_28.mp4",
+      "source": "chapter3_windows/vid/tennaIntroJPf1_compressed_28.mp4",
+      "size": 7713827,
+      "sha256": "534660ef0c99af7bacad7372ae75f2164f7d42b5d4cd4d6654606174b2950655",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/AUDIO_INTRONOISE.ogg",
+      "source": "chapter1_windows/AUDIO_INTRONOISE.ogg",
+      "size": 259154,
+      "sha256": "39e9dd180519d1929d280799ea8bff77ba899653de79e0954221fec14b1eca7b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/audiogroup1.dat",
+      "source": "chapter4_windows/audiogroup1.dat",
+      "size": 7025372,
+      "sha256": "c5e8216f340a2444dcd44dfd384b1018b2f9105b4b542506c8aebbbdd8154bca",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/game.droid",
+      "source": null,
+      "size": 131891262,
+      "sha256": "0e6c152582df6b9884360b2010df38ff20f9b6d1ba49e87601e4c57b9f1c1abb",
+      "mode": "patch",
+      "patch": "0123.bsdiff"
+    },
+    {
+      "output": "chapter4/lang/lang_ja.json",
+      "source": null,
+      "size": 1714262,
+      "sha256": "22791465a2964ba9799fb4f46dfd4d3a61bdeec78cb5389c9ad5ed4ca30beaed",
+      "mode": "patch",
+      "patch": "0124.bsdiff"
+    },
+    {
+      "output": "chapter4/mus_undynescary.ogg",
+      "source": "chapter4_windows/mus_undynescary.ogg",
+      "size": 337354,
+      "sha256": "3c045885f2f655aeabd3edcdf68765c73a7c3c40c9dc11da9fc3dd56e28c1712",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/options.ini",
+      "source": "chapter2_windows/options.ini",
+      "size": 63,
+      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_bigcar_yelp.ogg",
+      "source": "chapter2_windows/snd_bigcar_yelp.ogg",
+      "size": 7778,
+      "sha256": "7227d899a1d8712dc069f3b3bc7229899865e425e21256636bc8c5605ea77ba8",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_closet_fall.ogg",
+      "source": "chapter1_windows/snd_closet_fall.ogg",
+      "size": 119120,
+      "sha256": "49ade98cb1534fad9ff07b18b448d1b67563365f606275a8a230b279d1b5a3d2",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_closet_impact.ogg",
+      "source": "chapter1_windows/snd_closet_impact.ogg",
+      "size": 80298,
+      "sha256": "a041d05cf35d235e2bf9fde25a71e06d6e11efce33d4246b30c5d562556d848f",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_dtrans_drone.ogg",
+      "source": "chapter2_windows/snd_dtrans_drone.ogg",
+      "size": 192776,
+      "sha256": "f800be1425e584bfb3a602401d7213a83a137d2dd3872ae6cd062aece8eaef2b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_dtrans_flip.ogg",
+      "source": "chapter2_windows/snd_dtrans_flip.ogg",
+      "size": 38277,
+      "sha256": "53c83f9a19ad956a22312941dcf6492e48bd43bf7de22fc2683dded6ac0e35b8",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_dtrans_heavypassing.ogg",
+      "source": "chapter2_windows/snd_dtrans_heavypassing.ogg",
+      "size": 27935,
+      "sha256": "7af68ffbf6fff282f839e40dbb6fd0cc44f72a0c48d372aaf4d6ca39b908b8e3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_dtrans_lw.ogg",
+      "source": "chapter2_windows/snd_dtrans_lw.ogg",
+      "size": 82329,
+      "sha256": "693a127d51c1ffdf2c196496cf0b95aefe0c8365bae39ead34a20645882ce5c5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_dtrans_square.ogg",
+      "source": "chapter2_windows/snd_dtrans_square.ogg",
+      "size": 27509,
+      "sha256": "bed1ee68a913c8900ef63fe6032728833362706f0e98b72e7a5b53965bc9b1cd",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_dtrans_twinkle.ogg",
+      "source": "chapter2_windows/snd_dtrans_twinkle.ogg",
+      "size": 53497,
+      "sha256": "af31b48ba91d8932728027d5f5fac8e4a47e4f0ca88e68827ccb1be1376209e5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_fountain_make.ogg",
+      "source": "chapter2_windows/snd_fountain_make.ogg",
+      "size": 86934,
+      "sha256": "523da55498ad60313855e2befefb6659ef7eb79c78a5e0b9e194bb4027e66379",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_fountain_target.ogg",
+      "source": "chapter2_windows/snd_fountain_target.ogg",
+      "size": 4619,
+      "sha256": "aed05ae33c93d24da26f34b13b477c194ae963a2a1b511a232a61c5496d90eb0",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_ghostappear.ogg",
+      "source": "chapter2_windows/snd_ghostappear.ogg",
+      "size": 18349,
+      "sha256": "aa1855e7494c691056ebf8db149fc8cb292fbaa925f547e1373f761964432ca3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_great_shine.ogg",
+      "source": "chapter2_windows/snd_great_shine.ogg",
+      "size": 20854,
+      "sha256": "8f5a5053cd175683cdfa3830b73f7fe1b7203b679c4809dfdc08b4c761624de3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_him_quick.ogg",
+      "source": "chapter2_windows/snd_him_quick.ogg",
+      "size": 35156,
+      "sha256": "0ef382d5298b2d8daba246a46db398cb4dfc626a57c9c6f9595f1d9358442d36",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_hitcar.ogg",
+      "source": "chapter2_windows/snd_hitcar.ogg",
+      "size": 10331,
+      "sha256": "b86b266cc572933a8882d26a0729225d6e308f5daefbc5fdf3a28c2e645992e3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_hitcar_little.ogg",
+      "source": "chapter2_windows/snd_hitcar_little.ogg",
+      "size": 8540,
+      "sha256": "559bed038778c622a85aa718fdc7ed713a8316b62ee84acccd56dfeaea2aee6b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_icespell.ogg",
+      "source": "chapter2_windows/snd_icespell.ogg",
+      "size": 35258,
+      "sha256": "b1768b33d89ef31c72ea113d46cb6d4cf7038dc81490aca3efa7c500c633ce43",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_paper_rumble.ogg",
+      "source": "chapter1_windows/snd_paper_rumble.ogg",
+      "size": 31366,
+      "sha256": "2a063a900e21794fadf11f7d8f3d17c7bcbf8cc90dec11975163078ce084e6ff",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_paper_surf.ogg",
+      "source": "chapter1_windows/snd_paper_surf.ogg",
+      "size": 31533,
+      "sha256": "8bc383e9cd6d40891304bee271da152af16a2293af1289f66d222a48c592a1b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_revival.ogg",
+      "source": "chapter2_windows/snd_revival.ogg",
+      "size": 45846,
+      "sha256": "e9dc59893281d2fd3cd06b38376f1d3de2f060ae1e144cb0f584916aee73b0b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_rurus_appear.ogg",
+      "source": "chapter1_windows/snd_rurus_appear.ogg",
+      "size": 61668,
+      "sha256": "a55f77023e0bcb6181094cbc844cc04a7130aaebcaa07766a0a7afa7892223fc",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_smallcar_yelp.ogg",
+      "source": "chapter2_windows/snd_smallcar_yelp.ogg",
+      "size": 6008,
+      "sha256": "7bbb80dc81429345569d7eb6567f1068015cfa12012b85ee954d24b73458cc28",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_snowgrave.ogg",
+      "source": "chapter2_windows/snd_snowgrave.ogg",
+      "size": 44747,
+      "sha256": "e34f9737fb330ca8e32e10842b1fff51fcf19d94ddb3e63294864d2ccfcefa34",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_spell_pacify.ogg",
+      "source": "chapter2_windows/snd_spell_pacify.ogg",
+      "size": 18420,
+      "sha256": "7cdd4890c8c6e134f5f37f4635447fe3ba0d108545ba030f968c212b0c119752",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter4/snd_usefountain.ogg",
+      "source": "chapter2_windows/snd_usefountain.ogg",
+      "size": 112368,
+      "sha256": "f1aa3197d0ee44afe3c58fb72dc9daf18c2a92abeb9e5cb0b11bca49445fbc3e",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/AUDIO_INTRONOISE.ogg",
+      "source": "chapter1_windows/AUDIO_INTRONOISE.ogg",
+      "size": 259154,
+      "sha256": "39e9dd180519d1929d280799ea8bff77ba899653de79e0954221fec14b1eca7b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/audiogroup1.dat",
+      "source": "chapter4_windows/audiogroup1.dat",
+      "size": 7025372,
+      "sha256": "c5e8216f340a2444dcd44dfd384b1018b2f9105b4b542506c8aebbbdd8154bca",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/execute_program_pipe_x64.dll",
+      "source": "chapter5_windows/execute_program_pipe_x64.dll",
+      "size": 125440,
+      "sha256": "a594a7205f6a4ccff42cb460dfa08bb54442cb3317c7bdc0fa0437d636359402",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/game.droid",
+      "source": null,
+      "size": 165299868,
+      "sha256": "81f86fb98bdd9f3de029043adbb453f276a9fb7e26a4db1f3ee0ae3675e81c5a",
+      "mode": "patch",
+      "patch": "0155.bsdiff"
+    },
+    {
+      "output": "chapter5/lang/lang_ja.json",
+      "source": null,
+      "size": 1931284,
+      "sha256": "47096e6d82a86cd621323d77a5380b64d70d4f1cc20a61bf14c96b89ec1fcf95",
+      "mode": "patch",
+      "patch": "0156.bsdiff"
+    },
+    {
+      "output": "chapter5/options.ini",
+      "source": "chapter5_windows/options.ini",
+      "size": 133,
+      "sha256": "f3a19e09adf2d9edd2cb08b64999baf296543c3ba04a71a725119bf0a2ea0fe7",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/shader_replace_simple_x64.dll",
+      "source": "chapter5_windows/shader_replace_simple_x64.dll",
+      "size": 153600,
+      "sha256": "c10210e3cd619774d63947116bd22fb3f60f2d992b21f3ffb0121393e596b124",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_bigcar_yelp.ogg",
+      "source": "chapter2_windows/snd_bigcar_yelp.ogg",
+      "size": 7778,
+      "sha256": "7227d899a1d8712dc069f3b3bc7229899865e425e21256636bc8c5605ea77ba8",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_churchbell.ogg",
+      "source": "chapter5_windows/snd_churchbell.ogg",
+      "size": 145287,
+      "sha256": "a381880c647c8f20082ce4fcac30a082e6aa0db6fc0c1ac0fde701fa7173e981",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_closet_fall.ogg",
+      "source": "chapter1_windows/snd_closet_fall.ogg",
+      "size": 119120,
+      "sha256": "49ade98cb1534fad9ff07b18b448d1b67563365f606275a8a230b279d1b5a3d2",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_closet_impact.ogg",
+      "source": "chapter1_windows/snd_closet_impact.ogg",
+      "size": 80298,
+      "sha256": "a041d05cf35d235e2bf9fde25a71e06d6e11efce33d4246b30c5d562556d848f",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_dtrans_drone.ogg",
+      "source": "chapter2_windows/snd_dtrans_drone.ogg",
+      "size": 192776,
+      "sha256": "f800be1425e584bfb3a602401d7213a83a137d2dd3872ae6cd062aece8eaef2b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_dtrans_flip.ogg",
+      "source": "chapter2_windows/snd_dtrans_flip.ogg",
+      "size": 38277,
+      "sha256": "53c83f9a19ad956a22312941dcf6492e48bd43bf7de22fc2683dded6ac0e35b8",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_dtrans_heavypassing.ogg",
+      "source": "chapter2_windows/snd_dtrans_heavypassing.ogg",
+      "size": 27935,
+      "sha256": "7af68ffbf6fff282f839e40dbb6fd0cc44f72a0c48d372aaf4d6ca39b908b8e3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_dtrans_lw.ogg",
+      "source": "chapter2_windows/snd_dtrans_lw.ogg",
+      "size": 82329,
+      "sha256": "693a127d51c1ffdf2c196496cf0b95aefe0c8365bae39ead34a20645882ce5c5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_dtrans_square.ogg",
+      "source": "chapter2_windows/snd_dtrans_square.ogg",
+      "size": 27509,
+      "sha256": "bed1ee68a913c8900ef63fe6032728833362706f0e98b72e7a5b53965bc9b1cd",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_dtrans_twinkle.ogg",
+      "source": "chapter2_windows/snd_dtrans_twinkle.ogg",
+      "size": 53497,
+      "sha256": "af31b48ba91d8932728027d5f5fac8e4a47e4f0ca88e68827ccb1be1376209e5",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_fountain_make.ogg",
+      "source": "chapter2_windows/snd_fountain_make.ogg",
+      "size": 86934,
+      "sha256": "523da55498ad60313855e2befefb6659ef7eb79c78a5e0b9e194bb4027e66379",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_fountain_target.ogg",
+      "source": "chapter2_windows/snd_fountain_target.ogg",
+      "size": 4619,
+      "sha256": "aed05ae33c93d24da26f34b13b477c194ae963a2a1b511a232a61c5496d90eb0",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_ghostappear.ogg",
+      "source": "chapter2_windows/snd_ghostappear.ogg",
+      "size": 18349,
+      "sha256": "aa1855e7494c691056ebf8db149fc8cb292fbaa925f547e1373f761964432ca3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_great_shine.ogg",
+      "source": "chapter2_windows/snd_great_shine.ogg",
+      "size": 20854,
+      "sha256": "8f5a5053cd175683cdfa3830b73f7fe1b7203b679c4809dfdc08b4c761624de3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_him_quick.ogg",
+      "source": "chapter2_windows/snd_him_quick.ogg",
+      "size": 35156,
+      "sha256": "0ef382d5298b2d8daba246a46db398cb4dfc626a57c9c6f9595f1d9358442d36",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_hitcar.ogg",
+      "source": "chapter2_windows/snd_hitcar.ogg",
+      "size": 10331,
+      "sha256": "b86b266cc572933a8882d26a0729225d6e308f5daefbc5fdf3a28c2e645992e3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_hitcar_little.ogg",
+      "source": "chapter2_windows/snd_hitcar_little.ogg",
+      "size": 8540,
+      "sha256": "559bed038778c622a85aa718fdc7ed713a8316b62ee84acccd56dfeaea2aee6b",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_icespell.ogg",
+      "source": "chapter2_windows/snd_icespell.ogg",
+      "size": 35258,
+      "sha256": "b1768b33d89ef31c72ea113d46cb6d4cf7038dc81490aca3efa7c500c633ce43",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_paper_rumble.ogg",
+      "source": "chapter1_windows/snd_paper_rumble.ogg",
+      "size": 31366,
+      "sha256": "2a063a900e21794fadf11f7d8f3d17c7bcbf8cc90dec11975163078ce084e6ff",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_paper_surf.ogg",
+      "source": "chapter1_windows/snd_paper_surf.ogg",
+      "size": 31533,
+      "sha256": "8bc383e9cd6d40891304bee271da152af16a2293af1289f66d222a48c592a1b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_revival.ogg",
+      "source": "chapter2_windows/snd_revival.ogg",
+      "size": 45846,
+      "sha256": "e9dc59893281d2fd3cd06b38376f1d3de2f060ae1e144cb0f584916aee73b0b3",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_rurus_appear.ogg",
+      "source": "chapter1_windows/snd_rurus_appear.ogg",
+      "size": 61668,
+      "sha256": "a55f77023e0bcb6181094cbc844cc04a7130aaebcaa07766a0a7afa7892223fc",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_smallcar_yelp.ogg",
+      "source": "chapter2_windows/snd_smallcar_yelp.ogg",
+      "size": 6008,
+      "sha256": "7bbb80dc81429345569d7eb6567f1068015cfa12012b85ee954d24b73458cc28",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_snowgrave.ogg",
+      "source": "chapter2_windows/snd_snowgrave.ogg",
+      "size": 44747,
+      "sha256": "e34f9737fb330ca8e32e10842b1fff51fcf19d94ddb3e63294864d2ccfcefa34",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_spell_pacify.ogg",
+      "source": "chapter2_windows/snd_spell_pacify.ogg",
+      "size": 18420,
+      "sha256": "7cdd4890c8c6e134f5f37f4635447fe3ba0d108545ba030f968c212b0c119752",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/snd_usefountain.ogg",
+      "source": "chapter2_windows/snd_usefountain.ogg",
+      "size": 112368,
+      "sha256": "f1aa3197d0ee44afe3c58fb72dc9daf18c2a92abeb9e5cb0b11bca49445fbc3e",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/vid/ch5_intro_en.mp4",
+      "source": "chapter5_windows/vid/ch5_intro_en.mp4",
+      "size": 4520993,
+      "sha256": "fcbe0a2f78d2dd77987cd0cffeb2d75adfd1a46c78ec625118bb44c54101d778",
+      "mode": "copy"
+    },
+    {
+      "output": "chapter5/vid/ch5_intro_jp.mp4",
+      "source": "chapter5_windows/vid/ch5_intro_jp.mp4",
+      "size": 4482399,
+      "sha256": "7b7bc761a65685ea379cfc8389b396487351c6052d6396a461a504dde60b6a67",
+      "mode": "copy"
+    },
+    {
+      "output": "mods/PTBR/chapter0/game.droid",
+      "source": null,
+      "size": 2981666,
+      "sha256": "b882ece65a2a01f8f928d3ac8d75fae0129a436c2965d1996527c9c25a9d02f7",
+      "mode": "patch",
+      "patch": "0187.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/chapter1/game.droid",
+      "source": null,
+      "size": 13137812,
+      "sha256": "69f49b87c4385e553196fcceb760f4485f93ca77a5b18dcaab155c665c72f04e",
+      "mode": "patch",
+      "patch": "0188.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/chapter1/lang/lang_en.json",
+      "source": null,
+      "size": 559929,
+      "sha256": "24239cdd016582fc200437507e86c0876a2870f92eba2dbf8ae99046b75c9ea2",
+      "mode": "patch",
+      "patch": "0189.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/chapter2/game.droid",
+      "source": null,
+      "size": 67273414,
+      "sha256": "23f708887c54a0eb2557007ef1324961baca97f8f1fe6a6fae01399019eff4c6",
+      "mode": "patch",
+      "patch": "0190.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/chapter3/game.droid",
+      "source": null,
+      "size": 130515854,
+      "sha256": "1d9bcff7040207747221c25a9169e57ae7d5d2999ede5849e5ad441bc3fb84a7",
+      "mode": "patch",
+      "patch": "0191.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/chapter3/vid/tennaIntroF1_compressed_28.mp4",
+      "source": null,
+      "size": 7946240,
+      "sha256": "742d0a24817ba5831f24af734d881ba278074f30ce392ee3962d81538822995a",
+      "mode": "patch",
+      "patch": "0192.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/chapter4/game.droid",
+      "source": null,
+      "size": 132294142,
+      "sha256": "083db6feed7972f8543a31d757402e5a0d4dfcb3beb91eee8baac0d9e1fa683e",
+      "mode": "patch",
+      "patch": "0193.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/chapter4/lang/lang_en.json",
+      "source": null,
+      "size": 1328288,
+      "sha256": "fbbe2eb671c0063f2e07a42a7259a649c71fae33d7b64fe53c62d98b946fd70b",
+      "mode": "patch",
+      "patch": "0194.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/music/ch2_credits.ogg",
+      "source": null,
+      "size": 747313,
+      "sha256": "d974fe3fcf9a2dc6ba3a19a5b4af75bb10ecdc95c6a8340a849b94dc0e52de41",
+      "mode": "patch",
+      "patch": "0195.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/music/dontforget.ogg",
+      "source": null,
+      "size": 1641988,
+      "sha256": "59b2e67998a4e1b72ca0a1f8d8e3aa09b9cbb9ab955df6a327c70d592142f92e",
+      "mode": "patch",
+      "patch": "0196.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/music/spamton_battle.ogg",
+      "source": null,
+      "size": 800241,
+      "sha256": "a28e8ee776102fd8ed250f1b215cccdce2a92e051350e148e857791c79e34f1d",
+      "mode": "patch",
+      "patch": "0197.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/music/spamton_meeting.ogg",
+      "source": null,
+      "size": 332411,
+      "sha256": "4f0ed526262671adba11589eae295cd9c95d63640985a2ceb05a04e91655ff8e",
+      "mode": "patch",
+      "patch": "0198.bsdiff"
+    },
+    {
+      "output": "mods/PTBR/music/spamton_neo_mix_ex_wip.ogg",
+      "source": null,
+      "size": 2002637,
+      "sha256": "4f02693211a50d55d03fce005470cbaec2f0ee279308cc714f34d25f7fe38c26",
+      "mode": "patch",
+      "patch": "0199.bsdiff"
+    },
+    {
+      "output": "music/4rd_sanctuary.ogg",
+      "source": "mus/4rd_sanctuary.ogg",
+      "size": 1277118,
+      "sha256": "1e55bdf2f8f563d9470bdf2e11a7b194cb833ba333a461ed28a3213032191af0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/4rd_sanctuary_noguit.ogg",
+      "source": "mus/4rd_sanctuary_noguit.ogg",
+      "size": 1276612,
+      "sha256": "f3b9e96939ad392b4917d1d0d2ac6924ce26d73fbea00a1177e24477e578355e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/acid_tunnel.ogg",
+      "source": "mus/acid_tunnel.ogg",
+      "size": 1080250,
+      "sha256": "a5885437e7ec959bc49e07f03ec29d2396dc7326b76452cedc64ec71c3094d26",
+      "mode": "copy"
+    },
+    {
+      "output": "music/afterrain_inside.ogg",
+      "source": "mus/afterrain_inside.ogg",
+      "size": 171837,
+      "sha256": "01f01e52aee729ad1c49b71e236319a93dfbe993a9a9df497ec9c6666a3da7d9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/alarm_titlescreen.ogg",
+      "source": "mus/alarm_titlescreen.ogg",
+      "size": 135921,
+      "sha256": "988ca27af02641debb39f2b1f7d3627239944d33623641bc8f6767b63f831721",
+      "mode": "copy"
+    },
+    {
+      "output": "music/alley_ambience.ogg",
+      "source": "mus/alley_ambience.ogg",
+      "size": 154136,
+      "sha256": "de97e5f7ae12558e7f745dcd2d6b6729aa6346164791c110c359d489eae90709",
+      "mode": "copy"
+    },
+    {
+      "output": "music/alt_church_lobby.ogg",
+      "source": "mus/alt_church_lobby.ogg",
+      "size": 173096,
+      "sha256": "be39128f184fbb2ab2efa55e60b47cf989e2f685a5150d15a136ec34debe82fb",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ambientwater_weird.ogg",
+      "source": "mus/ambientwater_weird.ogg",
+      "size": 77284,
+      "sha256": "eec120522b3478330ee1a8edb34fafbd1f6bd71300a7eae37e81eaf040649c9f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/annoying_prophecy.ogg",
+      "source": "mus/annoying_prophecy.ogg",
+      "size": 111648,
+      "sha256": "fdd18ec02190f5b0a3f7ce699c2a0418b6db27a967a28c4fcf7561dd79e814a4",
+      "mode": "copy"
+    },
+    {
+      "output": "music/april_2012.ogg",
+      "source": "mus/april_2012.ogg",
+      "size": 254813,
+      "sha256": "a54c6916058beafd57b78b2c15fe54e26edabbb87e5cc364be572991f140a978",
+      "mode": "copy"
+    },
+    {
+      "output": "music/asgore_conspiracy.ogg",
+      "source": "mus/asgore_conspiracy.ogg",
+      "size": 1464398,
+      "sha256": "dbc2dfd4d2cb335779448fc8805cc3dd7d8008e20451eea0a3f9b3b145e40663",
+      "mode": "copy"
+    },
+    {
+      "output": "music/asgore_serious.ogg",
+      "source": "mus/asgore_serious.ogg",
+      "size": 641207,
+      "sha256": "bcdfe43b7d93dd6a533c4350c34caa3b8caaeff285959fa65217ae5b4f529d53",
+      "mode": "copy"
+    },
+    {
+      "output": "music/asgore_serious_drum_only_flowery_version.ogg",
+      "source": "mus/asgore_serious_drum_only_flowery_version.ogg",
+      "size": 388901,
+      "sha256": "3443e9d53389880cd851ec66fa6b0172944f666dcf7b8032ca43d582325503f2",
+      "mode": "copy"
+    },
+    {
+      "output": "music/asgore_serious_drum_only_low.ogg",
+      "source": "mus/asgore_serious_drum_only_low.ogg",
+      "size": 252984,
+      "sha256": "877cad383236e2dd3731420e7ee21b63b50b0de78d6e26bf9cf539a2c31e0741",
+      "mode": "copy"
+    },
+    {
+      "output": "music/AUDIO_ANOTHERHIM.ogg",
+      "source": "mus/AUDIO_ANOTHERHIM.ogg",
+      "size": 1169321,
+      "sha256": "b1561440e1e28256dfc225c3000e29c4f47e545f23b0b548e7608c8d01ec045d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/AUDIO_DARKNESS.ogg",
+      "source": "mus/AUDIO_DARKNESS.ogg",
+      "size": 709036,
+      "sha256": "5bfc97d97284e2c9d0f0b958e1c1242746c36524fb2b8acf6fea7a7aeaed1a40",
+      "mode": "copy"
+    },
+    {
+      "output": "music/AUDIO_DEFEAT.ogg",
+      "source": "mus/AUDIO_DEFEAT.ogg",
+      "size": 361145,
+      "sha256": "6e9b9b354aa888f18d5f2e65625c4f4b8908afed10722fba6ba78cb831559d4b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/AUDIO_DRONE.ogg",
+      "source": "mus/AUDIO_DRONE.ogg",
+      "size": 186541,
+      "sha256": "2775a00f8fe492efe5ecc7a513e32b0ce407d1848db16ef9686caf9a2c8f54f2",
+      "mode": "copy"
+    },
+    {
+      "output": "music/AUDIO_STORY.ogg",
+      "source": "mus/AUDIO_STORY.ogg",
+      "size": 2149167,
+      "sha256": "1e16688900311c3be1a7d4243de5d4c82a7c52db6d8801b98507166c9f76fd43",
+      "mode": "copy"
+    },
+    {
+      "output": "music/baci_distort.ogg",
+      "source": "mus/baci_distort.ogg",
+      "size": 227624,
+      "sha256": "9d3ec3de55af443833ad7c65310aaf6a8de5282ceea44946bddcf0c283b9c570",
+      "mode": "copy"
+    },
+    {
+      "output": "music/baci_perugina.ogg",
+      "source": "mus/baci_perugina.ogg",
+      "size": 322615,
+      "sha256": "2c9f6d6154340311c7c9a4c519a0ab4a870041ee5ff47412a32770627b1f77b9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/basement.ogg",
+      "source": "mus/basement.ogg",
+      "size": 642627,
+      "sha256": "c7ed445709f6e95e49cff548a0e8d2f68beca3ad7b273962ef88950905fc379f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/battle.ogg",
+      "source": "mus/battle.ogg",
+      "size": 1835051,
+      "sha256": "888c10611589bf38d540a472dedb43e25baed165fdcc77ff39fec37beeab3cd2",
+      "mode": "copy"
+    },
+    {
+      "output": "music/battle_preview.ogg",
+      "source": "mus/battle_preview.ogg",
+      "size": 810154,
+      "sha256": "e0f0ab02eb7652ebb7780fcd18f3a3e5a72ac8832609656efedbb480ff34954d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/battle_preview_crisp.ogg",
+      "source": "mus/battle_preview_crisp.ogg",
+      "size": 830983,
+      "sha256": "b144f0ae8a82e828264df5bd8def289f5fe50abeb5672b5bde740b14f50e4803",
+      "mode": "copy"
+    },
+    {
+      "output": "music/battle_vapor.ogg",
+      "source": "mus/battle_vapor.ogg",
+      "size": 1871203,
+      "sha256": "7e4c4ea18785bd84dffae7006db01812b6664b64f12fabbf9531da2e5ce0a540",
+      "mode": "copy"
+    },
+    {
+      "output": "music/bell_ambience.ogg",
+      "source": "mus/bell_ambience.ogg",
+      "size": 318912,
+      "sha256": "e75c31b959ed2ab2644614286676e654dc0024f7f7b122f1765ff7c89616a51e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/berdly_audience.ogg",
+      "source": "mus/berdly_audience.ogg",
+      "size": 20501,
+      "sha256": "04ba3a20fa0215af79f1e5d5bf55aabda1933db478b89787f711332ae3708905",
+      "mode": "copy"
+    },
+    {
+      "output": "music/berdly_battle_heartbeat_true.ogg",
+      "source": "mus/berdly_battle_heartbeat_true.ogg",
+      "size": 180749,
+      "sha256": "d35a5e419fdde1fb060184b612c6c2ed14de314bbf5018a715f8418f9704f6b8",
+      "mode": "copy"
+    },
+    {
+      "output": "music/berdly_chase.ogg",
+      "source": "mus/berdly_chase.ogg",
+      "size": 913570,
+      "sha256": "f6e61a27e91fcd4cfdb5330ef1fac4c899ddb8ccd825108128081f34d0e5a975",
+      "mode": "copy"
+    },
+    {
+      "output": "music/berdly_descend.ogg",
+      "source": "mus/berdly_descend.ogg",
+      "size": 62101,
+      "sha256": "d0b6a705e1409f8dbf0bb4bd875222e4b5e1ed742a34fe66ab5c267071a83675",
+      "mode": "copy"
+    },
+    {
+      "output": "music/berdly_flashback.ogg",
+      "source": "mus/berdly_flashback.ogg",
+      "size": 394150,
+      "sha256": "9223a89c45fb635e668e5d6c1105d8c85a0d64942ce4569140b8aaa69c637984",
+      "mode": "copy"
+    },
+    {
+      "output": "music/berdly_theme.ogg",
+      "source": "mus/berdly_theme.ogg",
+      "size": 822325,
+      "sha256": "37607654b59ae56bce25eb242daf281dfffb82f2db5def3ffb494007513b990a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/bird.ogg",
+      "source": "mus/bird.ogg",
+      "size": 160948,
+      "sha256": "1067ae035a82e2884ac4f563cf9ab2af3da1453a4173a45e21422df417bef361",
+      "mode": "copy"
+    },
+    {
+      "output": "music/birds_ch5.ogg",
+      "source": "mus/birds_ch5.ogg",
+      "size": 130833,
+      "sha256": "faedc48a9320fadaf2d1355a11b1fd5fff50b3408cf52d4a64eb38d5dd3da28d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/blue_flower.ogg",
+      "source": "mus/blue_flower.ogg",
+      "size": 2131749,
+      "sha256": "6523589f7980e003bbaa41f1226afa59f5ed45021979db2b106749c477859c0e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/board4_rhythm.ogg",
+      "source": "mus/board4_rhythm.ogg",
+      "size": 279404,
+      "sha256": "cd1e28119081029052cbffd112aec8331e8e748df8924083f78ac224422f3319",
+      "mode": "copy"
+    },
+    {
+      "output": "music/board_4.ogg",
+      "source": "mus/board_4.ogg",
+      "size": 373844,
+      "sha256": "ab38a519038d1227684880b162e5a02b576b22f8e27edf0920078e2397669692",
+      "mode": "copy"
+    },
+    {
+      "output": "music/board_4_challenge.ogg",
+      "source": "mus/board_4_challenge.ogg",
+      "size": 374063,
+      "sha256": "d6d4e68470bce1af95a7084729916d69ad6cca08c349064eb53c5d6b903aa6f6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/board_lancer_dig.ogg",
+      "source": "mus/board_lancer_dig.ogg",
+      "size": 86056,
+      "sha256": "9cc773502021c4ac8a0c46a19b333dd3e21999609d3c5a4b57f17705b6f07662",
+      "mode": "copy"
+    },
+    {
+      "output": "music/board_ocean.ogg",
+      "source": "mus/board_ocean.ogg",
+      "size": 80285,
+      "sha256": "6c115db065f47091820bfbb707c885b90ceee4af6028acc1ca3ab349db4819c1",
+      "mode": "copy"
+    },
+    {
+      "output": "music/board_sword_music.ogg",
+      "source": "mus/board_sword_music.ogg",
+      "size": 1069618,
+      "sha256": "a3e871a40ea33d721b4a4028d0b73ae19dce5424e8ec73ce1fc2295768b206c0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/board_zelda.ogg",
+      "source": "mus/board_zelda.ogg",
+      "size": 725447,
+      "sha256": "0973ef6e0d75863df58003f834087ce60382f3f9b21da3d6ce1d3285bfa87027",
+      "mode": "copy"
+    },
+    {
+      "output": "music/boxing_boss.ogg",
+      "source": "mus/boxing_boss.ogg",
+      "size": 1447802,
+      "sha256": "b748216307bcd291993c5f28db330d8a87ba34d14ea06a8c96bb407fa29a3cfb",
+      "mode": "copy"
+    },
+    {
+      "output": "music/boxing_boss_preview.ogg",
+      "source": "mus/boxing_boss_preview.ogg",
+      "size": 757579,
+      "sha256": "d4edd4ddb2cd4ce44e390606dd266f8eb3991787fed68fd42339ddb01fab738d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/boxing_boss_preview_crisp.ogg",
+      "source": "mus/boxing_boss_preview_crisp.ogg",
+      "size": 615205,
+      "sha256": "90b7dc60b6d4def77e41798014b2ed16773bd8541d26c4e5f662c4e809d9a2e7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/boxing_game.ogg",
+      "source": "mus/boxing_game.ogg",
+      "size": 183278,
+      "sha256": "1166725cfe9da3d7450d414991766bd6214b0bbc84f5c237d2a7ab327b431804",
+      "mode": "copy"
+    },
+    {
+      "output": "music/bratty_confession.ogg",
+      "source": "mus/bratty_confession.ogg",
+      "size": 646901,
+      "sha256": "5df861c02cc8731aca7cf721cdfa1cdd0bd710acb251ecb919e64dc92f449478",
+      "mode": "copy"
+    },
+    {
+      "output": "music/card_castle.ogg",
+      "source": "mus/card_castle.ogg",
+      "size": 625137,
+      "sha256": "fbcdf4c29e14a2ab1566d3179faee537551effbed89e554cfbf1de63c953170c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/carol_appeared.ogg",
+      "source": "mus/carol_appeared.ogg",
+      "size": 595184,
+      "sha256": "39feaa3bc118850d59da709d274d79bfa1d0218a463100824b050b1e3a5b38a5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/castle_foyer.ogg",
+      "source": "mus/castle_foyer.ogg",
+      "size": 851577,
+      "sha256": "39307fe5055e98246e5edfd2e4bca118ed3d985c12c6c7c9b9978cd20074bb30",
+      "mode": "copy"
+    },
+    {
+      "output": "music/castle_funk_long.ogg",
+      "source": "mus/castle_funk_long.ogg",
+      "size": 1439371,
+      "sha256": "fd6a1caf1a0c73b43618e46281f0f04ecc049636d79d72c75772cf44682e8f7d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/castle_intro.ogg",
+      "source": "mus/castle_intro.ogg",
+      "size": 375274,
+      "sha256": "f4244abb4b82f4bcebb7c09edd5e329d1853cb6997abeb1d4aa57954d70f3b78",
+      "mode": "copy"
+    },
+    {
+      "output": "music/castle_loop.ogg",
+      "source": "mus/castle_loop.ogg",
+      "size": 933516,
+      "sha256": "a0999107881d907ae9094c3babbbc284c26966aff3dc457eb0bb5f0b192dc39b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/castle_top.ogg",
+      "source": "mus/castle_top.ogg",
+      "size": 2882175,
+      "sha256": "3c72afbd27bc4ac3c3be69fcde5a0795c0d0e44a1ede0a0bf0c0c36191cf13ea",
+      "mode": "copy"
+    },
+    {
+      "output": "music/castletown.ogg",
+      "source": "mus/castletown.ogg",
+      "size": 1537218,
+      "sha256": "82edd8d4590e1fe849dc3ef57565826608567cfa79387eaeb6b0537a7dc79ccf",
+      "mode": "copy"
+    },
+    {
+      "output": "music/castletown_empty.ogg",
+      "source": "mus/castletown_empty.ogg",
+      "size": 1020494,
+      "sha256": "14476fe1d21706394ee2871d909e309a12c9122610818787743ad46638baa048",
+      "mode": "copy"
+    },
+    {
+      "output": "music/catti_confession.ogg",
+      "source": "mus/catti_confession.ogg",
+      "size": 486366,
+      "sha256": "9f68d173845a81c2fb118cef5e580d37a2dde61e703661bbb9b8a33ac1caf98a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch2_credits.ogg",
+      "source": "mus/ch2_credits.ogg",
+      "size": 747431,
+      "sha256": "7e9ebd7c1a70f6ff5e05aad82428dccd5bf0ff4b6bfa6d1cf0609dd757281b99",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3-practice_song_combined.ogg",
+      "source": "mus/ch3-practice_song_combined.ogg",
+      "size": 527947,
+      "sha256": "37d9d14ba29d5a40bceaaa9ce65c7dd49dd091fb414ba51a4f5e0c448413a714",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3-practice_song_noguit.ogg",
+      "source": "mus/ch3-practice_song_noguit.ogg",
+      "size": 528047,
+      "sha256": "26e3141313df1cf6b8446002f34c2961ac9c8236f16fb3eb9eeb6de1270dff53",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_board1.ogg",
+      "source": "mus/ch3_board1.ogg",
+      "size": 1221629,
+      "sha256": "73bfd2ec08c4803505dc8b319ded2e3967af6bb435ce01e6e6d415e02e0f8051",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_board2.ogg",
+      "source": "mus/ch3_board2.ogg",
+      "size": 705128,
+      "sha256": "9ef0362b727a2faf6a983f659f59f8efe17d53e00027d68f936b46c5f284232e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_board3.ogg",
+      "source": "mus/ch3_board3.ogg",
+      "size": 839644,
+      "sha256": "d93027c8d564ad1802735c6a88f559eddcb1215f7c08da2a284918415b97578f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_example_guit_only.ogg",
+      "source": "mus/ch3_karaoke_example_guit_only.ogg",
+      "size": 116057,
+      "sha256": "dbf9386c0e6eae9cf29ebdcd2b61292d23dfd4c7fceac235aece019e8fabb57b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_example_guitar_only_v2.ogg",
+      "source": "mus/ch3_karaoke_example_guitar_only_v2.ogg",
+      "size": 1208860,
+      "sha256": "d453023eb0062c887067ae11b5394bfb8f10e917eb0dd9644db342e45875dbe7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_example_noguit.ogg",
+      "source": "mus/ch3_karaoke_example_noguit.ogg",
+      "size": 257316,
+      "sha256": "8257e334eaacf649bf0914c0761d31b9bc240ae9c7a25c03a877de3d1c120f66",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_example_noguitar_v2.ogg",
+      "source": "mus/ch3_karaoke_example_noguitar_v2.ogg",
+      "size": 1652649,
+      "sha256": "3ec47da7ae2a88b6af7cc655ab24926b38314918091778d4eb94bba016252dfc",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_example_together_ex.ogg",
+      "source": "mus/ch3_karaoke_example_together_ex.ogg",
+      "size": 1375309,
+      "sha256": "5cfe85a1afd6e245df809abbd6ccd70ed61c6a75c75ba099a15969d94f8c579d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_full.ogg",
+      "source": "mus/ch3_karaoke_full.ogg",
+      "size": 2118413,
+      "sha256": "6486f0246fba0714e181aff4e294accf0cdf687bf902d7cdf698e39cd49c6658",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_no_guitar.ogg",
+      "source": "mus/ch3_karaoke_no_guitar.ogg",
+      "size": 2118843,
+      "sha256": "1e5a215eb91fd558066459aab6679e315ff27a06e32f654628e52b5e6fb809de",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_preview.ogg",
+      "source": "mus/ch3_karaoke_preview.ogg",
+      "size": 693522,
+      "sha256": "40971f813253dba96434595f29b803a4b495b54e26b0e1c87b4ad63ab4b4e3be",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_karaoke_preview_crisp.ogg",
+      "source": "mus/ch3_karaoke_preview_crisp.ogg",
+      "size": 674202,
+      "sha256": "137454b3a91ada227992dd58b27c86b67655691324853f61119f1f66da527242",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_south_of_the_border.ogg",
+      "source": "mus/ch3_south_of_the_border.ogg",
+      "size": 52620,
+      "sha256": "9c36c1214c81390800163e7bf0b7cf9f59d9618b5b2a52aa8ab8bdd6047a08ad",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_tvtime.ogg",
+      "source": "mus/ch3_tvtime.ogg",
+      "size": 336395,
+      "sha256": "d46a6c8bd598870573d4659bc0ddcafbe039f899dbf3c444bdb23023913c9bbd",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch3_tvtime_guitar.ogg",
+      "source": "mus/ch3_tvtime_guitar.ogg",
+      "size": 237893,
+      "sha256": "14eb1a518be71f54a20e96407e8031054c09a682f9200e3b6818d0847d26cf77",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch4_battle.ogg",
+      "source": "mus/ch4_battle.ogg",
+      "size": 2205886,
+      "sha256": "e6d33a873612f714a57b0545af58ca809df1ae146a8ab0a873222233b4459e79",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch4_credits.ogg",
+      "source": "mus/ch4_credits.ogg",
+      "size": 1202576,
+      "sha256": "cabd353fd34397049173dfacc39b9e6879e2c5678953eacc4b3b58438cb00687",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch4_extra_boss.ogg",
+      "source": "mus/ch4_extra_boss.ogg",
+      "size": 3241909,
+      "sha256": "28b10e5483a42201eeafbe60dea657dd2ccdb1a8c8ac105135f31cda9218c56a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch4_first_intro.ogg",
+      "source": "mus/ch4_first_intro.ogg",
+      "size": 219338,
+      "sha256": "66d7ba4f7fc687ac99b52f54b065e8c0085b3fbe222e06a6a0f6b81d2d8a0716",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch4_first_intro_breaking.ogg",
+      "source": "mus/ch4_first_intro_breaking.ogg",
+      "size": 48049,
+      "sha256": "802b737eb22841bec3663354782aec55b424c03261a12768b4f3cb4f41c15348",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch5_credits.ogg",
+      "source": "mus/ch5_credits.ogg",
+      "size": 1575449,
+      "sha256": "33ddf5f70a7548503dfdb3ba51dbf811b5503faa2a021b355fe6a0b59b1d0744",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch5_intro_audio.ogg",
+      "source": "mus/ch5_intro_audio.ogg",
+      "size": 1238981,
+      "sha256": "f0379bd46bc9c783f391f8efb8775e3cca9917eef5b2d68dcde894c4b3395ead",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch5_inversion_lake_chant.ogg",
+      "source": "mus/ch5_inversion_lake_chant.ogg",
+      "size": 104565,
+      "sha256": "f3635fd310a979a6581bade7a7709b7a2d19a07fac86406459368f6cb4ab3392",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch5_weird_monologue.ogg",
+      "source": "mus/ch5_weird_monologue.ogg",
+      "size": 653390,
+      "sha256": "583e43fdef696c9353b2c4c0d4448500c4f5e3dd8cb0631d23e5ef7e0e71a610",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ch5_weird_monologue_deep.ogg",
+      "source": "mus/ch5_weird_monologue_deep.ogg",
+      "size": 634405,
+      "sha256": "6a0e5b3abd1415a6d1a4fd2750ead1c338c152c90656c8a9307829a3f2ba6861",
+      "mode": "copy"
+    },
+    {
+      "output": "music/charjoined.ogg",
+      "source": "mus/charjoined.ogg",
+      "size": 76995,
+      "sha256": "7cf32a420acb036d45da9621b5695a2810dde2f9e9c28d6990b718da7753600d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/checkers.ogg",
+      "source": "mus/checkers.ogg",
+      "size": 1496742,
+      "sha256": "44641263d1a7689a5fe7ec8ea864f039aa62a4829a2a67c25a453a4539868ad2",
+      "mode": "copy"
+    },
+    {
+      "output": "music/church_dark_study.ogg",
+      "source": "mus/church_dark_study.ogg",
+      "size": 1920411,
+      "sha256": "a865bc5225c7faf7955f2c96277c3b220c2a643c4baa3566fa53c4277b2eeaa3",
+      "mode": "copy"
+    },
+    {
+      "output": "music/church_hymn.ogg",
+      "source": "mus/church_hymn.ogg",
+      "size": 344954,
+      "sha256": "7e81f8d496d3d2531720fdaf360d136601c43b08b7a996b7bb6c1c3042b5ed1c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/church_lightning.ogg",
+      "source": "mus/church_lightning.ogg",
+      "size": 128809,
+      "sha256": "3ef405f1a32d2250a1218b5e25e3cc463511b2a567d790d277901024457b46b7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/church_lw.ogg",
+      "source": "mus/church_lw.ogg",
+      "size": 311960,
+      "sha256": "aecde43e34e33eb83773f7de49f828c8e38070bd1b60174c2569203b11ca8a2d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/church_lw_night.ogg",
+      "source": "mus/church_lw_night.ogg",
+      "size": 203717,
+      "sha256": "9748a515e9e2e09ea0ddae83508fccc155b389bdbf54c824421ec8a97541cb09",
+      "mode": "copy"
+    },
+    {
+      "output": "music/church_wip.ogg",
+      "source": "mus/church_wip.ogg",
+      "size": 1294322,
+      "sha256": "466d855c9aff02a94b2bcb6525d63396f7db65f6807b496a64ffff56ad928d8a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/church_zone2_alt_longer_test.ogg",
+      "source": "mus/church_zone2_alt_longer_test.ogg",
+      "size": 1773024,
+      "sha256": "00530061b2b4afad4a57871bf623b0b74c87558843b6e12156566a789be40b70",
+      "mode": "copy"
+    },
+    {
+      "output": "music/church_zone3.ogg",
+      "source": "mus/church_zone3.ogg",
+      "size": 4015406,
+      "sha256": "94186ca4a095cf4b1ff8f7739fa033c9d54f8ce3279edb53e50acb22eba89341",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cliff.ogg",
+      "source": "mus/cliff.ogg",
+      "size": 4262926,
+      "sha256": "8ce0a91f950048d104d06e768c4804bb9f2645d14bc1b1d690bab7d2cb1735a3",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cliff_jump_ambience.ogg",
+      "source": "mus/cliff_jump_ambience.ogg",
+      "size": 246327,
+      "sha256": "9726e035f1d1b30c1821b75ebd082470f6246964957c0a855eb43fcaf4472341",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cliff_jump_ambience_nowind.ogg",
+      "source": "mus/cliff_jump_ambience_nowind.ogg",
+      "size": 244308,
+      "sha256": "38e984f58222a121dd1c67f84fd088da7159fbbf326b01d0ab8a21f5cf96b433",
+      "mode": "copy"
+    },
+    {
+      "output": "music/climb.ogg",
+      "source": "mus/climb.ogg",
+      "size": 886187,
+      "sha256": "e8221960fcaba9a5259fabbcc7d439d4d2b2370436533f50085f40f0e7e8209a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/coolbeat.ogg",
+      "source": "mus/coolbeat.ogg",
+      "size": 30374,
+      "sha256": "fb89f5e5887921dc626cc09f717f936b4797115513cef644e365b159f75a2e1c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cowboy_song.ogg",
+      "source": "mus/cowboy_song.ogg",
+      "size": 124543,
+      "sha256": "0549be5e9f933f94c5560c7c3fa3ba1ba7453618c0d87fbe7e3c7fe3724b8ea8",
+      "mode": "copy"
+    },
+    {
+      "output": "music/creepychase.ogg",
+      "source": "mus/creepychase.ogg",
+      "size": 826779,
+      "sha256": "d8efb5dfafd973ebbdc7bf367b0c8fdb76a12df9e416ff2b8bd26ba2deec903d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/creepydoor.ogg",
+      "source": "mus/creepydoor.ogg",
+      "size": 1017491,
+      "sha256": "bd925c7e0aa46768cd7e4232a019e42ae4611b73dfc6fcbfbc54321d555077e9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/creepylandscape.ogg",
+      "source": "mus/creepylandscape.ogg",
+      "size": 856835,
+      "sha256": "875664e99e20dfa51fc85b7545074d957a5ae6540bc4cac730dcbafe2d37838b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cyber.ogg",
+      "source": "mus/cyber.ogg",
+      "size": 2000305,
+      "sha256": "ad67f509309ef6940d9c8e8513f7acf90daf7b1b848997c17785b1819b57a9b0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cyber_battle.ogg",
+      "source": "mus/cyber_battle.ogg",
+      "size": 247149,
+      "sha256": "2c4d2e73370a0559b11f4181e44c2914be4a075a70ec6996c8181fcc408f4219",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cyber_battle_end.ogg",
+      "source": "mus/cyber_battle_end.ogg",
+      "size": 198362,
+      "sha256": "8dc8419ebd2ea93e05be6575f23eb991a3b21808135e5fe5468920c3379490de",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cyber_battle_prelude.ogg",
+      "source": "mus/cyber_battle_prelude.ogg",
+      "size": 206375,
+      "sha256": "4a66ee5f35d1f4cbb6cb83d5474ecb9458ae1dedf13436f636e091b37f0dee9f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cyber_shop.ogg",
+      "source": "mus/cyber_shop.ogg",
+      "size": 548966,
+      "sha256": "6b6bd5179960c8a9b76e75d58e2cbf26d9995327256b33b2afb8ee82f32bf4c6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cybercity.ogg",
+      "source": "mus/cybercity.ogg",
+      "size": 1575262,
+      "sha256": "8977006c6e41ae17ae7c482f919b1bf177cc6cc7fe11570e8e8fe5accc8570b3",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cybercity_alt.ogg",
+      "source": "mus/cybercity_alt.ogg",
+      "size": 1008835,
+      "sha256": "69169f48eaa5ec03f1b035c4264b39b8ab50117274cc2d61aeb077071603b74d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cybercity_old.ogg",
+      "source": "mus/cybercity_old.ogg",
+      "size": 1281025,
+      "sha256": "1744359850c2309edcfa43a75e33e527e0a4257f2ae56d23b34d2ecbe002b31a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cyberhouse.ogg",
+      "source": "mus/cyberhouse.ogg",
+      "size": 356629,
+      "sha256": "73988c94d300bc6fc4d97fdcdc0108550feffea8cf35f7dacdff0e67d0b31e9f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/cybershop_christmas.ogg",
+      "source": "mus/cybershop_christmas.ogg",
+      "size": 479829,
+      "sha256": "fb9779e9b96be09fe4a4794d8ebd718e7b17ec03ccb1111b87138dc85f08b16b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/d.ogg",
+      "source": "mus/d.ogg",
+      "size": 71666,
+      "sha256": "ea147c081b1e09e532731feecbf4f06899fb412ad69b1a7fb49e09b203b1dcf7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/dark_place.ogg",
+      "source": "mus/dark_place.ogg",
+      "size": 599200,
+      "sha256": "a74196f519b5e98545c05a40183b7e7ad3f3b1ef221783a8c0145ad35e976fd0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/darkchurch_intro.ogg",
+      "source": "mus/darkchurch_intro.ogg",
+      "size": 471291,
+      "sha256": "5e3f0bc7a7081c584446a2600351adba790833bd75532af37734247031a12e6c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/deep_noise.ogg",
+      "source": "mus/deep_noise.ogg",
+      "size": 36147,
+      "sha256": "277e609b1fe5927d9b4355ced2206dd6eb0c51b3235b9b25ccafe3a2c06c2fae",
+      "mode": "copy"
+    },
+    {
+      "output": "music/deltarune_logo_ch5_itoki.ogg",
+      "source": "mus/deltarune_logo_ch5_itoki.ogg",
+      "size": 169833,
+      "sha256": "c306fdf10d3fa2cab44e545a2ba29d5ad1fd59e59cd987433cca889256a8379c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/deltarune_piano_collections_by_trevor_alan_gomes.ogg",
+      "source": "mus/deltarune_piano_collections_by_trevor_alan_gomes.ogg",
+      "size": 633167,
+      "sha256": "28b87253a777cd9a3a363de9af72512ba0d3ef80b840d4a8f897d93250e82801",
+      "mode": "copy"
+    },
+    {
+      "output": "music/dog_balloon.ogg",
+      "source": "mus/dog_balloon.ogg",
+      "size": 705617,
+      "sha256": "3cedf9522ae31562a0bd8cd6753585d5bf20766d3643d55faa78db3c26c2191e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/dogcheck.ogg",
+      "source": "mus/dogcheck.ogg",
+      "size": 1002631,
+      "sha256": "0c74a92577a1828e4bfaea7578e0b3d5275b5c026d08d8031b446d00aeff0861",
+      "mode": "copy"
+    },
+    {
+      "output": "music/dogroom.ogg",
+      "source": "mus/dogroom.ogg",
+      "size": 353905,
+      "sha256": "56e4cb91fe197bbfa09c25c59cfc28a2c87ff31ed7c454a3aeeb1b504020628b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/dontforget.ogg",
+      "source": "mus/dontforget.ogg",
+      "size": 1668222,
+      "sha256": "eba4b8a6c23d43100029d7f1fe5618d56d1e116f74ddc50b4604805aeb8878d7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/elevator.ogg",
+      "source": "mus/elevator.ogg",
+      "size": 337320,
+      "sha256": "41f9d37b59c1bce64dc22c757dd1056595f1277fae90870aaf9717b935ff9572",
+      "mode": "copy"
+    },
+    {
+      "output": "music/fanfare.ogg",
+      "source": "mus/fanfare.ogg",
+      "size": 317705,
+      "sha256": "decb5cc2aa07e949c88fe0e4dda03a1b0b481b831ffc79ee858d5e4ea26f9a63",
+      "mode": "copy"
+    },
+    {
+      "output": "music/festival.ogg",
+      "source": "mus/festival.ogg",
+      "size": 1463550,
+      "sha256": "e71cc5128acd44d784b80f43e0891572dda8f2de3e8b8891f6f80cba1d4b17ab",
+      "mode": "copy"
+    },
+    {
+      "output": "music/festival_after.ogg",
+      "source": "mus/festival_after.ogg",
+      "size": 2524463,
+      "sha256": "a58eaebe1ffbf1b14e742e29d9ba349c141f417ff3d36e95536a3bca74c336ef",
+      "mode": "copy"
+    },
+    {
+      "output": "music/festival_night.ogg",
+      "source": "mus/festival_night.ogg",
+      "size": 2197002,
+      "sha256": "e0500ef8fe142b92233e3443aad29ea7e45a136b0e0cc62e3a2238d8a56166dc",
+      "mode": "copy"
+    },
+    {
+      "output": "music/field_of_hopes.ogg",
+      "source": "mus/field_of_hopes.ogg",
+      "size": 2626672,
+      "sha256": "5ac53e8aeb510f2df3117fdbfc38ae56dfb810f2ee40ae502ca285b2d7858d3b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/field_of_hopes_insaneintherain_intro.ogg",
+      "source": "mus/field_of_hopes_insaneintherain_intro.ogg",
+      "size": 1892123,
+      "sha256": "642436fc6472322ce2f1a53f379e36186165733a50b90072c1fb9d1dd88b4cd0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/field_of_hopes_insaneintherain_loop.ogg",
+      "source": "mus/field_of_hopes_insaneintherain_loop.ogg",
+      "size": 10179958,
+      "sha256": "67f750e78fa9d760743f15055b73b03f40b9d8ac87c9a5783292c09f82c31fad",
+      "mode": "copy"
+    },
+    {
+      "output": "music/field_of_hopes_preview.ogg",
+      "source": "mus/field_of_hopes_preview.ogg",
+      "size": 807937,
+      "sha256": "1cfe088b3f4ffa87ec0c1f19863afdf89c2a086a21bd390e51ef4f52ccea1587",
+      "mode": "copy"
+    },
+    {
+      "output": "music/field_of_hopes_preview_crisp.ogg",
+      "source": "mus/field_of_hopes_preview_crisp.ogg",
+      "size": 778147,
+      "sha256": "fe74936451db289460a722af0b2b66c8b1bd229f01529f324f383ac152ecacf6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/findher.ogg",
+      "source": "mus/findher.ogg",
+      "size": 450225,
+      "sha256": "c0f55add29c085615ac309a1ac4ba224cbf5c4d3e74b0b25cc6276d083b0a5d1",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flashback_excerpt.ogg",
+      "source": "mus/flashback_excerpt.ogg",
+      "size": 190018,
+      "sha256": "6caa0cba85eee933efea6e109db25361ca01fc002b1037c100b3bfe2e53d1774",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flower_cafe.ogg",
+      "source": "mus/flower_cafe.ogg",
+      "size": 1811026,
+      "sha256": "013c53f2cd2a00c05f0960bc9f9a47f327e7b42741111703e20aff0345b95e4b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flower_castle.ogg",
+      "source": "mus/flower_castle.ogg",
+      "size": 6561923,
+      "sha256": "7107a9a2f912f54aacaad053765af30b04557061cc8ad71a1c359f27fb6c16ad",
+      "mode": "copy"
+    },
+    {
+      "output": "music/Flowerman_Arrangement.ogg",
+      "source": "mus/Flowerman_Arrangement.ogg",
+      "size": 4664906,
+      "sha256": "62800fc9e65ca9854fe8618109087fa9d4ceeb3a87b80b9b3d71046b41795fde",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flowery.ogg",
+      "source": "mus/flowery.ogg",
+      "size": 813850,
+      "sha256": "7222bb5bdc73c018735da7645eb629c9dcbe66a52668f3b890f7a8d2cb73d605",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flowery_diner_romantic.ogg",
+      "source": "mus/flowery_diner_romantic.ogg",
+      "size": 1045682,
+      "sha256": "6335f1f19b91cf2e806d201e1137d53317dfad13f854767df6db0166136c9b68",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flowery_iog.ogg",
+      "source": "mus/flowery_iog.ogg",
+      "size": 271809,
+      "sha256": "1da4cc13c44b7d59182fc5767f48acebb9777e4d880f28359c5aa8e7e6dcf8e1",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flowery_iog_extended.ogg",
+      "source": "mus/flowery_iog_extended.ogg",
+      "size": 1526505,
+      "sha256": "9254bca9979d290019f6f92c7e727bb929b473f43167e88a3168c3601819eb01",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flowery_sad.ogg",
+      "source": "mus/flowery_sad.ogg",
+      "size": 2067296,
+      "sha256": "0d40a02f9e32bd7b901ff9ad635d554d11937e6811460836b354d159d6cb8275",
+      "mode": "copy"
+    },
+    {
+      "output": "music/flowery_skateboard.ogg",
+      "source": "mus/flowery_skateboard.ogg",
+      "size": 173116,
+      "sha256": "60ada87726455c07fdc6b993584a7515442f5e92c28c0b6be8f9c428fcdc17fc",
+      "mode": "copy"
+    },
+    {
+      "output": "music/forest.ogg",
+      "source": "mus/forest.ogg",
+      "size": 1818757,
+      "sha256": "1b23b35edc20c563422e124214f468ca54973ef04c35e3da00382f6382906186",
+      "mode": "copy"
+    },
+    {
+      "output": "music/friendship.ogg",
+      "source": "mus/friendship.ogg",
+      "size": 1614731,
+      "sha256": "4d9ab9b026f1ade5adf12cfac69f8ea71293cb3a617c1cb5c7249bb734515394",
+      "mode": "copy"
+    },
+    {
+      "output": "music/GALLERY.ogg",
+      "source": "mus/GALLERY.ogg",
+      "size": 418561,
+      "sha256": "c40529f38f2575318c7d8e6f17a28509a2994e2a4d8136badb2f89dd8169ffea",
+      "mode": "copy"
+    },
+    {
+      "output": "music/gameover_short.ogg",
+      "source": "mus/gameover_short.ogg",
+      "size": 97567,
+      "sha256": "22440da982485215421982f265bafc217444d15545a9cf7465fa8ae8921e31ff",
+      "mode": "copy"
+    },
+    {
+      "output": "music/gerson_defeated.ogg",
+      "source": "mus/gerson_defeated.ogg",
+      "size": 434907,
+      "sha256": "6272c45e6f840d676732cc62cbcfaf93abc74ce38b4df8f1923ed27b0c5f106d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/gerson_theme_intro.ogg",
+      "source": "mus/gerson_theme_intro.ogg",
+      "size": 1797648,
+      "sha256": "10a3c00a335072806289f18879b341cb55d8cbd713ea2ce0cf0f719dcc5a8060",
+      "mode": "copy"
+    },
+    {
+      "output": "music/gerson_theme_nointro.ogg",
+      "source": "mus/gerson_theme_nointro.ogg",
+      "size": 1601832,
+      "sha256": "bb11b8922298904fa8ea13330e90a21da53b0e9531199c1211c9a2491d65e779",
+      "mode": "copy"
+    },
+    {
+      "output": "music/giant_queen_appears.ogg",
+      "source": "mus/giant_queen_appears.ogg",
+      "size": 1826658,
+      "sha256": "98a2511eed9dc6ab5545cae5208ce92e71625bcdd4c1f68317465698f4223674",
+      "mode": "copy"
+    },
+    {
+      "output": "music/gigaqueen_pre.ogg",
+      "source": "mus/gigaqueen_pre.ogg",
+      "size": 137652,
+      "sha256": "1ba3786a72ea19816ed4aebada13ff2609c13ecf0238674467e25dc2cd1bd139",
+      "mode": "copy"
+    },
+    {
+      "output": "music/glacier.ogg",
+      "source": "mus/glacier.ogg",
+      "size": 549188,
+      "sha256": "6210e1f5d79ff40480ce03a835ba9499c89d98e4173e418a4987bbf3cd857380",
+      "mode": "copy"
+    },
+    {
+      "output": "music/greenroom_detune.ogg",
+      "source": "mus/greenroom_detune.ogg",
+      "size": 554483,
+      "sha256": "6e1bd13d3fbdfcf260fee8a3dfdde76602b93e70296a77aed42d7ea12955f4dc",
+      "mode": "copy"
+    },
+    {
+      "output": "music/happy_town.ogg",
+      "source": "mus/happy_town.ogg",
+      "size": 813473,
+      "sha256": "5d10415f028b5781e49c043327e5229148d95730c78ecc636b8f394c98dcf865",
+      "mode": "copy"
+    },
+    {
+      "output": "music/heartbeat.ogg",
+      "source": "mus/heartbeat.ogg",
+      "size": 18685,
+      "sha256": "fe77eeda88e8518f66f551782aa651fb15015582b0be76f061b4a3593e628550",
+      "mode": "copy"
+    },
+    {
+      "output": "music/hip_shop.ogg",
+      "source": "mus/hip_shop.ogg",
+      "size": 965356,
+      "sha256": "62acd3d2de7e4ad81e99a2b31e40b90b1b121d93fc0c79ec724a7f1a47892a66",
+      "mode": "copy"
+    },
+    {
+      "output": "music/home.ogg",
+      "source": "mus/home.ogg",
+      "size": 1638859,
+      "sha256": "cee36ec188a840317f7d6918e78ebfe82e7e9762f6ba235c118606e1b595dbe4",
+      "mode": "copy"
+    },
+    {
+      "output": "music/honksong.ogg",
+      "source": "mus/honksong.ogg",
+      "size": 464704,
+      "sha256": "e652c2c1cfec6dc9981a6d5dddd1adbd839d91869e5a2ed9df9631b8a6400e08",
+      "mode": "copy"
+    },
+    {
+      "output": "music/inappropriate_recycling.ogg",
+      "source": "mus/inappropriate_recycling.ogg",
+      "size": 2723536,
+      "sha256": "67534f8e403c297a90771c42f2ccd99017fe1c621c0b071a2f00e4de93a219b1",
+      "mode": "copy"
+    },
+    {
+      "output": "music/inukuma_wip.ogg",
+      "source": "mus/inukuma_wip.ogg",
+      "size": 540813,
+      "sha256": "f00f046c93051a40bb688d8b86b73e609ba88616ee8e5e73a3bbae096b6e2dfd",
+      "mode": "copy"
+    },
+    {
+      "output": "music/jitterbug.ogg",
+      "source": "mus/jitterbug.ogg",
+      "size": 184784,
+      "sha256": "1564b5f833a05fc7f837bdd342a5fad1c43abb30bf10da1e3d8ae758c88a788c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/jitterbug_muffled.ogg",
+      "source": "mus/jitterbug_muffled.ogg",
+      "size": 199000,
+      "sha256": "08a60480133f68bcedbe990fa923f32067cd28b700c6febf656f288cc4ab3f48",
+      "mode": "copy"
+    },
+    {
+      "output": "music/joker.ogg",
+      "source": "mus/joker.ogg",
+      "size": 2457357,
+      "sha256": "59aa09ed117bb057112befa4f740143e207d8f8d8a7d03e5b0f37f44240fe74d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/KEYGEN.ogg",
+      "source": "mus/KEYGEN.ogg",
+      "size": 65730,
+      "sha256": "b8e5151ab53a312ee9b3c449dbb9233f9509473453ecfd5b1ff3d5a12322cb74",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kikky_upgrade.ogg",
+      "source": "mus/kikky_upgrade.ogg",
+      "size": 89673,
+      "sha256": "78898c85c81a40d374603dfc29623cdc3347f32957b4df492ba270c058a9788c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kingboss.ogg",
+      "source": "mus/kingboss.ogg",
+      "size": 2880251,
+      "sha256": "ed306f4c75c0384b446d0aabeb92ad1f91b72dbff10f87f0ce799887a22f3d9c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/knight.ogg",
+      "source": "mus/knight.ogg",
+      "size": 2220177,
+      "sha256": "e34eca856216e6b257bc253309fd51ccb969b0668b8a31d61a35c68cfd3fd554",
+      "mode": "copy"
+    },
+    {
+      "output": "music/knight_appears.ogg",
+      "source": "mus/knight_appears.ogg",
+      "size": 162695,
+      "sha256": "acfe9f7101cdfef4df5e5c2aea5a67a4748a93c82e5c3b49a5f98982d78f8a3e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_lancer_waltz.ogg",
+      "source": "mus/kris_piano_lancer_waltz.ogg",
+      "size": 883293,
+      "sha256": "68a14530f38c3f540be968e687e731b5a5f73a132ddec966e6f6ecb31fbe25a3",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_last_prophecy.ogg",
+      "source": "mus/kris_piano_last_prophecy.ogg",
+      "size": 644543,
+      "sha256": "63c6ab206e49fbc8f45f75efca593fd37e88306b9c16906cbf687526c61995ed",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_lower.ogg",
+      "source": "mus/kris_piano_lower.ogg",
+      "size": 334484,
+      "sha256": "d1aa9e7f66968f3467d511e9e9d04dffe0c54a70574f8eb32b925eda51cb61dc",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_prophecy.ogg",
+      "source": "mus/kris_piano_prophecy.ogg",
+      "size": 401480,
+      "sha256": "d86b2efa1eda120b83777995a02bba9717112c70f39ae131173e1026cdb31046",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_quiz.ogg",
+      "source": "mus/kris_piano_quiz.ogg",
+      "size": 161480,
+      "sha256": "d92f3d390d8afe3f699479a4c83099731cf291b6988178491496ef1240d8fd7c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_rouxls.ogg",
+      "source": "mus/kris_piano_rouxls.ogg",
+      "size": 556781,
+      "sha256": "762fe13329f108fa922cbddcc27cfcf818fb933f533ea3b2c65d807fd1d14752",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_sevenfour.ogg",
+      "source": "mus/kris_piano_sevenfour.ogg",
+      "size": 770501,
+      "sha256": "499b0361eb8852aaff9a9c1ed6310d1b6930f0acd07bbc24de64f0d7edaf313a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_shop.ogg",
+      "source": "mus/kris_piano_shop.ogg",
+      "size": 589078,
+      "sha256": "289f6bbcd9da8e04f3ce8a4b11302aae96c6dbd9db10881dfc25abc13b1a69e2",
+      "mode": "copy"
+    },
+    {
+      "output": "music/kris_piano_waitingroom.ogg",
+      "source": "mus/kris_piano_waitingroom.ogg",
+      "size": 1062415,
+      "sha256": "63607512c0ef8c25ed319736a71df48aad584131c810102cb41e4ff7bcd11378",
+      "mode": "copy"
+    },
+    {
+      "output": "music/lancer.ogg",
+      "source": "mus/lancer.ogg",
+      "size": 1155941,
+      "sha256": "ae73bc3799b3bc0ea719f0666dd79081c7631b88468155c01a3ec754d396752a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/lancer_annoying.ogg",
+      "source": "mus/lancer_annoying.ogg",
+      "size": 348934,
+      "sha256": "1a375d7b16b0e9143927bd7ddaa0ca8206b6dabb15983c9c1962d8750c1ee220",
+      "mode": "copy"
+    },
+    {
+      "output": "music/lancer_susie.ogg",
+      "source": "mus/lancer_susie.ogg",
+      "size": 295644,
+      "sha256": "5c80ffc8832f2935af08da86a247f3fec6b516eb438e9784b7033d9e3fece5e5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/lancerfight.ogg",
+      "source": "mus/lancerfight.ogg",
+      "size": 508153,
+      "sha256": "e1b289476d673018bd70913f85ebe2cf59d1596e043343e9a621053074125b40",
+      "mode": "copy"
+    },
+    {
+      "output": "music/legend.ogg",
+      "source": "mus/legend.ogg",
+      "size": 2631955,
+      "sha256": "09efcd184b3d358555b309b4b068b945747ca3a3620fcddbbc58706ab26e13bf",
+      "mode": "copy"
+    },
+    {
+      "output": "music/legend_altered.ogg",
+      "source": "mus/legend_altered.ogg",
+      "size": 213119,
+      "sha256": "4033ee4c9f577eff0c78aebb6f572d9c7764d07945cb735a149bc6a27e349de9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/man.ogg",
+      "source": "mus/man.ogg",
+      "size": 140530,
+      "sha256": "99cd9d5462d4acaa2a24b76c0dbfe4e3f018a4bf33819cdca85138b079d7f46f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/man_2.ogg",
+      "source": "mus/man_2.ogg",
+      "size": 189485,
+      "sha256": "4297f6fa76451288832cb034db660b8d6bfb8443c36b966b74b82566fef260b8",
+      "mode": "copy"
+    },
+    {
+      "output": "music/man_nes.ogg",
+      "source": "mus/man_nes.ogg",
+      "size": 42084,
+      "sha256": "39f6527c27a8d20a9d6bee500853c1a101dbd600da4c5ad8cb8aef206ca47a3b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mansion.ogg",
+      "source": "mus/mansion.ogg",
+      "size": 1580329,
+      "sha256": "97833ac8f5aac3c17d1cfac6819e6bde14f5082345efeba91bd8c64059711ea7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mansion_entrance.ogg",
+      "source": "mus/mansion_entrance.ogg",
+      "size": 628633,
+      "sha256": "64d6594f3409a4791834ec818dbd5b9f830088f3162ef30e884ee4169ee7eaa6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/me.ogg",
+      "source": "mus/me.ogg",
+      "size": 106067,
+      "sha256": "59dd2a72681f5baa14ed87b44900d82ff57a783ca8f3935c53e0c2256d3738d6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/meeting_flower.ogg",
+      "source": "mus/meeting_flower.ogg",
+      "size": 459520,
+      "sha256": "3185d676a104f0a9e66e137f0f41ea69df702c1e77f8bdefab0600687531ca98",
+      "mode": "copy"
+    },
+    {
+      "output": "music/meeting_flower_cowboy.ogg",
+      "source": "mus/meeting_flower_cowboy.ogg",
+      "size": 1936917,
+      "sha256": "7c89a55f68fa4717c488b7faaf533ea96cc8a5f4aace920d7b82ab6a83ae3833",
+      "mode": "copy"
+    },
+    {
+      "output": "music/meeting_flower_orange.ogg",
+      "source": "mus/meeting_flower_orange.ogg",
+      "size": 1948229,
+      "sha256": "30d8df3e9ca924665440f18ddcb970d0ec9d14479ebb3f493b2ab3179a66707d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/meeting_flower_orange_highpitch.ogg",
+      "source": "mus/meeting_flower_orange_highpitch.ogg",
+      "size": 1872337,
+      "sha256": "a20364dc9decfcf9b698c475e5bc68d313deb64ee64c6d656315af3ba6d064c6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/meeting_flower_upbeat_drum.ogg",
+      "source": "mus/meeting_flower_upbeat_drum.ogg",
+      "size": 737852,
+      "sha256": "8ff14bf354de3c6b14c5c041e534348316a27a8732afb471a99557d1eaaef13c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/menu.ogg",
+      "source": "mus/menu.ogg",
+      "size": 632609,
+      "sha256": "0da10a89a8b55a749d0dbab7348201fd34119f7c9ae93fcce506b63faf5ed497",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mike.ogg",
+      "source": "mus/mike.ogg",
+      "size": 1685179,
+      "sha256": "7de21c98c7f399dce16e961041a871e5eb124fa188591d96e6c916cdf1553d3b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mike_zone.ogg",
+      "source": "mus/mike_zone.ogg",
+      "size": 262525,
+      "sha256": "90090effd61b73ca45b5746b4eb32b1f0b9a511364c24803f9ea6fa036f0befd",
+      "mode": "copy"
+    },
+    {
+      "output": "music/miniboss_new_section_idea_wip.ogg",
+      "source": "mus/miniboss_new_section_idea_wip.ogg",
+      "size": 1132888,
+      "sha256": "472926f4170c7f016f57d5620dacbd8f65d20a4b3158a6d8f4dca29e3687a9dc",
+      "mode": "copy"
+    },
+    {
+      "output": "music/minigame_kart.ogg",
+      "source": "mus/minigame_kart.ogg",
+      "size": 1054221,
+      "sha256": "d32463755abcea1fbe498c06208151231a382540c406d1f827bef252c7e26699",
+      "mode": "copy"
+    },
+    {
+      "output": "music/muffled_rain.ogg",
+      "source": "mus/muffled_rain.ogg",
+      "size": 1459007,
+      "sha256": "40e410e77a492d773547fa4b289fc344552a525c570219a17a0935856e813ac4",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_birdnoise.ogg",
+      "source": "mus/mus_birdnoise.ogg",
+      "size": 426534,
+      "sha256": "b91ea1eaa245a3a110ad5f1ecba120f35d36fc1859efce01ab95293693661e5a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_confession.ogg",
+      "source": "mus/mus_confession.ogg",
+      "size": 215747,
+      "sha256": "7db1a507c192075c2ee29d7d307bc95e1e485d9f56bf9afb84e8dff242700426",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_date_fight.ogg",
+      "source": "mus/mus_date_fight.ogg",
+      "size": 389822,
+      "sha256": "74f07cbaf33ac499e125a7b52e980e281928693b16bdc31ac2e923a765f6f143",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_date_tense.ogg",
+      "source": "mus/mus_date_tense.ogg",
+      "size": 294740,
+      "sha256": "6d42943b35c93309cea1820bf1fbbe45f78753ee4fe7ef9740a0afa3e92afd54",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_introcar.ogg",
+      "source": "mus/mus_introcar.ogg",
+      "size": 917893,
+      "sha256": "c560b1dbaa23aded54bba86eebc1bdc4e17bd3de7d8ad4855f0fc0822e9994d5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_knightthought.ogg",
+      "source": "mus/mus_knightthought.ogg",
+      "size": 41077,
+      "sha256": "f26e917375fd1bf5057617554287898926221130ce51b8dcce65f1e6cedd2785",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_race.ogg",
+      "source": "mus/mus_race.ogg",
+      "size": 497216,
+      "sha256": "e3e2fac9f7a92b5f5f127706dff2469cd7d9a72c42dd97dc548baa30b94427f6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_school.ogg",
+      "source": "mus/mus_school.ogg",
+      "size": 1303031,
+      "sha256": "888d1f33c77e24ff7c16c5e5cf5c29fd5d4c91b944dfa40a5e7aee4279e39138",
+      "mode": "copy"
+    },
+    {
+      "output": "music/mus_temloopshort.ogg",
+      "source": "mus/mus_temloopshort.ogg",
+      "size": 65099,
+      "sha256": "1e0fe6591fca6f2a5c8a44d1e72dec7298822682d2e10309b55896d263fb5103",
+      "mode": "copy"
+    },
+    {
+      "output": "music/muscle.ogg",
+      "source": "mus/muscle.ogg",
+      "size": 369225,
+      "sha256": "64bfeec27f0622a69e7329c47b26357bb725802d120e18224082ffe48d7064a2",
+      "mode": "copy"
+    },
+    {
+      "output": "music/music_guys.ogg",
+      "source": "mus/music_guys.ogg",
+      "size": 68063,
+      "sha256": "e6663aa133228b9856ac39479408f03b3a5c13b67b29801f8cf102495920e42d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/music_guys_intro.ogg",
+      "source": "mus/music_guys_intro.ogg",
+      "size": 75018,
+      "sha256": "c81beb9a29b435d531ebeac1e1746f9d9f14cfedceada7c000342ef85818b6b3",
+      "mode": "copy"
+    },
+    {
+      "output": "music/napsta_alarm.ogg",
+      "source": "mus/napsta_alarm.ogg",
+      "size": 141193,
+      "sha256": "8704f23e4c61e7738108e821dbe1756eb3160337b261a068baf2cd292ce4da7c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/nes_intro_extended_part2.ogg",
+      "source": "mus/nes_intro_extended_part2.ogg",
+      "size": 201701,
+      "sha256": "b92e7b1987ddf885054b9f1d4e2fc7c523b0bbcf9dd9d29f9b5248e47da52376",
+      "mode": "copy"
+    },
+    {
+      "output": "music/newscast.ogg",
+      "source": "mus/newscast.ogg",
+      "size": 36745,
+      "sha256": "aca43b5aca1bc052bc5a701ec9a9a82377a182917604b0c6f63024dace1b9b6e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/night_ambience.ogg",
+      "source": "mus/night_ambience.ogg",
+      "size": 252989,
+      "sha256": "563998bc2add216c0c292a7b21105d978eba656846344755b591bc54053b7d08",
+      "mode": "copy"
+    },
+    {
+      "output": "music/nightmare_boss_heavy.ogg",
+      "source": "mus/nightmare_boss_heavy.ogg",
+      "size": 798683,
+      "sha256": "9ca71f6d86a4d6e0081b00be4ed206a1d2f9702a93541f78048cc7d84ecadbf8",
+      "mode": "copy"
+    },
+    {
+      "output": "music/nightmare_boss_links.ogg",
+      "source": "mus/nightmare_boss_links.ogg",
+      "size": 421124,
+      "sha256": "38a1fd2fc197e26e110274dfcedf84690e92c38d53ab0edc5d958d093788bcea",
+      "mode": "copy"
+    },
+    {
+      "output": "music/nightmare_nes.ogg",
+      "source": "mus/nightmare_nes.ogg",
+      "size": 40303,
+      "sha256": "897a6e5928253c2cb59e5a6fc889f0f9ebbde1e8e2a42cdb47d2c556e1d579e9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/noelle.ogg",
+      "source": "mus/noelle.ogg",
+      "size": 439613,
+      "sha256": "e88229201c37ca4ce9ca0b9efe3b37a755bb767ad59301f8c4f5f811843e774d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/noelle_distant.ogg",
+      "source": "mus/noelle_distant.ogg",
+      "size": 522645,
+      "sha256": "2ce98ca28f08c041640fe903a28893fe7de01110e2d3cf806168bf13be4a482d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/noelle_ferriswheel.ogg",
+      "source": "mus/noelle_ferriswheel.ogg",
+      "size": 1364368,
+      "sha256": "ed403f25bf26bb2d6cef15e0fb860894e160622281d3ce1bb26c7b1f21b4d074",
+      "mode": "copy"
+    },
+    {
+      "output": "music/noelle_house_wip.ogg",
+      "source": "mus/noelle_house_wip.ogg",
+      "size": 1071916,
+      "sha256": "e4f6d37414bed437ea19906111b17e5a2b7ee042c3886f363c49c9e21c7277f5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/noelle_normal.ogg",
+      "source": "mus/noelle_normal.ogg",
+      "size": 1146089,
+      "sha256": "ada7b196658c1949987b63149793d44eda2ec8448a7b79f3a54d07bfe175d700",
+      "mode": "copy"
+    },
+    {
+      "output": "music/noelle_school.ogg",
+      "source": "mus/noelle_school.ogg",
+      "size": 440941,
+      "sha256": "a806c14cfbfc1e5847f904e5186bb1942752461a1d09258063f673fb8104f62d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/noelleshouseoutside.ogg",
+      "source": "mus/noelleshouseoutside.ogg",
+      "size": 436754,
+      "sha256": "f6ebaa9beb462a3301f8efa31a219d6d8a60a92d16ee2876b7b9c94514309f02",
+      "mode": "copy"
+    },
+    {
+      "output": "music/northernlight.ogg",
+      "source": "mus/northernlight.ogg",
+      "size": 70401,
+      "sha256": "26055e1e61254cf62b215a93e5ed82ef9e8d9d9ac0c45bb01c218578a71a6112",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ocean.ogg",
+      "source": "mus/ocean.ogg",
+      "size": 149995,
+      "sha256": "0035deea016fe978a5359e6c1f2b17c997e18d716e64e27669cb96d34c3480a2",
+      "mode": "copy"
+    },
+    {
+      "output": "music/oldman_helps_out.ogg",
+      "source": "mus/oldman_helps_out.ogg",
+      "size": 570148,
+      "sha256": "578b8d4c057b2140a28433c270ee56d3c85ecbcb9b064e8b5582693b66d59b06",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ominous_message.ogg",
+      "source": "mus/ominous_message.ogg",
+      "size": 19591,
+      "sha256": "d52e6224dd7b35ee11622728788fb9a0ff0acd3181754e42468940d27d3ddac7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ominous_stab_harsh.ogg",
+      "source": "mus/ominous_stab_harsh.ogg",
+      "size": 56078,
+      "sha256": "bde3676f6f0cceed5e1277779c0e5bfbbf868fa83cb0c71d375a83f096a21db8",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ominous_stab_harsh_2.ogg",
+      "source": "mus/ominous_stab_harsh_2.ogg",
+      "size": 37289,
+      "sha256": "83598223e578fe79cf29e5b9f357d44b74f09946c016e201297d08a5bb983a1d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ominous_worse.ogg",
+      "source": "mus/ominous_worse.ogg",
+      "size": 63681,
+      "sha256": "2fd820d8ded220c06742705334142a8aa77a2a3edf61cf781b96450fbd477693",
+      "mode": "copy"
+    },
+    {
+      "output": "music/piano_ambience.ogg",
+      "source": "mus/piano_ambience.ogg",
+      "size": 2811718,
+      "sha256": "38934872f4abce3f171ef5a2d2d6fcf93384edd0854878636dba6f49800af0d5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/pianpian.ogg",
+      "source": "mus/pianpian.ogg",
+      "size": 286479,
+      "sha256": "a6e1b944426051c91547f09d8acc8ea2113041b454f2b151522c5c7ca560f02d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/pink.ogg",
+      "source": "mus/pink.ogg",
+      "size": 4486049,
+      "sha256": "ac576c0be7daab01f3e87c2dc83b41bc0b4bc1239e4c53c6f417cf3a6cb9991c",
+      "mode": "copy"
+    },
+    {
+      "output": "music/pink_theme.ogg",
+      "source": "mus/pink_theme.ogg",
+      "size": 1202478,
+      "sha256": "61d57fca2d351efbda5a9f52d46757554bbd347cdc3a16c5fc084fd5304bb671",
+      "mode": "copy"
+    },
+    {
+      "output": "music/pink_theme_mad.ogg",
+      "source": "mus/pink_theme_mad.ogg",
+      "size": 470203,
+      "sha256": "081e543495e7dacfa4e526f854cd551d57769180850ded114e8bda4de2ff6dc6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/pirate_zone.ogg",
+      "source": "mus/pirate_zone.ogg",
+      "size": 855186,
+      "sha256": "d0b9e40a7b05f1ba380b45843a8927fa080a0e82a5557f0a796f04442cdb4022",
+      "mode": "copy"
+    },
+    {
+      "output": "music/prejoker.ogg",
+      "source": "mus/prejoker.ogg",
+      "size": 1252422,
+      "sha256": "921b59b3894054b0b8e98bb6c8122ba5609f2b16aac170a81a89cda7ccd98dc9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/pumpkin_boss.ogg",
+      "source": "mus/pumpkin_boss.ogg",
+      "size": 3349206,
+      "sha256": "6f585c5a14692b142e189e0ff2d31d4008a0540d7260b1d3caf9a5d9bede2e41",
+      "mode": "copy"
+    },
+    {
+      "output": "music/queen.ogg",
+      "source": "mus/queen.ogg",
+      "size": 685601,
+      "sha256": "c88119118acdc251e70b7702085b02c672bb3bd88e6b8fc84a03a3b30130a229",
+      "mode": "copy"
+    },
+    {
+      "output": "music/queen_boss.ogg",
+      "source": "mus/queen_boss.ogg",
+      "size": 979888,
+      "sha256": "887c49c349e90a5a7a3c0b62ddaa8882663ef7df01ddab556b1208c40c1f7177",
+      "mode": "copy"
+    },
+    {
+      "output": "music/queen_car_radio.ogg",
+      "source": "mus/queen_car_radio.ogg",
+      "size": 158702,
+      "sha256": "b39ddfb035971e4f4d7d96e670f25b97516df0799eb761f65cfa3e27f0643190",
+      "mode": "copy"
+    },
+    {
+      "output": "music/queen_intro.ogg",
+      "source": "mus/queen_intro.ogg",
+      "size": 115226,
+      "sha256": "dfa6c5c95cdd4558804f407463ed3da1b16f07b31b2dc5ecf009e2dce6aef6f0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/quiet_autumn.ogg",
+      "source": "mus/quiet_autumn.ogg",
+      "size": 709969,
+      "sha256": "8f5a6526d5b72342ed04de6fe7b68d0067312803d7801024b56876eb4c13a9a8",
+      "mode": "copy"
+    },
+    {
+      "output": "music/quiet_church.ogg",
+      "source": "mus/quiet_church.ogg",
+      "size": 2334441,
+      "sha256": "749fc75908f6d1a6da2643e142304b1d3b7de84db0e5b266e1aa77c6bf00780d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rain.ogg",
+      "source": "mus/rain.ogg",
+      "size": 1748442,
+      "sha256": "7a39e5578852a660dabe0a08023edda0c45c2c3b2083c5d96680d087a4662edc",
+      "mode": "copy"
+    },
+    {
+      "output": "music/raining.ogg",
+      "source": "mus/raining.ogg",
+      "size": 92289,
+      "sha256": "cc22e506ec68b68dc45f2b213b4b67b34c0f7a75da07ff989f0e53ad0f435ee6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/raining_in_church2.ogg",
+      "source": "mus/raining_in_church2.ogg",
+      "size": 198598,
+      "sha256": "1c17c2dc0e72348676bc28f403309a0b35790ed337985346797637aac26059ac",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rakuichi_buster_wip.ogg",
+      "source": "mus/rakuichi_buster_wip.ogg",
+      "size": 1468254,
+      "sha256": "272004bc9e9888ed162828a4639ee37b93835bb23cbb09fe695fe4aa99c6c495",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rhythm_3rd_sanctuary_guit.ogg",
+      "source": "mus/rhythm_3rd_sanctuary_guit.ogg",
+      "size": 2156103,
+      "sha256": "003f75a71b14725c80f12008ebaadf5a06e2260c889e1cc9dd33b8b95624930d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rhythm_3rd_sanctuary_noguit.ogg",
+      "source": "mus/rhythm_3rd_sanctuary_noguit.ogg",
+      "size": 2156439,
+      "sha256": "2ad039f77a0d6ed047aee13819dc256d0c7d955c2d8ef88c0e73c12f4e6bd2ab",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rhythm_knockdown_combined.ogg",
+      "source": "mus/rhythm_knockdown_combined.ogg",
+      "size": 1665113,
+      "sha256": "30f6b4b40bf2a9073293f3cbc1afab72a5891f0d9036a1cace2575e69028894a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rhythm_knockdown_no_guit.ogg",
+      "source": "mus/rhythm_knockdown_no_guit.ogg",
+      "size": 1653960,
+      "sha256": "a6cc877f8501d0f5ea4bec10089f3210e86c46a3069c7d88c549500b36ad9682",
+      "mode": "copy"
+    },
+    {
+      "output": "music/root_8bit.ogg",
+      "source": "mus/root_8bit.ogg",
+      "size": 498682,
+      "sha256": "95cdec706006d7603bda279b30b6cbfad50978154b4cb1331b25d9d02ca59932",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rouxls_battle.ogg",
+      "source": "mus/rouxls_battle.ogg",
+      "size": 718995,
+      "sha256": "c502041d7170d1b8511adb33cd7a2ecae5eb1bff2130acf26881cf43a2e31cd9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rtenna_zoom.ogg",
+      "source": "mus/rtenna_zoom.ogg",
+      "size": 92865,
+      "sha256": "0fce277bbfbc93a1bee45e7a17cb2b573cdc8512181ed7682ff1bbbe898bb269",
+      "mode": "copy"
+    },
+    {
+      "output": "music/rudebuster_boss.ogg",
+      "source": "mus/rudebuster_boss.ogg",
+      "size": 1473727,
+      "sha256": "7fa205bca2838f58133ce98498da94ee8c2e58ecd926ad1d794322c7e333cc43",
+      "mode": "copy"
+    },
+    {
+      "output": "music/running_water.ogg",
+      "source": "mus/running_water.ogg",
+      "size": 2516349,
+      "sha256": "372c7f9b5051a174b39583372aef8b45d26c26a42b2e273b270d4e6c76ccb9f9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/ruruskaado.ogg",
+      "source": "mus/ruruskaado.ogg",
+      "size": 470380,
+      "sha256": "39b76839e6699a26645f0a64b32a33518434423dcce6d413d915a474426adfdb",
+      "mode": "copy"
+    },
+    {
+      "output": "music/s_neo.ogg",
+      "source": "mus/s_neo.ogg",
+      "size": 669566,
+      "sha256": "7e1e1e8fe4d1fcd8838dd9f8981cbabf2e1cb27cdd001303340777f46fd9624b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/s_neo_clip.ogg",
+      "source": "mus/s_neo_clip.ogg",
+      "size": 53153,
+      "sha256": "bb7622b1e21f1e098650f0bc755c16e97a66add1962307286307b25b33f36597",
+      "mode": "copy"
+    },
+    {
+      "output": "music/sadchord2.ogg",
+      "source": "mus/sadchord2.ogg",
+      "size": 75149,
+      "sha256": "ae810783a336b92978e7125aa514bbada9ce8dc34219477ae1d394197367bb08",
+      "mode": "copy"
+    },
+    {
+      "output": "music/second_church.ogg",
+      "source": "mus/second_church.ogg",
+      "size": 2029506,
+      "sha256": "dbd4e8d381ee4d8bb97e25cb8da60a5e6e5d99db2f682375c62dcd28c7641544",
+      "mode": "copy"
+    },
+    {
+      "output": "music/shinkansen.ogg",
+      "source": "mus/shinkansen.ogg",
+      "size": 95656,
+      "sha256": "66c5170b1a32510831f120495d2c2058c2f8db2605345fb65d78ae5c05d1b776",
+      "mode": "copy"
+    },
+    {
+      "output": "music/shop1.ogg",
+      "source": "mus/shop1.ogg",
+      "size": 1121136,
+      "sha256": "a876ebfe1444b666c269ea27edbb04229294eabb8c832460de0f8cfe9dae20fc",
+      "mode": "copy"
+    },
+    {
+      "output": "music/shop_3.ogg",
+      "source": "mus/shop_3.ogg",
+      "size": 1172894,
+      "sha256": "47d8b56f50283803035088a8a876c9e348a4f48d4ddcfee79dc2d02fd2b25642",
+      "mode": "copy"
+    },
+    {
+      "output": "music/silly_printer.ogg",
+      "source": "mus/silly_printer.ogg",
+      "size": 818190,
+      "sha256": "03816aa3a6428fa8dd5dbcc8a6600f79c1948301cf9f1e4db42f04b7d1c69584",
+      "mode": "copy"
+    },
+    {
+      "output": "music/sinedrone_danger.ogg",
+      "source": "mus/sinedrone_danger.ogg",
+      "size": 16465,
+      "sha256": "ed7470be0ab7921b137145fe2119973ad061c8f5a4258496f0e8b2398d19eeb5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/sinedrone_danger_high.ogg",
+      "source": "mus/sinedrone_danger_high.ogg",
+      "size": 228474,
+      "sha256": "3d4172d91d6b3704f676a75ddb7238e584d6eb1006022cb42f9ccfe2f9693bca",
+      "mode": "copy"
+    },
+    {
+      "output": "music/sink_noise.ogg",
+      "source": "mus/sink_noise.ogg",
+      "size": 19069,
+      "sha256": "4f14188060e269d2f85fb2dd0db7f23e6fd85312e04d61ef49d0b922d0611998",
+      "mode": "copy"
+    },
+    {
+      "output": "music/smallpiano_room.ogg",
+      "source": "mus/smallpiano_room.ogg",
+      "size": 118861,
+      "sha256": "3b9ed71f8a605e62ada75212ccdd20a7448251ce804fb65ade6fd526acc1e418",
+      "mode": "copy"
+    },
+    {
+      "output": "music/sound_battle_bg.ogg",
+      "source": "mus/sound_battle_bg.ogg",
+      "size": 93647,
+      "sha256": "b36890a3c09500e1660ce8c120bea1cd07f49bcd83cf2c6d6cc82cdd4f7373f0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_basement.ogg",
+      "source": "mus/spamton_basement.ogg",
+      "size": 106594,
+      "sha256": "d6b48e549162c5575165c530ebf191b0ee2b5bb6ec5d1520cad724f542f4c747",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_battle.ogg",
+      "source": "mus/spamton_battle.ogg",
+      "size": 800168,
+      "sha256": "f3190f784b753e1c0734005c2cfac9e45b35980d0654fb6cecc6487c9abe3ae6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_dance.ogg",
+      "source": "mus/spamton_dance.ogg",
+      "size": 1926038,
+      "sha256": "5c2b9a5fb129aca58e401fac2e5cd507270d7a80a6c25f0a5eda9a1e9fa0d341",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_happy.ogg",
+      "source": "mus/spamton_happy.ogg",
+      "size": 51584,
+      "sha256": "bb4afa427fcfbe906a09187d43a36a08cbfecda2270a8d8efa16e719e04a90f3",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_house.ogg",
+      "source": "mus/spamton_house.ogg",
+      "size": 101557,
+      "sha256": "cdc55ed801db3d20ebd82104aa85b6ca812c65c3ee2b128b34ca5eb9dd7ddbae",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_laugh_noise.ogg",
+      "source": "mus/spamton_laugh_noise.ogg",
+      "size": 29060,
+      "sha256": "eb31192ee7bf987ff162f62a9b0a103b36cf30021ec1858d85d1e9fe251146ee",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_meeting.ogg",
+      "source": "mus/spamton_meeting.ogg",
+      "size": 332727,
+      "sha256": "4ebebabfc44758de25535eb3281696dc6eb292db770e1569f8c4a81c01dd0ab7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_meeting_intro.ogg",
+      "source": "mus/spamton_meeting_intro.ogg",
+      "size": 17409,
+      "sha256": "e5e65cafa501a1388bda038752ae2f7bcadf7001b0ca7e08797e0a8cb9b792da",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_neo_after.ogg",
+      "source": "mus/spamton_neo_after.ogg",
+      "size": 317763,
+      "sha256": "854dbf0c611f8266a45387f62db515ca731265c434a4eb83cb8a1626ef0e848f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_neo_meeting.ogg",
+      "source": "mus/spamton_neo_meeting.ogg",
+      "size": 364174,
+      "sha256": "ad0cdca2ba3fa8d6bff8950f49dbf9ec2c61662ea45e189553b756c5d38dbfba",
+      "mode": "copy"
+    },
+    {
+      "output": "music/spamton_neo_mix_ex_wip.ogg",
+      "source": "mus/spamton_neo_mix_ex_wip.ogg",
+      "size": 2003139,
+      "sha256": "2189fbde55b87915fd8c7696528c16af5fec2ede3107c266b3c5785d2bc20b71",
+      "mode": "copy"
+    },
+    {
+      "output": "music/static_placeholder.ogg",
+      "source": "mus/static_placeholder.ogg",
+      "size": 187157,
+      "sha256": "1736cb67b6a034ec05e81087a5ca069d77bf4c9239ab7b4901cc3e6e05578b94",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue2_level1.ogg",
+      "source": "mus/statue2_level1.ogg",
+      "size": 214260,
+      "sha256": "7a16242e04091930997678e5ae65c1ce01628a425632eb449ef68e1dce282154",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue2_level2.ogg",
+      "source": "mus/statue2_level2.ogg",
+      "size": 214299,
+      "sha256": "9b8346770a2a8d0cab33a1248dd1a4cea8661f941853ebd758f89baad8f1ca2e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue2_level3.ogg",
+      "source": "mus/statue2_level3.ogg",
+      "size": 214255,
+      "sha256": "080240128f3ee94276aef3b6095b5617fbff55a2d1dc3d7b185c9bc1641114be",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue2_level4.ogg",
+      "source": "mus/statue2_level4.ogg",
+      "size": 214267,
+      "sha256": "3fb0eded14fff7aa39bf3bce2833e547bf5591ca028906ea69f41cecccd7585b",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue2_level5.ogg",
+      "source": "mus/statue2_level5.ogg",
+      "size": 214537,
+      "sha256": "5b6e36d9f8d492eb6e8c2bc9561e7f5732794168f4610635337c383b38727cba",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue_chord_basic.ogg",
+      "source": "mus/statue_chord_basic.ogg",
+      "size": 214226,
+      "sha256": "52f82ce4b03d5244ae39cf70cbe014d518c8623991ee2a7b2ba7e4c308303d1d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue_level1.ogg",
+      "source": "mus/statue_level1.ogg",
+      "size": 165279,
+      "sha256": "3be5904f88561a18c848cebbefc03dfc2d7f20ccfa761f71457cebbb104947fa",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue_level2.ogg",
+      "source": "mus/statue_level2.ogg",
+      "size": 214163,
+      "sha256": "fe517bcbd5f0e85fc48066be9387579de3f40ea54e136f1bbeaf74a56444f976",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue_level3.ogg",
+      "source": "mus/statue_level3.ogg",
+      "size": 214360,
+      "sha256": "bba8df6903a214043f8601dc81aabd469c86a5b792f19ad59d5e885a747d06e6",
+      "mode": "copy"
+    },
+    {
+      "output": "music/statue_level4.ogg",
+      "source": "mus/statue_level4.ogg",
+      "size": 214198,
+      "sha256": "660fb203c30741f84378e9193941c6455901030f87d857fd769c39fa449e23e5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/stealth.ogg",
+      "source": "mus/stealth.ogg",
+      "size": 1104903,
+      "sha256": "741cb1f1d9a61b3f16e24c5db99333cd23dbaf8c0493081b2f8ff72c974fa797",
+      "mode": "copy"
+    },
+    {
+      "output": "music/strongwind_loop.ogg",
+      "source": "mus/strongwind_loop.ogg",
+      "size": 160049,
+      "sha256": "47123901601b7366821c4a0256cd9c0a2e034426990235ce6fa7590e1356007f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/susie_diner.ogg",
+      "source": "mus/susie_diner.ogg",
+      "size": 478433,
+      "sha256": "a1a3957a89d1f87e968f7eced798df029968f187e25798b99f5bbf2890f7d14d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tenna_battle.ogg",
+      "source": "mus/tenna_battle.ogg",
+      "size": 2355092,
+      "sha256": "a0a6905edcf9cd9a4d3b7c6251e1fbf6e992d0accc58aef3d02b2a6028a93161",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tenna_battle_guitar.ogg",
+      "source": "mus/tenna_battle_guitar.ogg",
+      "size": 2353273,
+      "sha256": "fc902dd4565fa4dec666c02954551d57947433ad6e0c9672d489ae90cf4d4580",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tenna_battle_old.ogg",
+      "source": "mus/tenna_battle.ogg",
+      "size": 2355092,
+      "sha256": "a0a6905edcf9cd9a4d3b7c6251e1fbf6e992d0accc58aef3d02b2a6028a93161",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tenna_battle_preview.ogg",
+      "source": "mus/tenna_battle_preview.ogg",
+      "size": 682715,
+      "sha256": "b91ccb65e9747bf0d35f94c0e65a5c024c3e7a859b0d43b60ee0059dfde313ef",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tenna_battle_preview_crisp.ogg",
+      "source": "mus/tenna_battle_preview_crisp.ogg",
+      "size": 634430,
+      "sha256": "bb9d2dfc50d3ea265dee612bc3aedd6ada7d95f2a0804dd8da2a358e35d08af0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tenna_island.ogg",
+      "source": "mus/tenna_island.ogg",
+      "size": 1520232,
+      "sha256": "5cd174620a7434fe9021743c0dc9f60b56866f33fbd0b04bb91cb944e58ec33f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tense.ogg",
+      "source": "mus/tense.ogg",
+      "size": 489573,
+      "sha256": "3a9fc75742daa6e71d8949964f36802691cc8802916488c012f4e80bc9b86107",
+      "mode": "copy"
+    },
+    {
+      "output": "music/the_dark_truth.ogg",
+      "source": "mus/the_dark_truth.ogg",
+      "size": 481038,
+      "sha256": "a901ca49c42b83417fb25b7240425d75827eb555b974fc1141b0d4a6e52170c4",
+      "mode": "copy"
+    },
+    {
+      "output": "music/THE_HOLY.ogg",
+      "source": "mus/THE_HOLY.ogg",
+      "size": 1169629,
+      "sha256": "8b50a48f292321ca9382f35091da424e0388f2c3f3999aac580fe80692c3237e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/thrash_rating.ogg",
+      "source": "mus/thrash_rating.ogg",
+      "size": 155938,
+      "sha256": "7482258bfcd671e4dfb26ecc86409acf495b82898e29cc93c3e3b3f985dca2b3",
+      "mode": "copy"
+    },
+    {
+      "output": "music/thrashmachine.ogg",
+      "source": "mus/thrashmachine.ogg",
+      "size": 1335798,
+      "sha256": "7721c2d07657ac74cc8cdb714b9d936c405607e1b30e15fa33140ea48cd500ff",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tin_night.ogg",
+      "source": "mus/tin_night.ogg",
+      "size": 287125,
+      "sha256": "de30a28579d1e0658032cefbd20af53ad79d80fe5579327a1ac0e20158f74ba5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tinnitus.ogg",
+      "source": "mus/tinnitus.ogg",
+      "size": 89857,
+      "sha256": "e7e44e3b4b96b00d852b5f0645ffe228b1c681f411647293b9e0bcf74d2bbca3",
+      "mode": "copy"
+    },
+    {
+      "output": "music/titan_battle.ogg",
+      "source": "mus/titan_battle.ogg",
+      "size": 5509107,
+      "sha256": "c24ee2ff7c0f90e0a385757c3f6040ddf4d6627255a6e846d42ff61a37f35e59",
+      "mode": "copy"
+    },
+    {
+      "output": "music/titan_pre.ogg",
+      "source": "mus/titan_pre.ogg",
+      "size": 471170,
+      "sha256": "95a7dcbdf2416204a3ef0a42996b43427460d6d30576633c9ca24b258e08ff6f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/titan_spawn.ogg",
+      "source": "mus/titan_spawn.ogg",
+      "size": 1732449,
+      "sha256": "840d4efcbfe4a268951df84504f2a554fed56f86bed13931ff295d657f17d657",
+      "mode": "copy"
+    },
+    {
+      "output": "music/titan_tower.ogg",
+      "source": "mus/titan_tower.ogg",
+      "size": 2033768,
+      "sha256": "b8ccf46b860029e1f48034db114881c7d734033b9a408b60f985c7dc8d0d47df",
+      "mode": "copy"
+    },
+    {
+      "output": "music/town.ogg",
+      "source": "mus/town.ogg",
+      "size": 2750649,
+      "sha256": "a9dc5fc33f2c9decd33dae143b9c3007cee589d1cf9fcbb123b441dc8d7bdfb7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/town_day.ogg",
+      "source": "mus/town_day.ogg",
+      "size": 2252471,
+      "sha256": "6190ba3b3f753acfecb7c69900c9ccfa8be5148d65f953e4553fb8c490a9fce9",
+      "mode": "copy"
+    },
+    {
+      "output": "music/trank.ogg",
+      "source": "mus/trank.ogg",
+      "size": 200561,
+      "sha256": "7830849f2d7df7406e16d7b56e11ac5e5abb3eed469b8bb0cf80bde05ba3577d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tv_changingroom.ogg",
+      "source": "mus/tv_changingroom.ogg",
+      "size": 665232,
+      "sha256": "91d4ca6f16cd84a50111c22f211092997e7b0567608fb7f9663794fe0bb5094e",
+      "mode": "copy"
+    },
+    {
+      "output": "music/TV_GAME.ogg",
+      "source": "mus/TV_GAME.ogg",
+      "size": 1097353,
+      "sha256": "b20c71d651ec0f958f4a4c201bcfa62571e3958fced555f6f0dc1c9eecd9fa55",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tv_hall_of_fame.ogg",
+      "source": "mus/tv_hall_of_fame.ogg",
+      "size": 169469,
+      "sha256": "4564f94d12368eedea6d50cbffdaf35d688456bb685b57527578d43b36c148a2",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tv_infrontof.ogg",
+      "source": "mus/tv_infrontof.ogg",
+      "size": 69629,
+      "sha256": "5a97ca20ea1847d8eecb343711fad1c98cc7817a113cb6532db2951e5566b34a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tv_noise.ogg",
+      "source": "mus/tv_noise.ogg",
+      "size": 36156,
+      "sha256": "48c8d7bc27b44934c27c02e921e4bc375b7783c5c9eb5f38eecf0d67b2ebe7b0",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tv_results_screen.ogg",
+      "source": "mus/tv_results_screen.ogg",
+      "size": 423082,
+      "sha256": "0778f28918ec8f66473f4f789d8862abf4d88fadc08a91fcaebaa066d9688f33",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tv_static_bad.ogg",
+      "source": "mus/tv_static_bad.ogg",
+      "size": 50220,
+      "sha256": "33b85fd3378252560dff3f39b758442da53769764f86701e48a1a293c1feb982",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tv_world.ogg",
+      "source": "mus/tv_world.ogg",
+      "size": 2096776,
+      "sha256": "a692ffa6eac0a3347513a0515bdd1ed833d8782d5d85972abaa20f116b127b57",
+      "mode": "copy"
+    },
+    {
+      "output": "music/tvromance.ogg",
+      "source": "mus/tvromance.ogg",
+      "size": 144631,
+      "sha256": "395cef70606a09c6c1e0e2df4fff91e30ed0900fd158ab5e1327a722c1580a9d",
+      "mode": "copy"
+    },
+    {
+      "output": "music/vs_susie.ogg",
+      "source": "mus/vs_susie.ogg",
+      "size": 1643248,
+      "sha256": "5ab7a2f874896d9093d6d3091d15c280810879a8ac26417ff808521d4276d42a",
+      "mode": "copy"
+    },
+    {
+      "output": "music/w.ogg",
+      "source": "mus/w.ogg",
+      "size": 129148,
+      "sha256": "5eba96ce43d11285b5ca055c75a3f8eeae814751f69770bcd92a99cab4c0cac5",
+      "mode": "copy"
+    },
+    {
+      "output": "music/wet_tapdancing.ogg",
+      "source": "mus/wet_tapdancing.ogg",
+      "size": 97526,
+      "sha256": "e22d267419008acbcc3a3262c5d149394c1adf5e63c86986bbf2f951a51140b7",
+      "mode": "copy"
+    },
+    {
+      "output": "music/wet_tapdancing2.ogg",
+      "source": "mus/wet_tapdancing2.ogg",
+      "size": 97616,
+      "sha256": "0eeb07bc03f940643f804cb1609d9988a23e5e86b59d38a59e0af6b2fc283c74",
+      "mode": "copy"
+    },
+    {
+      "output": "music/wet_tapdancing_failed.ogg",
+      "source": "mus/wet_tapdancing_failed.ogg",
+      "size": 57671,
+      "sha256": "c4eba28e7c121a5924f0f1416d5114bdda0b0303ba32c210566e8ee68d16f69f",
+      "mode": "copy"
+    },
+    {
+      "output": "music/wind.ogg",
+      "source": "mus/wind.ogg",
+      "size": 141946,
+      "sha256": "983f0218e3d7876426cdd788821c7ea9d78860bb0fe8424faa3a942530482599",
+      "mode": "copy"
+    },
+    {
+      "output": "music/wind_highplace.ogg",
+      "source": "mus/wind_highplace.ogg",
+      "size": 116241,
+      "sha256": "3df7b2d0e74e7af39be5402e8bf9d8ddb0f125989552af757d01d914f4440be1",
+      "mode": "copy"
+    },
+    {
+      "output": "sounds/snd-select.ogg",
+      "source": null,
+      "size": 6393,
+      "sha256": "4667263ebc70a39b070242c2f8bd8974f9b56f24554789bf56607a9f1340ddc0",
+      "mode": "patch",
+      "patch": "0539.bsdiff"
+    },
+    {
+      "output": "sounds/snd_menumove.wav",
+      "source": null,
+      "size": 2108,
+      "sha256": "76e9f105dc2a6939bd45157482c877579b2b2ac5f137ffc5cd3f1c545423e4c5",
+      "mode": "patch",
+      "patch": "0540.bsdiff"
+    },
+    {
+      "output": "sounds/snd_swing.wav",
+      "source": null,
+      "size": 64154,
+      "sha256": "6053d7d84d1244aa5d602edbbabe886590640d51c23883bbf5e06d5b43e9f777",
+      "mode": "patch",
+      "patch": "0541.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_circle_0.png",
+      "source": null,
+      "size": 150,
+      "sha256": "b2e670d1c41ae7b7b1efc40c51d55462ed96272d76a0e69d170ef8e712438513",
+      "mode": "patch",
+      "patch": "0542.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_cross_0.png",
+      "source": null,
+      "size": 142,
+      "sha256": "c53cbd49c30711adf3373ad1d3c391721f3be9ea3e6cde66896b859394a698c5",
+      "mode": "patch",
+      "patch": "0543.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_dpad_down.png",
+      "source": null,
+      "size": 142,
+      "sha256": "b1f3618f1b2641dba59b0d6c308349ee42e6bf60f2a4c1da02ece4b29cfbf4e2",
+      "mode": "patch",
+      "patch": "0544.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_dpad_left.png",
+      "source": null,
+      "size": 149,
+      "sha256": "0c27db399fff56c5d729531ee136deb74f42c048b319efe8e90203b60923d8fa",
+      "mode": "patch",
+      "patch": "0545.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_dpad_right.png",
+      "source": null,
+      "size": 140,
+      "sha256": "3a5715cec9fb74afa5a9770d444e42881cfb4578d321e7c7bc2505be3394b0df",
+      "mode": "patch",
+      "patch": "0546.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_dpad_up.png",
+      "source": null,
+      "size": 140,
+      "sha256": "3725f8f6968e8361769439dd68e911aa3ab93ce68c055a3c09c737dc8b80dbdd",
+      "mode": "patch",
+      "patch": "0547.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_l1.png",
+      "source": null,
+      "size": 144,
+      "sha256": "8b644d3fe740f7d4165b2a684bfef15e576ea9560ae3579da2eaa4db6176b4e6",
+      "mode": "patch",
+      "patch": "0548.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_options.png",
+      "source": null,
+      "size": 167,
+      "sha256": "540e6656902d4bf75fae57553067e2235ad7c5d26f1101dcf5b41467868da5ba",
+      "mode": "patch",
+      "patch": "0549.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_r1.png",
+      "source": null,
+      "size": 148,
+      "sha256": "a8beda903614033cc31629dadc172af3ffeaa88b21485673ffd8006966a5e779",
+      "mode": "patch",
+      "patch": "0550.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_square_0.png",
+      "source": null,
+      "size": 146,
+      "sha256": "c5e71488aa2ffcdd0c5fe1c56efc3cf44862958dbb38d86e63eea3b827374c40",
+      "mode": "patch",
+      "patch": "0551.bsdiff"
+    },
+    {
+      "output": "ui/button_ps4_triangle_0.png",
+      "source": null,
+      "size": 143,
+      "sha256": "315c086d81ade67e2c016a50da1906a758d7d31a5d5eb826a82f9595ff9d803a",
+      "mode": "patch",
+      "patch": "0552.bsdiff"
+    },
+    {
+      "output": "ui/spr_dodgeheartmask/hearth1.png",
+      "source": null,
+      "size": 145,
+      "sha256": "74e5dd5c9daf2132c19f9564e9101d36cfc9ecf37ab165745381a73fc6435c11",
+      "mode": "patch",
+      "patch": "0553.bsdiff"
+    },
+    {
+      "output": "ui/spr_dodgeheartmask/hearth2.png",
+      "source": null,
+      "size": 146,
+      "sha256": "0fb278099eeab3bceb3f196af896af11c88098c69b58a099fd53075f966ae71c",
+      "mode": "patch",
+      "patch": "0554.bsdiff"
+    },
+    {
+      "output": "ui/spr_dodgeheartmask/hearth3_cancel.png",
+      "source": null,
+      "size": 166,
+      "sha256": "ffc7ba8d5cc918a19d3ec0a72905220af5a43d9442c0081c02789c94cf026a73",
+      "mode": "patch",
+      "patch": "0555.bsdiff"
+    },
+    {
+      "output": "ui/spr_textbox_topleft_0.png",
+      "source": null,
+      "size": 237,
+      "sha256": "5ddfb85d300abc205fe7359a9f0d2c4b5f94e623422aa1864317dcd9462ab6ed",
+      "mode": "patch",
+      "patch": "0556.bsdiff"
+    }
+  ]
+}
+;

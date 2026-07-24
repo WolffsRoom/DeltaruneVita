@@ -1,0 +1,9 @@
+This pre-release introduces major rendering optimizations and stability fixes that were developed for v0.58 and v0.59.
+
+**O que mudou nesta versão? (Resumo)**
+
+1. **Gráficos em Alta Resolução (Original Mode):** Antes, em salas muito pesadas (como o Castelo), o jogo forçava uma redução na qualidade das texturas (de 2048px para 1280px) para não travar o console por falta de memória. Nós otimizamos o uso da RAM e removemos essa trava, permitindo que o jogo rode com os gráficos originais do PC sem descartar imagens.
+2. **Expansão da Memória RAM:** O PS Vita tem um limite rígido de memória. Nós descobrimos que a biblioteca gráfica (VitaGL) estava reservando 64MB de RAM de forma exagerada. Reduzimos isso para 32MB e repassamos o espaço livre para o jogo. O limite do cache de texturas subiu de 104MB para 128MB, dando muito mais fôlego para carregar cenários gigantes.
+3. **Compatibilidade com Mods (Anti-Textura Invisível):** Ferramentas de tradução (como as usadas no mod PT-BR) costumam gerar imagens com tamanhos fora do padrão (Non-Power-Of-Two). A GPU do Vita não lidava bem com isso e deixava essas imagens invisíveis. Criamos um sistema que detecta essas imagens e corrige automaticamente a forma como o Vita as lê (forçando a técnica GL_CLAMP_TO_EDGE), fazendo os mods aparecerem normalmente.
+4. **Otimização Massiva de Desempenho (Draw Batching):** Anteriormente, o jogo pedia para a placa de vídeo desenhar cada objeto da tela individualmente. Em áreas cheias, a fila de tarefas da GPU (Parameter Buffer) lotava e ela ignorava objetos, fazendo coisas sumirem. Reescrevemos o motor para agrupar tudo, enviando a tela inteira em um pacotão só. Isso alivia a GPU e impede que partes do cenário sumam do nada.
+5. **Correção de Saves (Buffer Overflow):** Aumentamos o limite de texto do sistema que organiza o diretório de saves (de 256 para 512 caracteres) para evitar crashes caso o caminho do arquivo seja muito longo.

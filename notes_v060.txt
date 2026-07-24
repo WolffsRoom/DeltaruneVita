@@ -1,0 +1,7 @@
+Build interno da versão v0.60. Inclui Teste de Estresse de Alocação de Memória para suporte completo a Mods em alta resolução.
+
+**Pre-release v0.60 (Internal Development Build)**
+
+*   Alterado o teto global do \itaTextureCacheLimit\ de \128ULL\ (e \112ULL\ no Capítulo 5) para absurdos \192ULL\. (Aumentando o limite dinâmico de cache de texturas para quase **200MB**, testando o limite físico de hardware do PS Vita).
+*   **Removida completamente** a trava de segurança de downscale (\	ransformedCastleSafetyScale\ e \chapter5SafetyScale\). Todas as texturas (incluindo as NPOT pesadas geradas por Mods como o PT-BR) passam a rodar nativamente em sua glória de **2048px (Modo Original)** sem downgrade, confiando inteiramente nos 192MB de RAM disponíveis.
+*   **Objetivo:** Permitir que mods ineficientes renderizem salas extremamente pesadas (como o Castelo e o Capítulo 5 inteiro) na resolução nativa sem esgotar o *Parameter Buffer* e sem fazer objetos (como o \obj_castle_shop\) sumirem da tela.

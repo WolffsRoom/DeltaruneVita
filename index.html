@@ -1114,6 +1114,7 @@ let doneState=false;
 document.addEventListener("keydown",e=>{
   if(inTipScreen) { e.preventDefault(); dismissTipScreen(); return; }
   if(e.repeat) { e.preventDefault(); return; }
+  if(e.key === "Tab") { e.preventDefault(); return; }
   if(e.key === " " || e.key === "Spacebar") { e.preventDefault(); }
   if(inLangScreen){
     e.preventDefault();

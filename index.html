@@ -424,6 +424,12 @@ let selectedExtra=null;
 let pendingAction=null;
 let inTransition=false;   // idioma extra alem de EN/JP (unico)
 let active=0, busy=false, pending=false;   // pending = aguardando OK
+const MIRRORS = [
+  { id: "mediafire", label: "Mediafire" },
+  { id: "gdrive", label: "Google Drive" },
+  { id: "mega", label: "Mega" },
+  { id: "archive", label: "Internet Archive" }
+];
 
 const MAIN=[
   {id:"lang",    label:"Idioma"},
@@ -989,7 +995,7 @@ function setBar(p){
    MAIN:     menu na direita (#options), fala do Seam na esquerda (#speech)
    SUBMENU:  lista na esquerda (#speech), pergunta do Seam na direita (#options),
              explicacao no dialogplus (#plus) que sobe de baixo. */
-function subList(){ return screen==="lang"? langItems() : screen==="ajustes"? settingsItems() : talkItems(); }
+function subList(){ return screen==="lang"? langItems() : screen==="ajustes"? settingsItems() : screen==="mirror"? MIRRORS : talkItems(); }
 const RET_INDEX={lang:0, ajustes:3, talk:4};
 function itemKey(it){ return it.code||it.id; }
 function sayQ(t){ type($("options"), t); }   // fala/pergunta do Seam -> caixa direita
@@ -1088,6 +1094,14 @@ function activate(){
   }
   // submenu
   if(pending) return resolveConfirm();
+  if(screen === "mirror") {
+    play(A.sel);
+    const chosen = MIRRORS[active].id;
+    screen = "main";
+    toSingle();
+    generate(chosen);
+    return;
+  }
   const it=subList()[active];
   if(it.id==="sair") return exitSub();
   if(screen==="talk"){ return talkSpeak(it.id); }   // resultado no dialog1
@@ -1105,8 +1119,16 @@ function resolveConfirm(){
     pendingAction = null;
     if(confirmSel === 0) { // Sim / Yes
       setSeam("laugh", 1200);
-      toSingle();
-      generate();
+      if(selectedExtra === "PTBR") {
+        screen = "mirror";
+        active = 3; // Default to Archive.org
+        setSeam("talk");
+        sayQ("* Selecione o servidor para o download:");
+        render();
+      } else {
+        toSingle();
+        generate();
+      }
     } else { // Não / No
       setSeam("idle");
       speech(SEAM_LINES.choose);
@@ -1167,6 +1189,14 @@ function exitSub(){
 }
 function back(){
   if(screen==="main"){ play(A.swing); return; }
+  if(screen==="mirror"){
+    screen="main";
+    active=0;
+    setSeam("idle");
+    speech(SEAM_LINES.choose);
+    render();
+    return;
+  }
   if(pending) return cancelConfirm();
   exitSub();
 }
@@ -1321,7 +1351,7 @@ function apply(){
   renderConfirm();
 }
 
-async function generate(){
+async function generate(chosenMirror){
   if(busy||!steamHandle) return;
   busy=true;
   const el=$("single");
@@ -1332,7 +1362,80 @@ async function generate(){
     if(!m) throw new Error("Não foi possível carregar o manifest.json (CORS ou erro de rede). Você abriu como file://? Tente rodar um servidor web local.");
 
     // FASE 1 — baixar idioma
-    if(selectedExtra){
+    let modZip = null;
+    if(selectedExtra === "PTBR" && chosenMirror){
+      let modsList;
+      try {
+        const res = await fetch("mods_list.json");
+        modsList = await res.json();
+      } catch(e) {
+        modsList = {
+          PTBR: {
+            Mediafire: "https://download1472.mediafire.com/wq1sfbskzyhgPzEezrIa5jdDfX9Mut7e3yehfMKMTT5tXxRNA5X_1-Kh9O0LRfl6I_nVWA7RB9ZhyhfAEz2yf6qjBOpUN5bCodQ-juY-TV7E1WysP0VfsJh20Es2vJVICDQMP5VCRqMo65PP9SBEzMASqy0wHF_0Ma69YLJxga4KQUg/4ildqbqja3ehuq2/PTBR.zip",
+            "Google Drive": "https://drive.google.com/uc?export=download&id=1LCT2kD-WQpPQO3dAeIldXBUn2j3c0m9d",
+            Mega: "https://mega.nz/file/ExcDiC6B#1pqrFjmz2-xaEiQ0SWOaa13N18k9sWevwHWIww21b8Q",
+            Archive: "https://archive.org/download/ptbr_20260725/PTBR.zip"
+          }
+        };
+      }
+      
+      const mirrorNames = {
+        mediafire: "Mediafire",
+        gdrive: "Google Drive",
+        mega: "Mega",
+        archive: "Archive"
+      };
+      const dlUrl = modsList.PTBR[mirrorNames[chosenMirror]] || modsList.PTBR.Archive;
+      
+      await typeAsync(el, "* Iniciando download da tradução...");
+      let zipBlob = null;
+      try {
+        const response = await fetch(dlUrl);
+        if(!response.ok) throw new Error();
+        const reader = response.body.getReader();
+        const contentLength = +response.headers.get('Content-Length') || 229429248;
+        let receivedLength = 0;
+        let chunks = [];
+        while(true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          receivedLength += value.length;
+          const p = Math.floor((receivedLength / contentLength) * 100);
+          setBar(p);
+          setLine(el, "* Baixando tradução... " + p + "%  (" + (receivedLength/1024/1024).toFixed(1) + " / " + (contentLength/1024/1024).toFixed(1) + " MB)");
+        }
+        zipBlob = new Blob(chunks);
+      } catch (err) {
+        console.error("Fetch failed, fallback to manual selection", err);
+        showBar(false);
+        setSeam("oh", 1800);
+        await typeAsync(el, "* O download automático falhou (CORS ou rede).\n* Baixando arquivo no navegador. Selecione-o quando o download terminar.");
+        window.open(dlUrl, '_blank');
+        
+        zipBlob = await new Promise((resolve, reject) => {
+          const inp = document.createElement("input");
+          inp.type = "file";
+          inp.accept = ".zip";
+          inp.style.display = "none";
+          document.body.appendChild(inp);
+          inp.addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              resolve(file);
+            } else {
+              reject(new Error("Cancelado"));
+            }
+            inp.remove();
+          });
+          inp.click();
+        });
+        showBar(true);
+      }
+      
+      setLine(el, "* Carregando arquivo zip da tradução...");
+      modZip = await JSZip.loadAsync(zipBlob);
+    } else if(selectedExtra){
       const L=LANGS.find(x=>x.code===selectedExtra);
       await typeAsync(el,"* Baixando o idioma "+L.label+"...");
       for(let p=0;p<=100;p+=4){ setBar(p);
@@ -1383,6 +1486,19 @@ async function generate(){
       setBar((i+1)/wanted.length*100);
       if(i%15===0||i===wanted.length-1){ setLine(el,"* Aplicando patch... "+(i+1)+"/"+wanted.length+" arquivos"); await sleep(5); }
     }
+
+    // FASE 3b — descompactar a traducao baixada dentro de deltarunevita/mods/PTBR
+    if(modZip){
+      setLine(el, "* Copiando arquivos da tradução...");
+      const modEntries = Object.values(modZip.files).filter(f=>!f.dir);
+      const hasPtbrRoot = modEntries.some(f=>/^ptbr[\/\\]/i.test(f.name));
+      for(const entry of modEntries){
+        const rel = hasPtbrRoot ? entry.name.replace(/^ptbr[\/\\]/i, "") : entry.name;
+        const buf = await entry.async("arraybuffer");
+        zip.file("deltarunevita/mods/PTBR/"+rel, buf);
+      }
+    }
+
     console.log("lang:",selectedExtra||"EN/JP","| copy:",copies,"| bspatch(pendente):",patches,"| cache:",cacheOn);
     
     showBar(true); setBar(100);

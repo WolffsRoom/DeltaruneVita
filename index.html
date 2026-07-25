@@ -506,7 +506,7 @@ const UI_TEXT = {
     mirror_manual_question: "* De onde você quer baixar a tradução?",
     mirror_open_hint: "* Quando terminar de baixar, selecione 'Anexar arquivo baixado'.",
     mirror_attach_option: "Anexar arquivo baixado",
-    vassets_question: "* Preciso de mais um arquivo antes de continuar: os assets exclusivos do Vita (interface, sons, bordas).",
+    vassets_question: "* Hey, I need you to attach the Vita-exclusive assets.",
     vassets_download_option: "Baixar assets do Vita",
     questions: {
       lang: "* Qual língua deseja configurar?",
@@ -579,7 +579,7 @@ const UI_TEXT = {
     mirror_manual_question: "* ¿Desde dónde quieres descargar la traducción?",
     mirror_open_hint: "* Cuando termines de descargar, selecciona 'Adjuntar archivo descargado'.",
     mirror_attach_option: "Adjuntar archivo descargado",
-    vassets_question: "* Necesito un archivo más antes de continuar: los assets exclusivos de Vita (interfaz, sonidos, bordes).",
+    vassets_question: "* Oye, necesito que adjuntes los recursos exclusivos para la Vita.",
     vassets_download_option: "Descargar assets de Vita",
     questions: {
       lang: "* ¿Qué idioma deseas configurar?",
@@ -655,7 +655,7 @@ const UI_TEXT = {
     mirror_manual_question: "* Where do you want to download the translation from?",
     mirror_open_hint: "* When you're done downloading, select 'Attach downloaded file'.",
     mirror_attach_option: "Attach downloaded file",
-    vassets_question: "* I need one more file before continuing: the Vita-exclusive assets (UI, sounds, borders).",
+    vassets_question: "* Hey, I need you to attach the Vita-exclusive assets.",
     vassets_download_option: "Download Vita assets",
     questions: {
       lang: "* Which language do you want to configure?",
@@ -731,7 +731,7 @@ const UI_TEXT = {
     mirror_manual_question: "* D'où voulez-vous télécharger la traduction ?",
     mirror_open_hint: "* Une fois le téléchargement terminé, sélectionnez « Joindre le fichier téléchargé ».",
     mirror_attach_option: "Joindre le fichier téléchargé",
-    vassets_question: "* Il me faut un fichier de plus avant de continuer : les assets exclusifs de la Vita (interface, sons, bordures).",
+    vassets_question: "* Salut, j'ai besoin que tu joignes les ressources exclusives à la Vita.",
     vassets_download_option: "Télécharger les assets Vita",
     questions: {
       lang: "* Quelle langue souhaitez-vous configurer ?",
@@ -807,7 +807,7 @@ const UI_TEXT = {
     mirror_manual_question: "* Von wo möchtest du die Übersetzung herunterladen?",
     mirror_open_hint: "* Wenn der Download fertig ist, wähle 'Heruntergeladene Datei anhängen'.",
     mirror_attach_option: "Heruntergeladene Datei anhängen",
-    vassets_question: "* Ich brauche noch eine Datei, bevor wir weitermachen: die Vita-exklusiven Assets (Oberfläche, Sounds, Rahmen).",
+    vassets_question: "* Hey, du musst mir bitte die exklusiven Assets für die Vita beifügen.",
     vassets_download_option: "Vita-Assets herunterladen",
     questions: {
       lang: "* Welche Sprache möchtest du konfigurieren?",
@@ -883,7 +883,7 @@ const UI_TEXT = {
     mirror_manual_question: "* Откуда хочешь скачать перевод?",
     mirror_open_hint: "* Когда закончишь скачивать, выбери «Прикрепить скачанный файл».",
     mirror_attach_option: "Прикрепить скачанный файл",
-    vassets_question: "* Нужен ещё один файл, прежде чем продолжить: эксклюзивные ассеты Vita (интерфейс, звуки, рамки).",
+    vassets_question: "* Привет, мне нужно, чтобы ты прислал материалы, предназначенные исключительно для Vita.",
     vassets_download_option: "Скачать ассеты Vita",
     questions: {
       lang: "* Какой язык настроить?",
@@ -959,7 +959,7 @@ const UI_TEXT = {
     mirror_manual_question: "* どこから翻訳をダウンロードする？",
     mirror_open_hint: "* ダウンロードが終わったら「ダウンロードしたファイルを添付」を選んでね。",
     mirror_attach_option: "ダウンロードしたファイルを添付",
-    vassets_question: "* 続ける前にもう1つファイルが必要だよ。Vita専用アセット(UI、サウンド、ボーダー)。",
+    vassets_question: "* ねえ、Vita専用アセットを添付してほしいんだ。",
     vassets_download_option: "Vitaアセットをダウンロード",
     questions: {
       lang: "* 設定する言語は？",
@@ -1538,7 +1538,7 @@ async function apply(){
       active = 0;
       setSeam("talk");
       render();
-      sayQ(T.vassets_question || "* Preciso de mais um arquivo antes de continuar: os assets exclusivos do Vita (interface, sons, bordas).");
+      sayQ(T.vassets_question || "* Ei, eu preciso que anexe os assets exclusivos do Vita.");
       return;
     }
   }

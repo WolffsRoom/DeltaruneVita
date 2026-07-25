@@ -421,7 +421,8 @@ let PORT_VERSION="0.63";
 let steamHandle=null, manifest=null;
 let screen="main";        // "main" | "lang" | "ajustes"
 let selectedExtra=null;
-let pendingAction=null;   // idioma extra alem de EN/JP (unico)
+let pendingAction=null;
+let inTransition=false;   // idioma extra alem de EN/JP (unico)
 let active=0, busy=false, pending=false;   // pending = aguardando OK
 
 const MAIN=[
@@ -1173,7 +1174,7 @@ function back(){
 let doneState=false;
 document.addEventListener("keydown",e=>{
   if(e.key === "Tab") { e.preventDefault(); return; }
-  if(busy) { e.preventDefault(); return; }
+  if(busy || inTransition) { e.preventDefault(); return; }
   if(e.repeat) { e.preventDefault(); return; }
   if(e.key === " " || e.key === "Spacebar") { e.preventDefault(); }
   if(inLangScreen){
@@ -1439,7 +1440,7 @@ let introPlaying=false, introTimer=null;
 
 // clique adianta a fala do Seam (menos ao clicar numa opção do menu)
 window.addEventListener("click",e=>{
-  if(inTipScreen) { dismissTipScreen(); return; } 
+  if(busy || inTransition) return;
   if(typeState && !e.target.closest(".opt")) { skipType(); return; }
   if(introPlaying && introTimer) {
       clearTimeout(introTimer); introTimer=null; introPlaying=false;
@@ -1472,6 +1473,7 @@ function renderLangScreen(){
 function selectLangOption(idx){
   if(!inLangScreen) return;
   inLangScreen = false;
+  inTransition = true;
   langActive = idx;
   renderLangScreen();
   play(A.sel);
@@ -1510,6 +1512,7 @@ function startShop(){
   introPlaying=true;
   setTimeout(()=>{
     $("fade").classList.add("gone");        // loja aparece do preto
+    inTransition = false;
     type($("single"),SEAM_LINES.intro,()=>{
       introTimer = setTimeout(()=>{ 
           introTimer=null; introPlaying=false; 
@@ -1520,9 +1523,16 @@ function startShop(){
 }
 function boot(){
   showDialog("single");                     // pronto por tras da splash
-  const go=()=>{ startLangSelect(); };
-  $("splash").addEventListener("click",go,{once:true});
-  window.addEventListener("keydown",go,{once:true});
+  $("plusbg").classList.remove("show");
+  $("plus").classList.remove("show");
+  const go=(e)=>{
+    if(e && e.type === "keydown" && ["Alt", "Control", "Shift", "Meta", "Tab"].includes(e.key)) return;
+    $("splash").removeEventListener("click", go);
+    window.removeEventListener("keydown", go);
+    startLangSelect();
+  };
+  $("splash").addEventListener("click",go);
+  window.addEventListener("keydown",go);
 }
 boot();
 </script>

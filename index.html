@@ -258,7 +258,7 @@
 <audio id="a-doorclose" src="assets/snd_doorclose.wav" preload="auto"></audio>
 
 <script src="manifest.js?v=0.63"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="assets/jszip.min.js"></script>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -430,6 +430,33 @@ const MIRRORS = [
   { id: "mega", label: "Mega" },
   { id: "archive", label: "Internet Archive" }
 ];
+const MIRROR_NAMES = { mediafire: "Mediafire", gdrive: "Google Drive", mega: "Mega", archive: "Archive" };
+const FALLBACK_MODS_LIST = {
+  PTBR: {
+    Mediafire: "https://download1472.mediafire.com/h9gwt1ys5weglxBXy6QIdOY8YR4x08_bI8wD6wcg2kPsQvho92G__KoPwKwaLDexs2o2hj3qfegZr8JwOeiP0lTr1trKNWf85tkPmEMpTRUqsfqM-sT4rFMsgsFZ7Orw0-KKJANu7YYHPn1SKmdWshgF5R3iI9l-BBnK0OffcfKjoMg/4ildqbqja3ehuq2/PTBR.zip",
+    "Google Drive": "https://drive.google.com/uc?export=download&id=1LCT2kD-WQpPQO3dAeIldXBUn2j3c0m9d",
+    Mega: "https://mega.nz/file/ExcDiC6B#1pqrFjmz2-xaEiQ0SWOaa13N18k9sWevwHWIww21b8Q",
+    Archive: "https://archive.org/download/ptbr_20260725/PTBR.zip"
+  }
+};
+// Prefetched na inicializacao (boot) para poder resolver a URL do mirror de forma
+// sincrona no fluxo manual — window.open() so funciona sem bloqueio de popup se
+// disparado dentro do mesmo gesto do usuario, sem nenhum await antes dele.
+let cachedModsList = null;
+async function fetchModsList(){
+  if(cachedModsList) return cachedModsList;
+  try {
+    const res = await fetch("mods_list.json");
+    cachedModsList = await res.json();
+  } catch(e) {
+    cachedModsList = FALLBACK_MODS_LIST;
+  }
+  return cachedModsList;
+}
+function resolveMirrorUrlSync(mirrorId){
+  const list = cachedModsList || FALLBACK_MODS_LIST;
+  return list.PTBR[MIRROR_NAMES[mirrorId]] || list.PTBR.Archive;
+}
 
 const MAIN=[
   {id:"lang",    label:"Idioma"},
@@ -468,10 +495,14 @@ const UI_TEXT = {
     no: "Não",
     base_tag: "  (base)",
     soon_tag: "  (em breve)",
-    lang_names: {
-    confirm_apply: "* Entonces aplicaré el mod {lang} en la versión v{ver} en {dir}{cache}.\n* ¿Confirmar?",
-    portrait_tip: "* Si estás en el móvil, utilízalo en modo retrato para evitar la superposición de texto.",
-    press_continue: "Haz clic o presiona una tecla para continuar", CORE: "Original", PTBR: "Português (BR)", ES: "Español", DE: "Alemão" },
+    lang_names: { CORE: "Original", PTBR: "Português (BR)", ES: "Español", DE: "Alemão" },
+    version_line: "* {lang}, ótima escolha. A versão suportada é a v{ver}. \n* Agora clique em {btn} para continuar.",
+    mirror_question: "* Selecione o servidor para o download:",
+    mirror_manual_option: "Baixar e anexar manualmente",
+    mirror_retry_fail: "* Puts, não consegui baixar por aqui. Tente outra opção de download.",
+    mirror_manual_question: "* De onde você quer baixar a tradução?",
+    mirror_open_hint: "* Abri o link em outra aba. Quando terminar de baixar, selecione 'Anexar arquivo baixado'.",
+    mirror_attach_option: "Anexar arquivo baixado",
     questions: {
       lang: "* Qual língua deseja configurar?",
       ajustes: "* O que deseja ajustar?",
@@ -536,6 +567,13 @@ const UI_TEXT = {
     base_tag: "  (base)",
     soon_tag: "  (próximamente)",
     lang_names: { CORE: "Original", PTBR: "Portugués (BR)", ES: "Español", DE: "Alemán" },
+    version_line: "* {lang}, excelente elección. La versión soportada es la v{ver}. \n* Ahora haz clic en {btn} para continuar.",
+    mirror_question: "* Selecciona el servidor para la descarga:",
+    mirror_manual_option: "Descargar y adjuntar manualmente",
+    mirror_retry_fail: "* Vaya, no pude descargar por aquí. Prueba otra opción de descarga.",
+    mirror_manual_question: "* ¿Desde dónde quieres descargar la traducción?",
+    mirror_open_hint: "* Abrí el enlace en otra pestaña. Cuando termines de descargar, selecciona 'Adjuntar archivo descargado'.",
+    mirror_attach_option: "Adjuntar archivo descargado",
     questions: {
       lang: "* ¿Qué idioma deseas configurar?",
       ajustes: "* ¿Qué deseas ajustar?",
@@ -603,6 +641,13 @@ const UI_TEXT = {
     base_tag: "  (base)",
     soon_tag: "  (coming soon)",
     lang_names: { CORE: "Original", PTBR: "Portuguese (BR)", ES: "Spanish", DE: "German" },
+    version_line: "* {lang}, great choice. The supported version is v{ver}. \n* Now click {btn} to continue.",
+    mirror_question: "* Select the download server:",
+    mirror_manual_option: "Download and attach manually",
+    mirror_retry_fail: "* Ugh, couldn't download from there. Try another download option.",
+    mirror_manual_question: "* Where do you want to download the translation from?",
+    mirror_open_hint: "* I opened the link in another tab. When you're done downloading, select 'Attach downloaded file'.",
+    mirror_attach_option: "Attach downloaded file",
     questions: {
       lang: "* Which language do you want to configure?",
       ajustes: "* What would you like to adjust?",
@@ -670,6 +715,13 @@ const UI_TEXT = {
     base_tag: "  (de base)",
     soon_tag: "  (bientôt)",
     lang_names: { CORE: "Original", PTBR: "Portugais (BR)", ES: "Espagnol", DE: "Allemand" },
+    version_line: "* {lang}, excellent choix. La version prise en charge est la v{ver}. \n* Cliquez maintenant sur {btn} pour continuer.",
+    mirror_question: "* Sélectionnez le serveur de téléchargement :",
+    mirror_manual_option: "Télécharger et joindre manuellement",
+    mirror_retry_fail: "* Zut, je n'ai pas pu télécharger depuis là. Essayez une autre option de téléchargement.",
+    mirror_manual_question: "* D'où voulez-vous télécharger la traduction ?",
+    mirror_open_hint: "* J'ai ouvert le lien dans un autre onglet. Une fois le téléchargement terminé, sélectionnez « Joindre le fichier téléchargé ».",
+    mirror_attach_option: "Joindre le fichier téléchargé",
     questions: {
       lang: "* Quelle langue souhaitez-vous configurer ?",
       ajustes: "* Que souhaitez-vous ajuster ?",
@@ -737,6 +789,13 @@ const UI_TEXT = {
     base_tag: "  (basis)",
     soon_tag: "  (demnächst)",
     lang_names: { CORE: "Original", PTBR: "Portugiesisch (BR)", ES: "Spanisch", DE: "Deutsch" },
+    version_line: "* {lang}, gute Wahl. Die unterstützte Version ist v{ver}. \n* Klicke jetzt auf {btn}, um fortzufahren.",
+    mirror_question: "* Wähle den Download-Server:",
+    mirror_manual_option: "Manuell herunterladen und anhängen",
+    mirror_retry_fail: "* Verflixt, von dort konnte ich nicht herunterladen. Versuche eine andere Download-Option.",
+    mirror_manual_question: "* Von wo möchtest du die Übersetzung herunterladen?",
+    mirror_open_hint: "* Ich habe den Link in einem neuen Tab geöffnet. Wenn der Download fertig ist, wähle 'Heruntergeladene Datei anhängen'.",
+    mirror_attach_option: "Heruntergeladene Datei anhängen",
     questions: {
       lang: "* Welche Sprache möchtest du konfigurieren?",
       ajustes: "* Was möchtest du anpassen?",
@@ -804,6 +863,13 @@ const UI_TEXT = {
     base_tag: "  (базовый)",
     soon_tag: "  (скоро)",
     lang_names: { CORE: "Оригинал", PTBR: "Португальский (BR)", ES: "Испанский", DE: "Немецкий" },
+    version_line: "* {lang}, отличный выбор. Поддерживаемая версия — v{ver}. \n* Теперь нажми «{btn}», чтобы продолжить.",
+    mirror_question: "* Выбери сервер для загрузки:",
+    mirror_manual_option: "Скачать и прикрепить вручную",
+    mirror_retry_fail: "* Эх, не получилось скачать отсюда. Попробуй другой вариант загрузки.",
+    mirror_manual_question: "* Откуда хочешь скачать перевод?",
+    mirror_open_hint: "* Я открыл ссылку в другой вкладке. Когда закончишь скачивать, выбери «Прикрепить скачанный файл».",
+    mirror_attach_option: "Прикрепить скачанный файл",
     questions: {
       lang: "* Какой язык настроить?",
       ajustes: "* Что изменить?",
@@ -871,6 +937,13 @@ const UI_TEXT = {
     base_tag: "  (標準)",
     soon_tag: "  (近日公開)",
     lang_names: { CORE: "オリジナル", PTBR: "ポルトガル語 (BR)", ES: "スペイン語", DE: "ドイツ語" },
+    version_line: "* {lang}か、いい選択だね。対応バージョンはv{ver}だよ。\n* さあ、「{btn}」をクリックして続けよう。",
+    mirror_question: "* ダウンロードするサーバーを選んでね：",
+    mirror_manual_option: "手動でダウンロードして添付する",
+    mirror_retry_fail: "* うーん、そこからはダウンロードできなかったよ。別のダウンロード方法を試してみて。",
+    mirror_manual_question: "* どこから翻訳をダウンロードする？",
+    mirror_open_hint: "* 別のタブでリンクを開いたよ。ダウンロードが終わったら「ダウンロードしたファイルを添付」を選んでね。",
+    mirror_attach_option: "ダウンロードしたファイルを添付",
     questions: {
       lang: "* 設定する言語は？",
       ajustes: "* 何を調整しますか？",
@@ -922,7 +995,10 @@ function applyWebLanguage(code) {
   $("hint").innerHTML = T.hint;
 }
 function versionLine(L){
-  return "* "+L.label+", ótima escolha.A versão suportada é a v"+PORT_VERSION+".";
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  const langName = (T.lang_names && T.lang_names[L.code]) || L.label;
+  const tmpl = T.version_line || UI_TEXT.ptbr.version_line;
+  return tmpl.replace("{lang}", langName).replace("{ver}", PORT_VERSION).replace("{btn}", T.btn_steam || "Arquivos");
 }
 function speech(t){ type($("speech"),t); }
 
@@ -995,7 +1071,22 @@ function setBar(p){
    MAIN:     menu na direita (#options), fala do Seam na esquerda (#speech)
    SUBMENU:  lista na esquerda (#speech), pergunta do Seam na direita (#options),
              explicacao no dialogplus (#plus) que sobe de baixo. */
-function subList(){ return screen==="lang"? langItems() : screen==="ajustes"? settingsItems() : screen==="mirror"? MIRRORS : talkItems(); }
+function mirrorItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return MIRRORS.concat([{ id: "manual", label: T.mirror_manual_option || "Baixar e anexar manualmente" }]);
+}
+function attachItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [{ id: "attach", label: T.mirror_attach_option || "Anexar arquivo baixado" }];
+}
+function subList(){
+  return screen==="lang"? langItems()
+    : screen==="ajustes"? settingsItems()
+    : screen==="mirror"? mirrorItems()
+    : screen==="mirror-manual"? MIRRORS
+    : screen==="mirror-attach"? attachItems()
+    : talkItems();
+}
 const RET_INDEX={lang:0, ajustes:3, talk:4};
 function itemKey(it){ return it.code||it.id; }
 function sayQ(t){ type($("options"), t); }   // fala/pergunta do Seam -> caixa direita
@@ -1059,7 +1150,7 @@ function renderConfirm(){
 }
 function render(){
   const sub = screen!=="main";
-  const showPlus = sub && screen!=="talk";   // Conversar nao usa o dialogplus
+  const showPlus = sub && screen!=="talk" && screen!=="mirror" && screen!=="mirror-manual" && screen!=="mirror-attach";   // Conversar e telas de mirror nao usam o dialogplus
   $("seam-wrap").classList.toggle("left", sub);
   $("plusbg").classList.toggle("show", showPlus);
   $("plus").classList.toggle("show", showPlus);
@@ -1096,10 +1187,37 @@ function activate(){
   if(pending) return resolveConfirm();
   if(screen === "mirror") {
     play(A.sel);
-    const chosen = MIRRORS[active].id;
+    const chosen = mirrorItems()[active];
+    if(chosen.id === "manual") {
+      const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+      screen = "mirror-manual";
+      active = 0;
+      setSeam("talk");
+      render();
+      sayQ(T.mirror_manual_question || "* De onde você quer baixar a tradução?");
+      return;
+    }
     screen = "main";
     toSingle();
-    generate(chosen);
+    generate(chosen.id);
+    return;
+  }
+  if(screen === "mirror-manual") {
+    play(A.sel);
+    const mirrorId = MIRRORS[active].id;
+    // Sincrono: sem await antes disso, senao o navegador bloqueia o popup.
+    window.open(resolveMirrorUrlSync(mirrorId), '_blank');
+    const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+    screen = "mirror-attach";
+    active = 0;
+    setSeam("talk");
+    render();
+    sayQ(T.mirror_open_hint || "* Abri o link em outra aba. Quando terminar de baixar, selecione 'Anexar arquivo baixado'.");
+    return;
+  }
+  if(screen === "mirror-attach") {
+    play(A.sel);
+    attachManualFile();
     return;
   }
   const it=subList()[active];
@@ -1120,11 +1238,12 @@ function resolveConfirm(){
     if(confirmSel === 0) { // Sim / Yes
       setSeam("laugh", 1200);
       if(selectedExtra === "PTBR") {
+        const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
         screen = "mirror";
         active = 3; // Default to Archive.org
         setSeam("talk");
-        sayQ("* Selecione o servidor para o download:");
         render();
+        sayQ(T.mirror_question || "* Selecione o servidor para o download:");
       } else {
         toSingle();
         generate();
@@ -1140,8 +1259,17 @@ function resolveConfirm(){
   const it=subList()[active];
   if(screen==="lang"){
     const L=LANGS[active];
-    if(selectedExtra===L.code){ selectedExtra=null; setSeam("idle"); sayQ(SEAM_LINES.rem); }
-    else{ selectedExtra=L.code; setSeam("laugh",1200); sayQ(versionLine(L)); }
+    const ret = RET_INDEX[screen] ?? 0;
+    if(selectedExtra===L.code){
+      selectedExtra=null;
+      screen="main"; active=ret; pending=false;
+      setSeam("idle"); render(); speech(SEAM_LINES.rem);
+    } else {
+      selectedExtra=L.code;
+      screen="main"; active=ret; pending=false;
+      setSeam("laugh",1200); render(); speech(versionLine(L));
+    }
+    return;
   }else{
     if(it.id==="sfx") sfxOn=!sfxOn;
     else if(it.id==="music"){ musicOn=!musicOn; musicOn?startMusic():stopMusic(); }
@@ -1195,6 +1323,24 @@ function back(){
     setSeam("idle");
     speech(SEAM_LINES.choose);
     render();
+    return;
+  }
+  if(screen==="mirror-manual"){
+    const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+    screen="mirror";
+    active=0;
+    setSeam("talk");
+    render();
+    sayQ(T.mirror_question || "* Selecione o servidor para o download:");
+    return;
+  }
+  if(screen==="mirror-attach"){
+    const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+    screen="mirror-manual";
+    active=0;
+    setSeam("talk");
+    render();
+    sayQ(T.mirror_manual_question || "* De onde você quer baixar a tradução?");
     return;
   }
   if(pending) return cancelConfirm();
@@ -1351,102 +1497,9 @@ function apply(){
   renderConfirm();
 }
 
-async function generate(chosenMirror){
-  if(busy||!steamHandle) return;
-  busy=true;
+async function finishGeneration(m, modZip){
   const el=$("single");
-  showBar(true); setBar(0);
   try{
-    // manifesto: em file:// o fetch e bloqueado (CORS)
-    let m=await loadManifest();
-    if(!m) throw new Error("Não foi possível carregar o manifest.json (CORS ou erro de rede). Você abriu como file://? Tente rodar um servidor web local.");
-
-    // FASE 1 — baixar idioma
-    let modZip = null;
-    if(selectedExtra === "PTBR" && chosenMirror){
-      let modsList;
-      try {
-        const res = await fetch("mods_list.json");
-        modsList = await res.json();
-      } catch(e) {
-        modsList = {
-          PTBR: {
-            Mediafire: "https://download1472.mediafire.com/wq1sfbskzyhgPzEezrIa5jdDfX9Mut7e3yehfMKMTT5tXxRNA5X_1-Kh9O0LRfl6I_nVWA7RB9ZhyhfAEz2yf6qjBOpUN5bCodQ-juY-TV7E1WysP0VfsJh20Es2vJVICDQMP5VCRqMo65PP9SBEzMASqy0wHF_0Ma69YLJxga4KQUg/4ildqbqja3ehuq2/PTBR.zip",
-            "Google Drive": "https://drive.google.com/uc?export=download&id=1LCT2kD-WQpPQO3dAeIldXBUn2j3c0m9d",
-            Mega: "https://mega.nz/file/ExcDiC6B#1pqrFjmz2-xaEiQ0SWOaa13N18k9sWevwHWIww21b8Q",
-            Archive: "https://archive.org/download/ptbr_20260725/PTBR.zip"
-          }
-        };
-      }
-      
-      const mirrorNames = {
-        mediafire: "Mediafire",
-        gdrive: "Google Drive",
-        mega: "Mega",
-        archive: "Archive"
-      };
-      const dlUrl = modsList.PTBR[mirrorNames[chosenMirror]] || modsList.PTBR.Archive;
-      
-      await typeAsync(el, "* Iniciando download da tradução...");
-      let zipBlob = null;
-      try {
-        const response = await fetch(dlUrl);
-        if(!response.ok) throw new Error();
-        const reader = response.body.getReader();
-        const contentLength = +response.headers.get('Content-Length') || 229429248;
-        let receivedLength = 0;
-        let chunks = [];
-        while(true) {
-          const {done, value} = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          receivedLength += value.length;
-          const p = Math.floor((receivedLength / contentLength) * 100);
-          setBar(p);
-          setLine(el, "* Baixando tradução... " + p + "%  (" + (receivedLength/1024/1024).toFixed(1) + " / " + (contentLength/1024/1024).toFixed(1) + " MB)");
-        }
-        zipBlob = new Blob(chunks);
-      } catch (err) {
-        console.error("Fetch failed, fallback to manual selection", err);
-        showBar(false);
-        setSeam("oh", 1800);
-        await typeAsync(el, "* O download automático falhou (CORS ou rede).\n* Baixando arquivo no navegador. Selecione-o quando o download terminar.");
-        window.open(dlUrl, '_blank');
-        
-        zipBlob = await new Promise((resolve, reject) => {
-          const inp = document.createElement("input");
-          inp.type = "file";
-          inp.accept = ".zip";
-          inp.style.display = "none";
-          document.body.appendChild(inp);
-          inp.addEventListener("change", async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-              resolve(file);
-            } else {
-              reject(new Error("Cancelado"));
-            }
-            inp.remove();
-          });
-          inp.click();
-        });
-        showBar(true);
-      }
-      
-      setLine(el, "* Carregando arquivo zip da tradução...");
-      modZip = await JSZip.loadAsync(zipBlob);
-    } else if(selectedExtra){
-      const L=LANGS.find(x=>x.code===selectedExtra);
-      await typeAsync(el,"* Baixando o idioma "+L.label+"...");
-      for(let p=0;p<=100;p+=4){ setBar(p);
-        setLine(el,"* Baixando "+L.label+"... "+p+"%  ("+(L.size*p/100).toFixed(1)+" / "+L.size.toFixed(1)+" MB)");
-        await sleep(45); }
-    }
-    if(cacheOn){
-      await typeAsync(el,"* Baixando o cache...");
-      for(let p=0;p<=100;p+=8){ setBar(p); setLine(el,"* Baixando o cache... "+p+"%"); await sleep(35); }
-    }
-
     // FASE 2 — verificar a Steam
     await typeAsync(el,"* Verificando os arquivos da Steam...");
     const req=Object.entries(m.required_sources||{}); let bad=0;
@@ -1468,9 +1521,10 @@ async function generate(chosenMirror){
     // FASE 3 — aplicar o patch
     await typeAsync(el,"* Aplicando o patch nos arquivos...");
     const zip = new JSZip();
+    const outRoot = (m.output_folder || "deltarune") + "/";
     const wanted=m.files.filter(r=>{ const mm=/deltarunevita\/mods\/([^/]+)\//.exec(r.output);
       return mm? (selectedExtra===mm[1]) : true; });
-    let copies=0,patches=0;
+    let copies=0,embeds=0,unsupported=0;
     for(let i=0;i<wanted.length;i++){
       let fObj = wanted[i];
       if(fObj.mode==="copy"){
@@ -1478,10 +1532,21 @@ async function generate(chosenMirror){
         try {
           const f = await getFile(steamHandle, fObj.source);
           const arrayBuf = await f.arrayBuffer();
-          zip.file(fObj.output, arrayBuf);
+          zip.file(outRoot+fObj.output, arrayBuf);
         } catch(e) { console.error("Faltando:", fObj.source); }
+      } else if(fObj.mode==="embed"){
+        embeds++;
+        try {
+          const res = await fetch("embedded/"+fObj.output);
+          if(!res.ok) throw new Error(res.status);
+          zip.file(outRoot+fObj.output, await res.arrayBuffer());
+        } catch(e) { console.error("Falha ao buscar asset embutido:", fObj.output, e); }
       } else {
-        patches++;
+        // mode "patch" real (diff contra um arquivo Steam) — o Web Patcher nao
+        // aplica bsdiff; hoje nenhum registro do manifest usa esse modo, mas
+        // reportamos em vez de gerar silenciosamente um arquivo faltante.
+        unsupported++;
+        console.error("Modo 'patch' nao suportado pelo Web Patcher:", fObj.output);
       }
       setBar((i+1)/wanted.length*100);
       if(i%15===0||i===wanted.length-1){ setLine(el,"* Aplicando patch... "+(i+1)+"/"+wanted.length+" arquivos"); await sleep(5); }
@@ -1493,18 +1558,19 @@ async function generate(chosenMirror){
       const modEntries = Object.values(modZip.files).filter(f=>!f.dir);
       const hasPtbrRoot = modEntries.some(f=>/^ptbr[\/\\]/i.test(f.name));
       for(const entry of modEntries){
-        const rel = hasPtbrRoot ? entry.name.replace(/^ptbr[\/\\]/i, "") : entry.name;
+        let rel = hasPtbrRoot ? entry.name.replace(/^ptbr[\/\\]/i, "") : entry.name;
+        rel = rel.replace(/game\.droid$/i, "data.win");
         const buf = await entry.async("arraybuffer");
-        zip.file("deltarunevita/mods/PTBR/"+rel, buf);
+        zip.file(outRoot+"deltarunevita/mods/PTBR/"+rel, buf);
       }
     }
 
-    console.log("lang:",selectedExtra||"EN/JP","| copy:",copies,"| bspatch(pendente):",patches,"| cache:",cacheOn);
-    
+    console.log("lang:",selectedExtra||"EN/JP","| copy:",copies,"| embed:",embeds,"| patch(unsupported):",unsupported,"| cache:",cacheOn);
+
     showBar(true); setBar(100);
     setLine(el,"* Empacotando arquivos (ZIP)... Isso pode demorar.");
     await sleep(100);
-    
+
     const blob = await zip.generateAsync({type:"blob"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1525,6 +1591,119 @@ async function generate(chosenMirror){
     doneState = true;
   }
   busy=false;
+}
+
+async function generate(chosenMirror){
+  if(busy||!steamHandle) return;
+  busy=true;
+  const el=$("single");
+  showBar(true); setBar(0);
+  try{
+    // manifesto: em file:// o fetch e bloqueado (CORS)
+    let m=await loadManifest();
+    if(!m) throw new Error("Não foi possível carregar o manifest.json (CORS ou erro de rede). Você abriu como file://? Tente rodar um servidor web local.");
+
+    // FASE 1 — baixar idioma
+    let modZip = null;
+    if(selectedExtra === "PTBR" && chosenMirror){
+      const modsList = await fetchModsList();
+      const dlUrl = modsList.PTBR[MIRROR_NAMES[chosenMirror]] || modsList.PTBR.Archive;
+
+      await typeAsync(el, "* Iniciando download da tradução...");
+      let zipBlob = null;
+      try {
+        const response = await fetch(dlUrl);
+        if(!response.ok) throw new Error();
+        const reader = response.body.getReader();
+        const contentLength = +response.headers.get('Content-Length') || 229429248;
+        let receivedLength = 0;
+        let chunks = [];
+        while(true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          receivedLength += value.length;
+          const p = Math.floor((receivedLength / contentLength) * 100);
+          setBar(p);
+          setLine(el, "* Baixando tradução... " + p + "%  (" + (receivedLength/1024/1024).toFixed(1) + " / " + (contentLength/1024/1024).toFixed(1) + " MB)");
+        }
+        zipBlob = new Blob(chunks);
+      } catch (err) {
+        // Sem rede/CORS: volta para a tela de mirrors (com a opcao manual) em vez
+        // de travar aqui. Retomar o download automatico de novo, ou ir manual.
+        console.error("Fetch failed, back to mirror picker", err);
+        busy = false;
+        showBar(false);
+        setSeam("oh", 1800);
+        const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+        screen = "mirror";
+        active = 0;
+        showDialog("split");
+        render();
+        sayQ(T.mirror_retry_fail || "* Puts, não consegui baixar por aqui. Tente outra opção de download.");
+        return;
+      }
+
+      setLine(el, "* Carregando arquivo zip da tradução...");
+      modZip = await JSZip.loadAsync(zipBlob);
+    } else if(selectedExtra){
+      const L=LANGS.find(x=>x.code===selectedExtra);
+      await typeAsync(el,"* Baixando o idioma "+L.label+"...");
+      for(let p=0;p<=100;p+=4){ setBar(p);
+        setLine(el,"* Baixando "+L.label+"... "+p+"%  ("+(L.size*p/100).toFixed(1)+" / "+L.size.toFixed(1)+" MB)");
+        await sleep(45); }
+    }
+    if(cacheOn){
+      await typeAsync(el,"* Baixando o cache...");
+      for(let p=0;p<=100;p+=8){ setBar(p); setLine(el,"* Baixando o cache... "+p+"%"); await sleep(35); }
+    }
+
+    await finishGeneration(m, modZip);
+  }catch(err){
+    showBar(false); setSeam("oh",1800);
+    type(el,"* Algo deu errado ao gerar.\n* "+((err&&err.message)||err));
+    doneState = true;
+    busy=false;
+  }
+}
+
+async function continueWithManualZip(file){
+  if(busy||!steamHandle) return;
+  busy=true;
+  const el=$("single");
+  showBar(true); setBar(0);
+  try{
+    let m=await loadManifest();
+    if(!m) throw new Error("Não foi possível carregar o manifest.json.");
+    setLine(el, "* Carregando arquivo zip da tradução...");
+    const modZip = await JSZip.loadAsync(file);
+    await finishGeneration(m, modZip);
+  }catch(err){
+    showBar(false); setSeam("oh",1800);
+    type(el,"* Algo deu errado ao gerar.\n* "+((err&&err.message)||err));
+    doneState = true;
+    busy=false;
+  }
+}
+
+let manualFileInput = null;
+function attachManualFile(){
+  if(!manualFileInput){
+    manualFileInput = document.createElement("input");
+    manualFileInput.type = "file";
+    manualFileInput.accept = ".zip";
+    manualFileInput.style.display = "none";
+    document.body.appendChild(manualFileInput);
+  }
+  manualFileInput.value = "";
+  manualFileInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if(file){
+      toSingle();
+      continueWithManualZip(file);
+    }
+  };
+  manualFileInput.click(); // sincrono, disparado direto pelo Enter/clique do usuario
 }
 
 
@@ -1649,6 +1828,7 @@ function boot(){
   };
   $("splash").addEventListener("click",go);
   window.addEventListener("keydown",go);
+  fetchModsList();
 }
 boot();
 </script>

@@ -3,6 +3,12 @@
 /data/extracted-apk/
 /data/game.apk
 /data/prepared/
+/SteamFiles/
+/mods/PTBR/
+/mods/*.zip
+
+# Working checkout of the gh-pages branch (edited/pushed separately)
+/repo_tmp/
 
 # Generated builds and diagnostic output
 /artifacts/

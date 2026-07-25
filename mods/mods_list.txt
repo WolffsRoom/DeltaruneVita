@@ -1,0 +1,8 @@
+{
+  "PTBR": {
+    "Mediafire": "https://download1472.mediafire.com/wq1sfbskzyhgPzEezrIa5jdDfX9Mut7e3yehfMKMTT5tXxRNA5X_1-Kh9O0LRfl6I_nVWA7RB9ZhyhfAEz2yf6qjBOpUN5bCodQ-juY-TV7E1WysP0VfsJh20Es2vJVICDQMP5VCRqMo65PP9SBEzMASqy0wHF_0Ma69YLJxga4KQUg/4ildqbqja3ehuq2/PTBR.zip",
+    "Google Drive": "https://drive.google.com/uc?export=download&id=1LCT2kD-WQpPQO3dAeIldXBUn2j3c0m9d",
+    "Mega": "https://mega.nz/file/ExcDiC6B#1pqrFjmz2-xaEiQ0SWOaa13N18k9sWevwHWIww21b8Q",
+    "Archive": "https://archive.org/download/ptbr_20260725/PTBR.zip"
+  }
+}

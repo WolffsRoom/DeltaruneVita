@@ -92,7 +92,7 @@ int main(void) {
     options.lazyLoadTextures = true;
     options.loadType = DATAWINLOADTYPE_LOAD_PER_CHUNK;
     options.progressCallback = parser_progress;
-    DataWin *dw = DataWin_parse(DATA_DIR "/chapter0/game.droid", options);
+    DataWin *dw = DataWin_parse(DATA_DIR "/chapter0/data.win", options);
     if (!dw || dw->txtr.count == 0) {
         log_line("ERROR=no_txtr_pages");
         sceKernelExitProcess(1);

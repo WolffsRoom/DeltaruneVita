@@ -27,8 +27,8 @@ $launcher = Join-Path $sourcePath 'data.win'
 if (Test-Path -LiteralPath $launcher) {
     $chapter0 = Join-Path $destinationPath 'chapter0'
     New-Item -ItemType Directory -Force -Path $chapter0 | Out-Null
-    Copy-Item -Force -LiteralPath $launcher -Destination (Join-Path $chapter0 'game.droid')
-    Write-Host 'PT-BR chapter0 -> game.droid'
+    Copy-Item -Force -LiteralPath $launcher -Destination $chapter0
+    Write-Host 'PT-BR chapter0 -> data.win'
 }
 
 # Cada data.win traduzido substitui somente o runner data do capitulo. Lang, vid e
@@ -44,12 +44,10 @@ for ($chapter = 1; $chapter -le 5; $chapter++) {
     New-Item -ItemType Directory -Force -Path $targetChapter | Out-Null
     Copy-Item -Recurse -Force -Path (Join-Path $sourceChapter '*') -Destination $targetChapter
 
-    $translatedData = Join-Path $targetChapter 'data.win'
-    if (Test-Path -LiteralPath $translatedData) {
-        Move-Item -Force -LiteralPath $translatedData -Destination (Join-Path $targetChapter 'game.droid')
-        Write-Host "PT-BR chapter$chapter -> game.droid + overlay"
+    if (Test-Path -LiteralPath (Join-Path $targetChapter 'data.win')) {
+        Write-Host "PT-BR chapter$chapter -> data.win + overlay"
     } else {
-        Write-Host "PT-BR chapter$chapter -> overlay sem game.droid"
+        Write-Host "PT-BR chapter$chapter -> overlay sem data.win"
     }
 }
 

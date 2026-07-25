@@ -180,7 +180,7 @@ int main(void) {
     ProbeResult results[6];
     char path[128], line[192];
     for (int i = 0; i < 6; ++i) {
-        snprintf(path, sizeof(path), DATA_DIR "/chapter%d/game.droid", i);
+        snprintf(path, sizeof(path), DATA_DIR "/chapter%d/data.win", i);
         results[i] = probe_file(path);
         snprintf(line, sizeof(line), "CH%d present=%d FORM=%d GEN8=%d size=%llu error=%s",
                  i, results[i].present, results[i].valid_form, results[i].has_gen8,

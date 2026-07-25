@@ -397,12 +397,12 @@ int main(void) {
     int next_chapter = -1;
     char game_path[192];
     char bundle_path[128];
-    snprintf(game_path, sizeof(game_path), DATA_ROOT "chapter%d/game.droid", active_chapter);
+    snprintf(game_path, sizeof(game_path), DATA_ROOT "chapter%d/data.win", active_chapter);
     snprintf(bundle_path, sizeof(bundle_path), DATA_ROOT "chapter%d/", active_chapter);
     if (settings.modIndex > 0 && settings.modIndex < settings.modCount) {
         SceIoStat mod_stat;
         char mod_game[160];
-        snprintf(mod_game, sizeof(mod_game), DATA_ROOT "mods/%s/chapter%d/game.droid", settings.modNames[settings.modIndex], active_chapter);
+        snprintf(mod_game, sizeof(mod_game), DATA_ROOT "mods/%s/chapter%d/data.win", settings.modNames[settings.modIndex], active_chapter);
         if (sceIoGetstat(mod_game, &mod_stat) >= 0) {
             snprintf(game_path, sizeof(game_path), "%s", mod_game);
             log_line("MOD=alternate_game=enabled");

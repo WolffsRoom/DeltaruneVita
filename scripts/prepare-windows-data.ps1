@@ -16,7 +16,7 @@ New-Item -ItemType Directory -Force -Path $Output | Out-Null
 
 $launcher = Join-Path $Output 'chapter0'
 New-Item -ItemType Directory -Force -Path $launcher | Out-Null
-Copy-Item -Force (Join-Path $Source 'data.win') (Join-Path $launcher 'game.droid')
+Copy-Item -Force (Join-Path $Source 'data.win') $launcher
 if (Test-Path (Join-Path $Source 'options.ini')) {
     Copy-Item -Force (Join-Path $Source 'options.ini') $launcher
 }
@@ -25,8 +25,7 @@ for ($chapter = 1; $chapter -le 5; $chapter++) {
     $from = Join-Path $Source "chapter${chapter}_windows"
     $to = Join-Path $Output "chapter$chapter"
     New-Item -ItemType Directory -Force -Path $to | Out-Null
-    Get-ChildItem -Force $from | Where-Object Name -ne 'data.win' | Copy-Item -Destination $to -Recurse -Force
-    Copy-Item -Force (Join-Path $from 'data.win') (Join-Path $to 'game.droid')
+    Get-ChildItem -Force $from | Copy-Item -Destination $to -Recurse -Force
 }
 
 $music = Join-Path $Output 'music'
@@ -44,17 +43,14 @@ New-Item -ItemType Directory -Force -Path $mods | Out-Null
 if (Test-Path (Join-Path $translation 'data.win')) {
     $modLauncher = Join-Path $mods 'chapter0'
     New-Item -ItemType Directory -Force -Path $modLauncher | Out-Null
-    Copy-Item -Force (Join-Path $translation 'data.win') (Join-Path $modLauncher 'game.droid')
+    Copy-Item -Force (Join-Path $translation 'data.win') $modLauncher
 }
 for ($chapter = 1; $chapter -le 5; $chapter++) {
     $from = Join-Path $translation "chapter$chapter"
     if (-not (Test-Path $from)) { continue }
     $to = Join-Path $mods "chapter$chapter"
     New-Item -ItemType Directory -Force -Path $to | Out-Null
-    Get-ChildItem -Force $from | Where-Object Name -ne 'data.win' | Copy-Item -Destination $to -Recurse -Force
-    if (Test-Path (Join-Path $from 'data.win')) {
-        Copy-Item -Force (Join-Path $from 'data.win') (Join-Path $to 'game.droid')
-    }
+    Get-ChildItem -Force $from | Copy-Item -Destination $to -Recurse -Force
 }
 if (Test-Path (Join-Path $translation 'mus')) {
     $modMusic = Join-Path $mods 'music'

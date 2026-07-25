@@ -431,6 +431,9 @@ const MIRRORS = [
   { id: "archive", label: "Internet Archive" }
 ];
 const MIRROR_NAMES = { mediafire: "Mediafire", gdrive: "Google Drive", mega: "Mega", archive: "Archive" };
+const VITA_ASSETS_URL = "https://github.com/WolffsRoom/DeltaruneVita/releases/download/webpatcher-assets/vita_assets.zip";
+let vitaAssetsZip = null;
+function manifestNeedsVitaAssets(m){ return (m.files||[]).some(r=>r.mode==="embed"); }
 const FALLBACK_MODS_LIST = {
   PTBR: {
     Mediafire: "https://download1472.mediafire.com/h9gwt1ys5weglxBXy6QIdOY8YR4x08_bI8wD6wcg2kPsQvho92G__KoPwKwaLDexs2o2hj3qfegZr8JwOeiP0lTr1trKNWf85tkPmEMpTRUqsfqM-sT4rFMsgsFZ7Orw0-KKJANu7YYHPn1SKmdWshgF5R3iI9l-BBnK0OffcfKjoMg/4ildqbqja3ehuq2/PTBR.zip",
@@ -503,6 +506,8 @@ const UI_TEXT = {
     mirror_manual_question: "* De onde você quer baixar a tradução?",
     mirror_open_hint: "* Quando terminar de baixar, selecione 'Anexar arquivo baixado'.",
     mirror_attach_option: "Anexar arquivo baixado",
+    vassets_question: "* Preciso de mais um arquivo antes de continuar: os assets exclusivos do Vita (interface, sons, bordas).",
+    vassets_download_option: "Baixar assets do Vita",
     questions: {
       lang: "* Qual língua deseja configurar?",
       ajustes: "* O que deseja ajustar?",
@@ -574,6 +579,8 @@ const UI_TEXT = {
     mirror_manual_question: "* ¿Desde dónde quieres descargar la traducción?",
     mirror_open_hint: "* Cuando termines de descargar, selecciona 'Adjuntar archivo descargado'.",
     mirror_attach_option: "Adjuntar archivo descargado",
+    vassets_question: "* Necesito un archivo más antes de continuar: los assets exclusivos de Vita (interfaz, sonidos, bordes).",
+    vassets_download_option: "Descargar assets de Vita",
     questions: {
       lang: "* ¿Qué idioma deseas configurar?",
       ajustes: "* ¿Qué deseas ajustar?",
@@ -648,6 +655,8 @@ const UI_TEXT = {
     mirror_manual_question: "* Where do you want to download the translation from?",
     mirror_open_hint: "* When you're done downloading, select 'Attach downloaded file'.",
     mirror_attach_option: "Attach downloaded file",
+    vassets_question: "* I need one more file before continuing: the Vita-exclusive assets (UI, sounds, borders).",
+    vassets_download_option: "Download Vita assets",
     questions: {
       lang: "* Which language do you want to configure?",
       ajustes: "* What would you like to adjust?",
@@ -722,6 +731,8 @@ const UI_TEXT = {
     mirror_manual_question: "* D'où voulez-vous télécharger la traduction ?",
     mirror_open_hint: "* Une fois le téléchargement terminé, sélectionnez « Joindre le fichier téléchargé ».",
     mirror_attach_option: "Joindre le fichier téléchargé",
+    vassets_question: "* Il me faut un fichier de plus avant de continuer : les assets exclusifs de la Vita (interface, sons, bordures).",
+    vassets_download_option: "Télécharger les assets Vita",
     questions: {
       lang: "* Quelle langue souhaitez-vous configurer ?",
       ajustes: "* Que souhaitez-vous ajuster ?",
@@ -796,6 +807,8 @@ const UI_TEXT = {
     mirror_manual_question: "* Von wo möchtest du die Übersetzung herunterladen?",
     mirror_open_hint: "* Wenn der Download fertig ist, wähle 'Heruntergeladene Datei anhängen'.",
     mirror_attach_option: "Heruntergeladene Datei anhängen",
+    vassets_question: "* Ich brauche noch eine Datei, bevor wir weitermachen: die Vita-exklusiven Assets (Oberfläche, Sounds, Rahmen).",
+    vassets_download_option: "Vita-Assets herunterladen",
     questions: {
       lang: "* Welche Sprache möchtest du konfigurieren?",
       ajustes: "* Was möchtest du anpassen?",
@@ -870,6 +883,8 @@ const UI_TEXT = {
     mirror_manual_question: "* Откуда хочешь скачать перевод?",
     mirror_open_hint: "* Когда закончишь скачивать, выбери «Прикрепить скачанный файл».",
     mirror_attach_option: "Прикрепить скачанный файл",
+    vassets_question: "* Нужен ещё один файл, прежде чем продолжить: эксклюзивные ассеты Vita (интерфейс, звуки, рамки).",
+    vassets_download_option: "Скачать ассеты Vita",
     questions: {
       lang: "* Какой язык настроить?",
       ajustes: "* Что изменить?",
@@ -944,6 +959,8 @@ const UI_TEXT = {
     mirror_manual_question: "* どこから翻訳をダウンロードする？",
     mirror_open_hint: "* ダウンロードが終わったら「ダウンロードしたファイルを添付」を選んでね。",
     mirror_attach_option: "ダウンロードしたファイルを添付",
+    vassets_question: "* 続ける前にもう1つファイルが必要だよ。Vita専用アセット(UI、サウンド、ボーダー)。",
+    vassets_download_option: "Vitaアセットをダウンロード",
     questions: {
       lang: "* 設定する言語は？",
       ajustes: "* 何を調整しますか？",
@@ -1079,12 +1096,20 @@ function attachItems(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return [{ id: "attach", label: T.mirror_attach_option || "Anexar arquivo baixado" }];
 }
+function vassetsItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    { id: "download", label: T.vassets_download_option || "Baixar assets do Vita" },
+    { id: "attach", label: T.mirror_attach_option || "Anexar arquivo baixado" },
+  ];
+}
 function subList(){
   return screen==="lang"? langItems()
     : screen==="ajustes"? settingsItems()
     : screen==="mirror"? mirrorItems()
     : screen==="mirror-manual"? MIRRORS
     : screen==="mirror-attach"? attachItems()
+    : screen==="vassets"? vassetsItems()
     : talkItems();
 }
 const RET_INDEX={lang:0, ajustes:3, talk:4};
@@ -1150,7 +1175,7 @@ function renderConfirm(){
 }
 function render(){
   const sub = screen!=="main";
-  const showPlus = sub && screen!=="talk" && screen!=="mirror" && screen!=="mirror-manual" && screen!=="mirror-attach";   // Conversar e telas de mirror nao usam o dialogplus
+  const showPlus = sub && screen!=="talk" && screen!=="mirror" && screen!=="mirror-manual" && screen!=="mirror-attach" && screen!=="vassets";   // Conversar e telas de mirror/vassets nao usam o dialogplus
   $("seam-wrap").classList.toggle("left", sub);
   $("plusbg").classList.toggle("show", showPlus);
   $("plus").classList.toggle("show", showPlus);
@@ -1227,6 +1252,17 @@ function activate(){
   if(screen === "mirror-attach") {
     play(A.sel);
     attachManualFile();
+    return;
+  }
+  if(screen === "vassets") {
+    play(A.sel);
+    const chosen = vassetsItems()[active];
+    if(chosen.id === "download") {
+      // Sincrono: sem await antes disso, senao o navegador bloqueia o popup.
+      window.open(VITA_ASSETS_URL, '_blank');
+      return;
+    }
+    attachVitaAssets();
     return;
   }
   const it=subList()[active];
@@ -1350,6 +1386,14 @@ function back(){
     setSeam("talk");
     render();
     sayQ(T.mirror_manual_question || "* De onde você quer baixar a tradução?");
+    return;
+  }
+  if(screen==="vassets"){
+    screen="main";
+    active=0;
+    setSeam("idle");
+    speech(SEAM_LINES.choose);
+    render();
     return;
   }
   if(pending) return cancelConfirm();
@@ -1484,8 +1528,20 @@ function toSingle(){                 // troca para o dialog1 (caixa unica)
   $("plus").classList.remove("show"); $("plusbg").classList.remove("show");
   $("seam-wrap").classList.remove("left");
 }
-function apply(){
+async function apply(){
   if(!steamHandle){ play(A.swing); setSeam("oh",900); speech(SEAM_LINES.needsteam); return; }
+  if(!vitaAssetsZip){
+    const m = await loadManifest();
+    if(m && manifestNeedsVitaAssets(m)){
+      const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+      screen = "vassets";
+      active = 0;
+      setSeam("talk");
+      render();
+      sayQ(T.vassets_question || "* Preciso de mais um arquivo antes de continuar: os assets exclusivos do Vita (interface, sons, bordas).");
+      return;
+    }
+  }
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   const L=selectedExtra?LANGS.find(x=>x.code===selectedExtra):null;
   const langName=L? ((T.lang_names && T.lang_names[L.code]) || L.label) : ((T.lang_names && T.lang_names.CORE) || "Original");
@@ -1546,9 +1602,10 @@ async function finishGeneration(m, modZip){
       } else if(fObj.mode==="embed"){
         embeds++;
         try {
-          const res = await fetch("embedded/"+fObj.output);
-          if(!res.ok) throw new Error(res.status);
-          zip.file(outRoot+fObj.output, await res.arrayBuffer());
+          if(!vitaAssetsZip) throw new Error("assets do Vita nao anexados");
+          const entry = vitaAssetsZip.file(fObj.output);
+          if(!entry) throw new Error("nao encontrado no zip de assets: "+fObj.output);
+          zip.file(outRoot+fObj.output, await entry.async("arraybuffer"));
         } catch(e) { console.error("Falha ao buscar asset embutido:", fObj.output, e); }
       } else {
         // mode "patch" real (diff contra um arquivo Steam) — o Web Patcher nao
@@ -1692,6 +1749,38 @@ async function continueWithManualZip(file){
     type(el,"* Algo deu errado ao gerar.\n* "+((err&&err.message)||err));
     doneState = true;
     busy=false;
+  }
+}
+
+let vassetsFileInput = null;
+function attachVitaAssets(){
+  if(!vassetsFileInput){
+    vassetsFileInput = document.createElement("input");
+    vassetsFileInput.type = "file";
+    vassetsFileInput.accept = ".zip";
+    vassetsFileInput.style.display = "none";
+    document.body.appendChild(vassetsFileInput);
+  }
+  vassetsFileInput.value = "";
+  vassetsFileInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if(file) loadVitaAssetsZip(file);
+  };
+  vassetsFileInput.click(); // sincrono, disparado direto pelo Enter/clique do usuario
+}
+async function loadVitaAssetsZip(file){
+  try{
+    const zip = await JSZip.loadAsync(file);
+    vitaAssetsZip = zip;
+    screen = "main"; active = 0;
+    setSeam("laugh", 900);
+    render();
+    speech(SEAM_LINES.choose);
+    apply(); // retoma o fluxo normal de Aplicar
+  }catch(e){
+    setSeam("oh", 1200);
+    render();
+    sayQ("* " + ((e&&e.message)||e));
   }
 }
 

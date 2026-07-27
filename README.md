@@ -20,7 +20,7 @@ Starting with v0.36, the project directly executes GameMaker data from the Windo
   <a href="https://github.com/WolffsRoom/DeltaruneVita/releases"><img src="https://img.shields.io/github/downloads/WolffsRoom/DeltaruneVita/total?style=for-the-badge&color=blue&logo=github" alt="Downloads"></a>
   <a href="https://github.com/WolffsRoom/DeltaruneVita/releases/latest"><img src="https://img.shields.io/github/v/release/WolffsRoom/DeltaruneVita?style=for-the-badge&color=brightgreen&logo=github" alt="Release"></a>
   <br>
-  <img src="https://img.shields.io/badge/OVERALL_PROGRESS-60%25-ffc107?style=for-the-badge" alt="Progress">
+  <img src="https://img.shields.io/badge/OVERALL_PROGRESS-65%25-ffc107?style=for-the-badge" alt="Progress">
   <img src="https://img.shields.io/badge/SOURCE-PC%2FSTEAM-004aa5?style=for-the-badge&logo=steam&logoColor=white" alt="Source">
   <img src="https://img.shields.io/badge/STATE-PLAYABLE-brightgreen?style=for-the-badge" alt="State">
 </div>
@@ -63,17 +63,38 @@ To install the game correctly, follow these steps:
 
 ### HOW TO APPLY THE PATCH:
 
-To run the game, make sure you have the required data files from an official game installation. The supported Steam version is **v0.0.247 Patch**.  
-*PS: The language selection in the patcher only changes the program's interface, not the in-game language.*
+The patchers require an official, unmodified DELTARUNE installation. The version currently supported by v0.64 is Steam **v0.0.250**.
 
-1. Purchase and/or install [DELTARUNE for PC](https://store.steampowered.com/agecheck/app/1671210/) via Steam.
-2. Ensure the installation is on version **v0.0.247 Patch** and contains no modified files.
-3. Download the .VPK (`Deltarune-vX.XX.vpk`) and the .ZIP file (`DeltaruneVita-Patcher-vX.XX.zip`) from the [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases/latest) page.
-4. Extract the ZIP file to get the patcher.
-5. Copy the `DELTARUNE` folder (typically located at `C:\Program Files (x86)\Steam\steamapps\common\`) into the patcher directory at `SteamFiles/DELTARUNE`.
-6. Run `DeltaruneVitaPatcher.exe`, select your preferred interface language, and start the process.
-7. Copy the generated `deltarune` folder inside `VitaFiles` to `ux0:data/` on your PS Vita. USB transfer or an SD card reader is highly recommended since the file size is quite large (~1.1 GB).
-8. Finally, install `Deltarune-vX.XX.vpk` using VitaShell.
+> [!IMPORTANT]
+> v0.64 requires freshly generated data. Do not reuse the data folder produced by an older patcher.
+
+1. Purchase and install [DELTARUNE for PC](https://store.steampowered.com/app/1671210/) through Steam.
+2. Confirm that the installation is updated to **v0.0.250** and contains no modified files.
+3. Download `Deltarune-v0.64.vpk` and one of the patchers from the [latest release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
+4. Generate the Vita data using either the traditional desktop patcher, Seam's Patcher, or the [Web Patcher](https://wolffsroom.github.io/DeltaruneVita/).
+5. Copy the generated `deltarune` folder to `ux0:data/` on the PS Vita. USB transfer or an SD card reader is recommended.
+6. Install `Deltarune-v0.64.vpk` using VitaShell.
+
+The language selected at startup changes only the patcher interface. In-game languages are installed separately through the available mod option.
+
+#### Traditional desktop patcher
+
+1. Extract the 32-bit or 64-bit `Deltarune Vita Patcher` ZIP.
+2. Copy the complete Steam `DELTARUNE` folder into `SteamFiles/DELTARUNE`.
+3. Run `DeltaruneVitaPatcher.exe` and follow the displayed instructions.
+4. The finished data will be created under `VitaFiles/deltarune`.
+
+#### Seam's Patcher
+
+Seam's Patcher provides the Web Patcher experience as a Windows application. It runs without a console and opens in a clean application window without browser tabs or an address bar.
+
+1. Extract the correct 32-bit or 64-bit `Seam's Patcher` ZIP.
+2. Run `SeamsPatcher.exe`.
+3. Select the official DELTARUNE Steam folder when requested.
+4. Choose optional language/mod settings and generate the Vita package.
+5. Extract the generated package and transfer its `deltarune` folder to `ux0:data/`.
+
+You can also use Seam's store directly through the **[DELTARUNE Vita Web Patcher](https://wolffsroom.github.io/DeltaruneVita/)**.
 
 #### Observations: 
 
@@ -84,7 +105,7 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 ```
 
 > [!IMPORTANT]
-> When updating to latest [Realease](https://github.com/WolffsRoom/DeltaruneVita/releases/latest), verifique se é necessário generate and transfer the data again using the newest patcher. Sometimes, Updating only the VPK does not provide the complete cache and data improvements.
+> When updating to the [latest release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest), check whether the release requires regenerating and transferring the data with the newest patcher. Installing only the VPK may omit required data or cache improvements.
 
 ## Control Layout
 
@@ -96,25 +117,25 @@ The control layout is based on and adapted from the PS4 version, with additional
   </thead>
   <tbody>
     <tr>
-      <td><img src="Assets/SonyButtons/up.png" width="30" alt="Up"> <img src="Assets/SonyButtons/down.png" width="30" alt="Down"> <img src="Assets/SonyButtons/left.png" width="30" alt="D-Pad"> / Left Analog Stick</td>
+      <td><img src="docs/media/v0.64/controls/button_ps4_dpad_up.png" width="28" alt="Up"> <img src="docs/media/v0.64/controls/button_ps4_dpad_down.png" width="28" alt="Down"> <img src="docs/media/v0.64/controls/button_ps4_dpad_left.png" width="28" alt="Left"> <img src="docs/media/v0.64/controls/button_ps4_dpad_right.png" width="28" alt="Right"> / Left Analog Stick</td>
       <td>Movement</td>
-      <td><img src="Assets/SonyButtons/cross.png" width="30" alt="Cross"></td>
+      <td><img src="docs/media/v0.64/controls/button_ps4_cross_0.png" width="28" alt="Cross"></td>
       <td>Confirm / Interact</td>
     </tr>
     <tr>
-      <td><img src="Assets/SonyButtons/circle.png" width="30" alt="Circle"> <img src="Assets/SonyButtons/square.png" width="30" alt="Square"></td>
+      <td><img src="docs/media/v0.64/controls/button_ps4_circle_0.png" width="28" alt="Circle"> <img src="docs/media/v0.64/controls/button_ps4_square_0.png" width="28" alt="Square"></td>
       <td>Cancel / Back</td>
-      <td><img src="Assets/SonyButtons/triangle.png" width="30" alt="Triangle"></td>
+      <td><img src="docs/media/v0.64/controls/button_ps4_triangle_0.png" width="28" alt="Triangle"></td>
       <td>In-game Menu</td>
     </tr>
     <tr>
       <td><strong>SELECT</strong></td>
       <td>Open Game Settings</td>
-      <td><img src="Assets/SonyButtons/analog_l.png" width="30" alt="L"> <img src="Assets/SonyButtons/analog_r.png" width="30" alt="R"></td>
+      <td><img src="docs/media/v0.64/controls/button_ps4_l1.png" width="28" alt="L"> <img src="docs/media/v0.64/controls/button_ps4_r1.png" width="28" alt="R"></td>
       <td>Navigate categories</td>
     </tr>
     <tr>
-      <td><img src="Assets/SonyButtons/touchpad.png" width="34" alt="Touch screen"></td>
+      <td>Touch screen</td>
       <td>Virtual controls</td>
       <td>Analog Sticks (Adjust Screen)</td>
       <td>Left moves; Right adjusts zoom</td>
@@ -125,27 +146,41 @@ The control layout is based on and adapted from the PS4 version, with additional
 ## Screenshots (on the PS Vita)
 
 <p align="center">
-  <img src="Assets/Screenshots/2026-07-17-003606-442387.png" alt="Deltarune Vita chapter selection" width="64%">
- </p>
-<p align="center">
-  <img src="Assets/Screenshots/2026-07-17-003602-288879.png" alt="Deltarune Vita" width="32%">
-  <img src="Assets/Screenshots/2026-07-17-004312-951699.png" alt="Deltarune Chapter 5 on PS Vita" width="32%">
-  <img src="Assets/Screenshots/2026-07-17-003701-130278.png" alt="Deltarune running on PS Vita" width="32%">
+  <img src="docs/media/v0.64/screenshots/0.png" alt="DELTARUNE Vita v0.64" width="49%">
+  <img src="docs/media/v0.64/screenshots/1.png" alt="DELTARUNE Vita chapter selection" width="49%">
 </p>
 <p align="center">
-  <img src="Assets/Screenshots/2026-07-17-003704-049821.png" alt="Deltarune gameplay on PS Vita" width="32%">
-  <img src="Assets/Screenshots/2026-07-17-003816-839271.png" alt="Deltarune scene on PS Vita" width="32%">
-  <img src="Assets/Screenshots/2026-07-17-003828-635093.png" alt="Deltarune interface on PS Vita" width="32%">
+  <img src="docs/media/v0.64/screenshots/2.png" alt="DELTARUNE Vita gameplay" width="32%">
+  <img src="docs/media/v0.64/screenshots/3.png" alt="DELTARUNE Vita gameplay" width="32%">
+  <img src="docs/media/v0.64/screenshots/4.png" alt="DELTARUNE Vita gameplay" width="32%">
+</p>
+<p align="center">
+  <img src="docs/media/v0.64/screenshots/5.png" alt="DELTARUNE Vita gameplay" width="32%">
+  <img src="docs/media/v0.64/screenshots/6.png" alt="DELTARUNE Vita gameplay" width="32%">
+  <img src="docs/media/v0.64/screenshots/7.png" alt="DELTARUNE Vita gameplay" width="32%">
 </p>
 
-## Official Vídeo 
+### Game Settings
+
+<p align="center">
+  <img src="docs/media/v0.64/settings/Screen.png" alt="Screen settings" width="31%">
+  <img src="docs/media/v0.64/settings/Sound.png" alt="Audio settings" width="31%">
+  <img src="docs/media/v0.64/settings/Controls.png" alt="Control settings" width="31%">
+</p>
+<p align="center">
+  <img src="docs/media/v0.64/settings/System.png" alt="System settings" width="31%">
+  <img src="docs/media/v0.64/settings/TouchSettings.png" alt="Touch settings" width="31%">
+  <img src="docs/media/v0.64/settings/Dev.png" alt="Developer settings" width="31%">
+</p>
+
+## v0.64 Showcase
 
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=yDzgiGdekas" target="_blank" title="Assistir à demonstração no YouTube">
-    <img src="https://img.youtube.com/vi/yDzgiGdekas/maxresdefault.jpg" alt="Vídeo de demonstração do Deltarune rodando no PS Vita" width="760">
+  <a href="https://youtu.be/qxZaAjv8iiE" target="_blank" title="Watch the v0.64 showcase on YouTube">
+    <img src="https://img.youtube.com/vi/qxZaAjv8iiE/maxresdefault.jpg" alt="DELTARUNE Vita v0.64 showcase" width="760">
   </a>
   <br>
-  <sup><em>Clique na imagem para assistir ao vídeo completo no YouTube</em></sup>
+  <sup><em>Click the image to watch the full showcase on YouTube.</em></sup>
 </div>
 
 ## <img src="https://i.redd.it/pzi6lj5np5je1.gif" height="30" align="absmiddle"> What already works
@@ -344,6 +379,18 @@ This section briefly documents past versions, covering the initial Android resea
       <td><code>v0.52</code></td>
       <td>Added animated chapter loading, Debug Dev captures, RAM texture cache, font-safe texture optimization, and selectable Original/Medium/Low graphics profiles.</td>
     </tr>
+    <tr>
+      <td><code>v0.53 - v0.57</code></td>
+      <td>Expanded profiling, audio and texture caches, touch editing, dynamic borders, room navigation, separate saves, and broad Chapter 1/2 stability work.</td>
+    </tr>
+    <tr>
+      <td><code>v0.58 - v0.63</code></td>
+      <td>Added missing GameMaker behavior, puzzle diagnostics, rendering optimizations, surface compatibility fixes, improved settings icons, and Chapter 3/5 development builds.</td>
+    </tr>
+    <tr>
+      <td><code>v0.64</code></td>
+      <td>Public release with direct <code>data.win</code> loading, Chapter 2 light-puzzle fixes, Chapter 3 pathfinding and performance fixes, Chapter 5 runtime compatibility, Web Patcher, Seam's Patcher, and Steam v0.0.250 support.</td>
+    </tr>
   </tbody>
 </table>
 </details>
@@ -369,7 +416,7 @@ ux0:data/deltarune/
 ```
 - Save date:
 ```text
-ux0:data/DeltaruneSaves/
+ux0:data/deltarune_saves/
 ├── true_config.ini
 ├── dr.ini/
 └── DLTR00000/
@@ -399,7 +446,10 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 - [VitaGL](https://github.com/Rinnegatamante/vitaGL) by Rinnegatamante.
 - [VitaSDK](https://vitasdk.org/) and the PlayStation Vita homebrew community.
 - [Vita Development Wiki / PSDevWiki](https://www.psdevwiki.com/vita/) for technical documentation.
+- [UndertaleModTool](https://github.com/UnderminersTeam/UndertaleModTool), used to inspect, analyze, and adapt GameMaker data during development.
+- [DataWin documentation](https://github.com/ButterscotchRunner/DataWin), a fundamental technical reference for parsing GameMaker data files.
 - [DELTARUNE PT-BR Translation](https://github.com/teiarruma/deltarune-ptbr) for the PT-BR localization by the TEIARRUMA team and contributors.
+- Special thanks to [MrPowerGamerBR](https://github.com/MrPowerGamerBR) for the technical help and contributions shared with the GameMaker porting community.
 
 ## AI Notice
 

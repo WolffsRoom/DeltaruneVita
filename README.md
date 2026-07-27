@@ -111,37 +111,9 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 
 The control layout is based on and adapted from the PS4 version, with additional features tailored for the DeltaruneVita project add-ons (e.g., touch control support and L/R bumper navigation within settings menus).
 
-<table>
-  <thead>
-    <tr><th>Control</th><th>Action</th><th>Control</th><th>Action</th></tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><img src="docs/media/v0.64/controls/button_ps4_dpad_up.png" width="28" alt="Up"> <img src="docs/media/v0.64/controls/button_ps4_dpad_down.png" width="28" alt="Down"> <img src="docs/media/v0.64/controls/button_ps4_dpad_left.png" width="28" alt="Left"> <img src="docs/media/v0.64/controls/button_ps4_dpad_right.png" width="28" alt="Right"> / Left Analog Stick</td>
-      <td>Movement</td>
-      <td><img src="docs/media/v0.64/controls/button_ps4_cross_0.png" width="28" alt="Cross"></td>
-      <td>Confirm / Interact</td>
-    </tr>
-    <tr>
-      <td><img src="docs/media/v0.64/controls/button_ps4_circle_0.png" width="28" alt="Circle"> <img src="docs/media/v0.64/controls/button_ps4_square_0.png" width="28" alt="Square"></td>
-      <td>Cancel / Back</td>
-      <td><img src="docs/media/v0.64/controls/button_ps4_triangle_0.png" width="28" alt="Triangle"></td>
-      <td>In-game Menu</td>
-    </tr>
-    <tr>
-      <td><strong>SELECT</strong></td>
-      <td>Open Game Settings</td>
-      <td><img src="docs/media/v0.64/controls/button_ps4_l1.png" width="28" alt="L"> <img src="docs/media/v0.64/controls/button_ps4_r1.png" width="28" alt="R"></td>
-      <td>Navigate categories</td>
-    </tr>
-    <tr>
-      <td>Touch screen</td>
-      <td>Virtual controls</td>
-      <td>Analog Sticks (Adjust Screen)</td>
-      <td>Left moves; Right adjusts zoom</td>
-    </tr>
-  </tbody>
-</table>
+<p align="center">
+  <img src="docs/media/v0.64/control-layout.svg" alt="DELTARUNE Vita control layout: D-Pad or left stick moves, Cross confirms, Circle or Square cancels, Triangle opens the in-game menu, Select opens Game Settings, and L/R navigate categories." width="100%">
+</p>
 
 ## Screenshots (on the PS Vita)
 

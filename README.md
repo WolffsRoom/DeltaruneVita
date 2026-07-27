@@ -27,21 +27,25 @@ Starting with v0.36, the project directly executes GameMaker data from the Windo
 
 <br>
 
+
 | Chapter | Details |
 | :--- | :--- |
-| **1** | Thoroughly reviewed room by room. The run fully verified. Maybe some optimizations remain to be checked. |
-| **2** | Received comprehensive fixes (audio, battles, transitions, textures, menus, performance). Some rooms are under observation. |
-| **3 and 4**| Fully bootable and playable, subject to testing, optimizations, and perhaps fixes at certain points. |
-| **5** | The primary optimization challenge. The city area is highly resource-intensive and may still result in low FPS or crashes. |
+| **1** | Playable and reviewed extensively. |
+| **2** | Playable, including the three light puzzles. Several performance and rendering issues were corrected. |
+| **3** | It isn't very playable, even with the fixes to the navigation system and performance in large areas, there are still many glitches due to a lack of texture optimization. |
+| **4** | It works, with fixes related to runtime and interface compatibility. No comprehensive tests have yet been reported or conducted in Chapter 4. |
+| **5** | It works, but isn't very playable. This chapter now considerably faster in urban areas, but that remains the most demanding part. Further optimization is planned for the World of Darkness.|
 
 <div align="center">
-  <img src="https://img.shields.io/badge/Please%2C%20support%20this%20and%20others%20projects-black?style=for-the-badge&labelColor=black&color=yellow&logoWidth=0" alt="Please, support this and others projects" style="font-family: 'Press Start 2P', monospace; height: 35px;">
-  <br><br>
-  <a href="https://www.buymeacoffee.com/5rsrt7j4z8f" target="_blank">
-    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important; width: 217px !important;">
-  </a>
+
+### Support this and other projects
+If you enjoy my work, consider supporting the development!
+
+[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="48">](https://www.buymeacoffee.com/5rsrt7j4z8f)
+
 </div>
 
+<br>
 
 ## Installation Guide
 
@@ -59,40 +63,59 @@ To install the game correctly, follow these steps:
 
 - **Optional:** Install [PSVshell](https://github.com/Electry/PSVshell/releases) to overclock your device.
 - Install `libshacccg.suprx`, if it is not already installed, by following [this guide](https://samilops2.gitbook.io/vita-troubleshooting-guide/shader-compiler/extract-libshacccg.suprx).
-- Purchase the official game legally at [Deltarune](https://store.steampowered.com/agecheck/app/1671210/).
 
 ### HOW TO APPLY THE PATCH:
 
-The patchers require an official, unmodified DELTARUNE installation. The version currently supported by v0.64 is Steam **v0.0.250**.
+The patchers require an official, unmodified DELTARUNE installation.
 
 > [!IMPORTANT]
-> v0.64 requires freshly generated data. Do not reuse the data folder produced by an older patcher.
+> Check the latest release notes to verify the Steam version's compatibility
 
 1. Purchase and install [DELTARUNE for PC](https://store.steampowered.com/app/1671210/) through Steam.
-2. Confirm that the installation is updated to **v0.0.250** and contains no modified files.
-3. Download `Deltarune-v0.64.vpk` and one of the patchers from the [latest release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
-4. Generate the Vita data using either the traditional desktop patcher, Seam's Patcher, or the [Web Patcher](https://wolffsroom.github.io/DeltaruneVita/).
+2. Confirm that the installation is updated to latests version and contains no modified files.
+3. Download `Deltarune-vX.XX.vpk` and one of the patchers from the [latest release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
+4. Generate the Vita data using either DeltaruneVita Patcher (terminal-like) or the [Seam's Patcher](https://wolffsroom.github.io/DeltaruneVita/) (Seam's Patcher is available in .exe format in case you encounter issues with the GitHub pages).
 5. Copy the generated `deltarune` folder to `ux0:data/` on the PS Vita. USB transfer or an SD card reader is recommended.
-6. Install `Deltarune-v0.64.vpk` using VitaShell.
+6. Install `Deltarune-vX.XX.vpk` using VitaShell.
 
-The language selected at startup changes only the patcher interface. In-game languages are installed separately through the available mod option.
+Now, the language selected in the Patcher will check for the availability of a language mod to modify the game. A translation can be added manually to `deltarunevita/mods`
 
-#### Traditional desktop patcher
+### DeltaruneVita Patcher (terminal-like)
 
 1. Extract the 32-bit or 64-bit `Deltarune Vita Patcher` ZIP.
 2. Copy the complete Steam `DELTARUNE` folder into `SteamFiles/DELTARUNE`.
+> <img width="212" height="102" alt="image" src="https://github.com/user-attachments/assets/46b0d639-11f3-4832-8653-1f24faa376ea" />
+
 3. Run `DeltaruneVitaPatcher.exe` and follow the displayed instructions.
 4. The finished data will be created under `VitaFiles/deltarune`.
 
-#### Seam's Patcher
+**Visual guide below:**
 
-Seam's Patcher provides the Web Patcher experience as a Windows application. It runs without a console and opens in a clean application window without browser tabs or an address bar.
+ <p align="center">
+  <img src="https://github.com/user-attachments/assets/cbf804a7-1108-43fd-9a5d-5c1be892a703" alt="Screenshot 1" width="31%">
+  <img src="https://github.com/user-attachments/assets/8ea839c5-ecd7-4584-a08d-6d79eedc8ee3" alt="Screenshot 2" width="31%">
+  <img src="https://github.com/user-attachments/assets/fd96f975-02dc-43a8-b7e4-2598aad90aa2" alt="Screenshot 3" width="31%">
+</p>
 
-1. Extract the correct 32-bit or 64-bit `Seam's Patcher` ZIP.
+### Seam's Patcher (DeltaruneVita Web Patcher)
+
+Seam's Patcher (.exe) provides the Patcher in the Web experience as a Windows application. It runs opens in a clean web application window without browser tabs or an address bar.
+
+1. Extract the correct 32-bit or 64-bit `Seam's Patcher` ZIP. 
 2. Run `SeamsPatcher.exe`.
+> <img width="174" height="45" alt="image" src="https://github.com/user-attachments/assets/f08d09e9-19a0-495b-aab9-0e672e3ef656" />
+
 3. Select the official DELTARUNE Steam folder when requested.
 4. Choose optional language/mod settings and generate the Vita package.
 5. Extract the generated package and transfer its `deltarune` folder to `ux0:data/`.
+
+**Visual guide below:**
+
+ <p align="center">
+  <img src="https://github.com/user-attachments/assets/12867819-9b89-40d8-89fc-feaab2f721ac" alt="Screenshot 1" width="31%">
+  <img src="https://github.com/user-attachments/assets/9d3ad63f-e6f1-4680-964e-3341e3cad3e1" alt="Screenshot 2" width="31%">
+  <img src="https://github.com/user-attachments/assets/5ee5677b-7a9d-4bec-87bd-50ffae00ac35" alt="Screenshot 3" width="31%">
+</p>
 
 You can also use Seam's store directly through the **[DELTARUNE Vita Web Patcher](https://wolffsroom.github.io/DeltaruneVita/)**.
 

@@ -171,14 +171,17 @@ The control layout is based on and adapted from the PS4 version, with additional
   <img src="docs/media/v0.64/settings/Dev.png" alt="Developer settings" width="31%">
 </p>
 
-## v0.64 Showcase
-
 <div align="center">
-  <a href="https://youtu.be/qxZaAjv8iiE" target="_blank" title="Watch the v0.64 showcase on YouTube">
-    <img src="https://img.youtube.com/vi/qxZaAjv8iiE/maxresdefault.jpg" alt="DELTARUNE Vita v0.64 showcase" width="760">
+
+  ### DELTARUNE for PS Vita (v0.64 Showcase)
+
+  <a href="https://youtu.be/qxZaAjv8iiE">
+    <img src="https://img.youtube.com/vi/qxZaAjv8iiE/maxresdefault.jpg" width="85%" style="border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" alt="DELTARUNE Vita Showcase">
   </a>
-  <br>
-  <sup><em>Click the image to watch the full showcase on YouTube.</em></sup>
+  <a href="https://youtu.be/qxZaAjv8iiE">
+    <img src="https://img.shields.io/badge/YouTube-Watch%20Showcase-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch on YouTube">
+  </a>
+
 </div>
 
 ## <img src="https://i.redd.it/pzi6lj5np5je1.gif" height="30" align="absmiddle"> What already works

@@ -9,8 +9,8 @@
 
 An _unofficial_ port of **DELTARUNE Chapters 1–5** for the PlayStation Vita.
 
-Starting with v0.36, the project directly executes GameMaker data from the Windows/Steam version using a tailored implementation of [Butterscotch](https://github.com/ButterscotchRunner/Butterscotch), with rendering powered by [VitaGL](https://github.com/Rinnegatamante/vitaGL). The Android version is no longer the primary asset source.
-
+The project runs the original Deltarune data, created with GameMaker Studio for Windows/Steam, using a customized version of [Butterscotch](https://github.com/ButterscotchRunner/Butterscotch), with rendering provided by [VitaGL](https://github.com/rinnegatamante/vitagl). DeltaruneVita includes Vita controls, optional touch input, configurable graphics and audio, console borders, mod support, diagnostic tools, and dedicated patchers that generate the required data from a legally obtained copy of the game.
+ 
 > This repository and its releases do not include any commercial assets or files from DELTARUNE.
 > Please purchase and obtain the official game at [deltarune.com](https://deltarune.com/).
 
@@ -99,6 +99,8 @@ Now, the language selected in the Patcher will check for the availability of a l
 
 ### Seam's Patcher (DeltaruneVita Web Patcher)
 
+Designed to mimic Seam's shop from Deltarune, [Seam's Patcher](https://wolffsroom.github.io/DeltaruneVita/) offers a more immersive patching experience. The web-first approach via GitHub Pages ensures the patcher remains accessible on any platform and receives instant updates.
+
 Seam's Patcher (.exe) provides the Patcher in the Web experience as a Windows application. It runs opens in a clean web application window without browser tabs or an address bar.
 
 1. Extract the correct 32-bit or 64-bit `Seam's Patcher` ZIP. 
@@ -117,7 +119,8 @@ Seam's Patcher (.exe) provides the Patcher in the Web experience as a Windows ap
   <img src="https://github.com/user-attachments/assets/5ee5677b-7a9d-4bec-87bd-50ffae00ac35" alt="Screenshot 3" width="31%">
 </p>
 
-You can also use Seam's store directly through the **[DELTARUNE Vita Web Patcher](https://wolffsroom.github.io/DeltaruneVita/)**.
+You can also access the Seam store directly through your preferred browser using the **[Seam Patcher](https://wolffsroom.github.io/DeltaruneVita/)**.
+
 
 #### Observations: 
 
@@ -240,25 +243,167 @@ Butterscotch adapted to Vita
 VitaGL + OpenAL + Vita Controls
 ```
 
-### Build Instructions (For Devs)
+## Build Instructions (For Developers)
 
-Place the data file from a legitimate installation in `SteamFiles/DELTARUNE` and run:
+### Requirements
+
+- Windows 10 or 11;
+- PowerShell 5.1 or newer;
+- Docker Desktop with Linux containers enabled;
+- Git with submodule support;
+- An official and unmodified DELTARUNE Steam installation.
+
+The standard build uses VitaSDK through Docker, so a separate VitaSDK installation on Windows is not required.
+
+### Preparing the game data
+
+Place the official Steam files inside:
+
+```text
+SteamFiles/DELTARUNE/
+```
+
+Run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\prepare-windows-data.ps1
 ```
 
-The prepared data will be created in:
+The prepared data will be generated in:
 
 ```text
-data/prepared/deltarune/deltarunevita/
+data/prepared/deltarune/
 ```
 
-To build the VPK using Docker and VitaSDK:
+Each chapter keeps its original Windows `data.win`. Starting with v0.64, files are no longer renamed to `game.droid`.
+
+### Building the VPK
+
+With Docker Desktop running, execute:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\build-butterscotch-probe.ps1
 ```
+
+The generated VPK and related files will be placed under:
+
+```text
+artifacts/current/
+```
+
+### Building the patchers
+
+The Windows patcher project is located at:
+
+```text
+artifacts/Patcher/Build_Patch/
+```
+
+Run:
+
+```bat
+Build_Patcher.bat
+```
+
+The build menu can compile the patchers using the current patch data or regenerate the patch data from `SteamFiles` and `VitaFiles` first.
+
+> [!IMPORTANT]
+> Please, don't share the commercial DELTARUNE files. must never be committed or distributed. Only the VPK, patch data and tools used to generate the Vita files may be published.
+
+<br>
+<br>
+
+## Butterscotch + VitaGL: How It Works
+
+DELTARUNE Vita does not emulate Windows or execute the original game executable. It loads the GameMaker data from the official Steam version and runs it through a customized native runner.
+
+```text
+Official Steam files
+        ↓
+Per-chapter data.win
+        ↓
+Customized Butterscotch runner
+        ↓
+GameMaker rooms, objects, scripts and events
+        ↓
+VitaGL rendering backend
+        ↓
+PS Vita display, audio and controls
+```
+
+---
+
+### Butterscotch
+
+[Butterscotch](https://github.com/ButterscotchRunner/Butterscotch) reads and executes the GameMaker data stored in each chapter’s `data.win`.
+
+The customized runner includes:
+
+- Additional GameMaker built-in functions required by DELTARUNE;
+- Vita physical controls and touch input;
+- Audio streaming and caching;
+- Surface and buffer compatibility;
+- Room, texture and audio preloading;
+- Texture-cache management adapted to Vita memory limits;
+- Mods and alternative `data.win` support;
+- Developer logging, profiling and room diagnostics;
+- Chapter-specific fixes for puzzles, events and softlocks.
+
+The chapter selector acts as a launcher. When a chapter is selected, the runner initializes its corresponding GameMaker data.
+
+---
+
+### VitaGL
+
+[VitaGL](https://github.com/Rinnegatamante/vitaGL) translates the runner’s rendering operations to the PS Vita GPU.
+
+It handles:
+
+- Sprites, backgrounds, tiles and primitives;
+- GameMaker surfaces and render targets;
+- Texture uploads and filtering;
+- Blending, transparency and color operations;
+- Screen scaling and positioning;
+- Console borders;
+- GPU memory allocation through CDRAM.
+
+The port currently uses the `legacy-gl` rendering path. 
+
+---
+
+### Vita-specific layeer - Game Settings
+
+A separate Vita frontend provides:
+
+- Game Settings;
+- Physical and touch controls;
+- Screen position and zoom adjustment;
+- Dynamic console borders;
+- Music and sound controls;
+- Save-directory management;
+- Loading and cache screens;
+- Development overlays and diagnostic logs.
+
+This separation keeps most GameMaker behavior inside Butterscotch while platform-specific features are handled by the Vita frontend.
+
+---
+
+### Memory and performance
+
+The PS Vita has considerably less memory than a modern PC. Later DELTARUNE chapters contain large texture pages, complex rooms and many simultaneous objects.
+
+The port manages these limitations through:
+
+- Chapter-specific loading;
+- On-demand texture uploads;
+- Protected font and interface atlases;
+- RAM and CDRAM texture caches;
+- Texture eviction and reuse;
+- Audio preloading and streaming;
+- Off-screen rendering optimizations;
+- Original, Medium and Low graphics profiles.
+
+These systems make all five chapters bootable and playable, although particularly demanding areas may still require further optimization.
 
 ## Mods
 
@@ -424,7 +569,7 @@ ux0:data/deltarune_saves/
     └── true_config.ini
 ```
 
-The main file log is saved in:
+The main log file is saved in:
 ```text
 ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 ```
@@ -448,7 +593,7 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 
 ## AI Notice
 
-GPT-5.6 Sol (Codex IDE) was integrated into the workflow to support development (specifically for the loader's programming logic), diagnostics, project organization, and documentation.
+GPT-5.6 Sol (Codex IDE) was integrated into the workflow to assist with core development (specifically the loader's programming logic), diagnostics, project organization, and technical documentation. Additionally, Claude Code (Opus 4.8) was utilized to re-document the project for the current release, while Gemini (3.6 Flash) was used to develop Seam's Patcher.
 
 ## Licença e dados do jogo
 

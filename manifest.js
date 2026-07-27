@@ -1,7 +1,7 @@
 const manifestData = {
   "format": 4,
   "game": "DELTARUNE",
-  "port_version": "0.63",
+  "port_version": "0.64",
   "output_folder": "deltarune",
   "steam_folder": "DELTARUNE",
   "optimizations": {

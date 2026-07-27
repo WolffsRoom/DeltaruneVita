@@ -215,7 +215,7 @@
 
   <img id="borda" class="layer" src="assets/borda.png" alt="">
   <div id="vignette"></div>
-  <div id="version">Patcher v0.62</div>
+  <div id="version">Patcher v0.64</div>
   <input type="file" id="zipInput" accept=".zip" style="display:none">
   <div id="fade"></div>
   <div id="splash">
@@ -257,7 +257,7 @@
 <audio id="a-drone" src="assets/AUDIO_DRONE.wav" loop preload="auto"></audio>
 <audio id="a-doorclose" src="assets/snd_doorclose.wav" preload="auto"></audio>
 
-<script src="manifest.js?v=0.63"></script>
+<script src="manifest.js?v=0.64"></script>
 <script src="assets/jszip.min.js"></script>
 <script>
 "use strict";
@@ -417,7 +417,7 @@ const LANGS=[
 ];
 
 /* ================= state ================= */
-let PORT_VERSION="0.63";
+let PORT_VERSION="0.64";
 let steamHandle=null, manifest=null;
 let screen="main";        // "main" | "lang" | "ajustes"
 let selectedExtra=null;
@@ -504,7 +504,7 @@ const UI_TEXT = {
     mirror_manual_option: "Baixar e anexar manualmente",
     mirror_retry_fail: "* Puts, não consegui baixar por aqui. Tente outra opção de download.",
     mirror_manual_question: "* De onde você quer baixar a tradução?",
-    mirror_open_hint: "* Quando terminar de baixar, selecione 'Anexar arquivo baixado'.",
+    mirror_open_hint: "Quando baixar, selecione 'Anexar arquivo baixado'.",
     mirror_attach_option: "Anexar arquivo baixado",
     vassets_question: "* Ei, eu preciso que anexe os assets exclusivos do Vita.",
     vassets_download_option: "Baixar assets do Vita",
@@ -577,7 +577,7 @@ const UI_TEXT = {
     mirror_manual_option: "Descargar y adjuntar manualmente",
     mirror_retry_fail: "* Vaya, no pude descargar por aquí. Prueba otra opción de descarga.",
     mirror_manual_question: "* ¿Desde dónde quieres descargar la traducción?",
-    mirror_open_hint: "* Cuando termines de descargar, selecciona 'Adjuntar archivo descargado'.",
+    mirror_open_hint: "Al descargar, elige 'Adjuntar archivo descargado'.",
     mirror_attach_option: "Adjuntar archivo descargado",
     vassets_question: "* Oye, necesito que adjuntes los recursos exclusivos para la Vita.",
     vassets_download_option: "Descargar assets de Vita",
@@ -653,7 +653,7 @@ const UI_TEXT = {
     mirror_manual_option: "Download and attach manually",
     mirror_retry_fail: "* Ugh, couldn't download from there. Try another download option.",
     mirror_manual_question: "* Where do you want to download the translation from?",
-    mirror_open_hint: "* When you're done downloading, select 'Attach downloaded file'.",
+    mirror_open_hint: "After download, select 'Attach downloaded file'.",
     mirror_attach_option: "Attach downloaded file",
     vassets_question: "* Hey, I need you to attach the Vita-exclusive assets.",
     vassets_download_option: "Download Vita assets",
@@ -729,7 +729,7 @@ const UI_TEXT = {
     mirror_manual_option: "Télécharger et joindre manuellement",
     mirror_retry_fail: "* Zut, je n'ai pas pu télécharger depuis là. Essayez une autre option de téléchargement.",
     mirror_manual_question: "* D'où voulez-vous télécharger la traduction ?",
-    mirror_open_hint: "* Une fois le téléchargement terminé, sélectionnez « Joindre le fichier téléchargé ».",
+    mirror_open_hint: "Après téléchargement, choisir 'Joindre fichier'.",
     mirror_attach_option: "Joindre le fichier téléchargé",
     vassets_question: "* Salut, j'ai besoin que tu joignes les ressources exclusives à la Vita.",
     vassets_download_option: "Télécharger les assets Vita",
@@ -805,7 +805,7 @@ const UI_TEXT = {
     mirror_manual_option: "Manuell herunterladen und anhängen",
     mirror_retry_fail: "* Verflixt, von dort konnte ich nicht herunterladen. Versuche eine andere Download-Option.",
     mirror_manual_question: "* Von wo möchtest du die Übersetzung herunterladen?",
-    mirror_open_hint: "* Wenn der Download fertig ist, wähle 'Heruntergeladene Datei anhängen'.",
+    mirror_open_hint: "Nach Download 'Heruntergeladene Datei anhängen'.",
     mirror_attach_option: "Heruntergeladene Datei anhängen",
     vassets_question: "* Hey, du musst mir bitte die exklusiven Assets für die Vita beifügen.",
     vassets_download_option: "Vita-Assets herunterladen",
@@ -881,7 +881,7 @@ const UI_TEXT = {
     mirror_manual_option: "Скачать и прикрепить вручную",
     mirror_retry_fail: "* Эх, не получилось скачать отсюда. Попробуй другой вариант загрузки.",
     mirror_manual_question: "* Откуда хочешь скачать перевод?",
-    mirror_open_hint: "* Когда закончишь скачивать, выбери «Прикрепить скачанный файл».",
+    mirror_open_hint: "После загрузки выберите «Прикрепить файл».",
     mirror_attach_option: "Прикрепить скачанный файл",
     vassets_question: "* Привет, мне нужно, чтобы ты прислал материалы, предназначенные исключительно для Vita.",
     vassets_download_option: "Скачать ассеты Vita",
@@ -957,7 +957,7 @@ const UI_TEXT = {
     mirror_manual_option: "手動でダウンロードして添付する",
     mirror_retry_fail: "* うーん、そこからはダウンロードできなかったよ。別のダウンロード方法を試してみて。",
     mirror_manual_question: "* どこから翻訳をダウンロードする？",
-    mirror_open_hint: "* ダウンロードが終わったら「ダウンロードしたファイルを添付」を選んでね。",
+    mirror_open_hint: "ダウンロード後、「ダウンロード済みファイルを添付」を選択。",
     mirror_attach_option: "ダウンロードしたファイルを添付",
     vassets_question: "* ねえ、Vita専用アセットを添付してほしいんだ。",
     vassets_download_option: "Vitaアセットをダウンロード",
@@ -1206,7 +1206,7 @@ function openMirrorForManualAttach(mirrorId){
   active = 0;
   setSeam("talk");
   render();
-  sayQ(T.mirror_open_hint || "* Quando terminar de baixar, selecione 'Anexar arquivo baixado'.");
+  sayQ(T.mirror_open_hint || "Quando baixar, selecione 'Anexar arquivo baixado'.");
 }
 function activate(){
   if(screen==="main"){

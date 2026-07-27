@@ -112,7 +112,7 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 The control layout is based on and adapted from the PS4 version, with additional features tailored for the DeltaruneVita project add-ons (e.g., touch control support and L/R bumper navigation within settings menus).
 
 <p align="center">
-  <img src="docs/media/v0.64/control-layout.svg" alt="DELTARUNE Vita control layout: D-Pad or left stick moves, Cross confirms, Circle or Square cancels, Triangle opens the in-game menu, Select opens Game Settings, and L/R navigate categories." width="100%">
+  <img src="docs/media/v0.64/control-layout.png" alt="DELTARUNE Vita control layout: D-Pad or left stick moves, Cross confirms, Circle or Square cancels, Triangle opens the in-game menu, Select opens Game Settings, and L/R navigate categories." width="100%">
 </p>
 
 ## Screenshots (on the PS Vita)

@@ -107,9 +107,12 @@ Seam's Patcher (.exe) provides the Patcher in the Web experience as a Windows ap
 2. Run `SeamsPatcher.exe`.
 > <img width="174" height="45" alt="image" src="https://github.com/user-attachments/assets/f08d09e9-19a0-495b-aab9-0e672e3ef656" />
 
-3. Select the official DELTARUNE Steam folder when requested.
-4. Choose optional language/mod settings and generate the Vita package.
-5. Extract the generated package and transfer its `deltarune` folder to `ux0:data/`.
+3. Copy the official DELTARUNE folder from Steam to another directory. I recommend your desktop (`C:\Users\<USERNAME>\Desktop`).
+4. Select the `DELTARUNE` folder, which was copied when prompted.
+5. Choose optional language/mod settings and generate the Vita package.
+6. Extract the generated package and transfer its `deltarune` folder to `ux0:data/`.
+
+P.S.: On iOS/iPadOS, you need to zip the `DELTARUNE` folder, since Apple doesn't allow you to attach a folder directly
 
 **Visual guide below:**
 
@@ -126,8 +129,10 @@ You can also access the Seam store directly through your preferred browser using
 
 Ensure that the data files were correctly placed and are located in the following path: `ux0:data/deltarune/deltarunevita/...`, and verify that everything matches the layout shown in [Folder Structure](https://github.com/WolffsRoom/DeltaruneVita#folder-structure).
 
+The correct directory is: 
+
 ```text
-ux0:data/deltarune/deltarunevita/butterscotch-probe.log
+ux0:data/deltarune/deltarunevita/...
 ```
 
 > [!IMPORTANT]

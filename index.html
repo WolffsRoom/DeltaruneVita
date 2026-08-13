@@ -262,10 +262,13 @@
 "use strict";
 const $=id=>document.getElementById(id);
 
-// Heartbeat ping loop to keep desktop launcher server active
-setInterval(() => {
-  fetch("/__heartbeat__").catch(() => {});
-}, 2000);
+// The heartbeat only exists in the packaged desktop launcher. Do not request
+// it from GitHub Pages, where it would generate a permanent stream of 404s.
+if(new URLSearchParams(location.search).get("desktop") === "1"){
+  setInterval(() => {
+    fetch("/__heartbeat__").catch(() => {});
+  }, 2000);
+}
 
 /* ================= Seam animation engine ================= */
 const SEAM={
@@ -936,11 +939,13 @@ async function pickSteam(){
   if(window.showDirectoryPicker){
     try{
       const handle = await window.showDirectoryPicker({mode:"read"});
-      const dataWin = await findDataWinInHandle(handle);
-      if(!dataWin){ setSeam("oh",1500); speech(SEAM_LINES.steambad); return; }
-      steamHandle = handle; steamFilesMap = new Map();
+      const gameRoot = await findSteamRoot(handle);
+      if(!gameRoot){ setSeam("oh",1500); speech(SEAM_LINES.steambad); return; }
+      // Users commonly choose either DELTARUNE itself or its parent Steam
+      // folder. Always index from the directory that actually owns data.win.
+      steamHandle = gameRoot; steamFilesMap = new Map();
       setBar(0); showBar(true);
-      await scanDirectoryHandle(handle, "", steamFilesMap);
+      await scanDirectoryHandle(gameRoot, "", steamFilesMap);
       showBar(false); setSeam("laugh",1500);
       speech(SEAM_LINES.steamok);
     } catch(e){ setSeam("idle"); speech(SEAM_LINES.choose); }
@@ -949,11 +954,13 @@ async function pickSteam(){
   }
 }
 
-async function findDataWinInHandle(handle){
+async function findSteamRoot(handle){
   for await (const [name, entry] of handle.entries()){
-    if(entry.kind === "file" && name.toLowerCase() === "data.win") return entry;
+    if(entry.kind === "file" && name.toLowerCase() === "data.win") return handle;
+  }
+  for await (const [name, entry] of handle.entries()){
     if(entry.kind === "directory"){
-      const sub = await findDataWinInHandle(entry);
+      const sub = await findSteamRoot(entry);
       if(sub) return sub;
     }
   }

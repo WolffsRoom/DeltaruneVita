@@ -264,7 +264,8 @@ const $=id=>document.getElementById(id);
 
 // The heartbeat only exists in the packaged desktop launcher. Do not request
 // it from GitHub Pages, where it would generate a permanent stream of 404s.
-if(new URLSearchParams(location.search).get("desktop") === "1"){
+if(new URLSearchParams(location.search).get("desktop") === "1" &&
+   (location.hostname === "127.0.0.1" || location.hostname === "localhost")){
   setInterval(() => {
     fetch("/__heartbeat__").catch(() => {});
   }, 2000);
@@ -1037,13 +1038,13 @@ async function generate(mirrorId, attachedZipFile){
         const buf = await res.arrayBuffer();
         zip.file(outPath, buf);
       } else if(fileRec.mode === "copy"){
-        const steamEntry = steamFilesMap.get(fileRec.source.toLowerCase());
+        const steamEntry = findSteamEntry(fileRec.source);
         if(!steamEntry) throw new Error("Arquivo Steam ausente: " + fileRec.source);
         const f = await steamEntry.getFile();
         const buf = await f.arrayBuffer();
         zip.file(outPath, buf);
       } else if(fileRec.mode === "browser_patch"){
-        const steamEntry = steamFilesMap.get(fileRec.source.toLowerCase());
+        const steamEntry = findSteamEntry(fileRec.source);
         if(!steamEntry) throw new Error("Arquivo Steam ausente: " + fileRec.source);
         const f = await steamEntry.getFile();
         const origBuf = new Uint8Array(await f.arrayBuffer());
@@ -1113,6 +1114,18 @@ async function applyBrowserPatch(oldBuf, compressedPatch){
   }
   if(newPos !== out.length) throw new Error("Tamanho final do patch invalido");
   return out;
+}
+
+function findSteamEntry(source){
+  const wanted = source.toLowerCase().replace(/\\/g, "/");
+  const direct = steamFilesMap.get(wanted);
+  if(direct) return direct;
+  const suffix = "/" + wanted;
+  const matches = [];
+  for(const [path, entry] of steamFilesMap){
+    if(path.endsWith(suffix)) matches.push(entry);
+  }
+  return matches.length === 1 ? matches[0] : null;
 }
 
 /* ================= Splash & Web Language Selection Flow ================= */

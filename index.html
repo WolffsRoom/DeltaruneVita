@@ -2,10 +2,9 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Seam's Patcher - DeltaruneVita</title>
 <link rel="icon" type="image/x-icon" href="./favicon.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seam's Patcher - DeltaruneVita</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet">
@@ -125,7 +124,7 @@
   /* splash screen (logo) before the shop opens */
   #splash{position:absolute;inset:0;z-index:90;background:#000;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2em;
-    transition:opacity 1s ease}
+    transition:opacity 1s ease;cursor:pointer}
   #splash.gone{opacity:0;pointer-events:none}
   #splash img{width:58%;max-width:60vw;height:auto;image-rendering:auto}
   #splash .by{color:var(--white);font-size:1.1em;letter-spacing:.06em;
@@ -217,7 +216,7 @@
 
   <img id="borda" class="layer" src="assets/borda.png" alt="">
   <div id="vignette"></div>
-  <div id="version">Patcher v0.64</div>
+  <div id="version">Patcher v0.69</div>
   <input type="file" id="zipInput" accept=".zip" style="display:none">
   <div id="fade"></div>
   <div id="splash">
@@ -240,8 +239,6 @@
   </div>
 </div>
 
-
-
 <div id="bottom-bar">
   <div id="hint">↑↓ move &nbsp; Z/Enter confirm &nbsp; X back</div>
   <div id="disclaimer">
@@ -259,11 +256,16 @@
 <audio id="a-drone" src="assets/AUDIO_DRONE.wav" loop preload="auto"></audio>
 <audio id="a-doorclose" src="assets/snd_doorclose.wav" preload="auto"></audio>
 
-<script src="manifest.js?v=0.64"></script>
+<script src="manifest.js?v=0.69"></script>
 <script src="assets/jszip.min.js"></script>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
+
+// Heartbeat ping loop to keep desktop launcher server active
+setInterval(() => {
+  fetch("/__heartbeat__").catch(() => {});
+}, 2000);
 
 /* ================= Seam animation engine ================= */
 const SEAM={
@@ -301,12 +303,28 @@ const A = {
   lantern:$("a-lantern"), appearance:$("a-appearance"), drone:$("a-drone"), 
   doorclose:$("a-doorclose") 
 };
+let audioUnlocked = false;
+function unlockAudio(){
+  if(typeof initAudio === "function") initAudio();
+  if(audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(()=>{});
+  audioUnlocked = true;
+}
+window.addEventListener("click", unlockAudio, {capture: true});
+window.addEventListener("pointerdown", unlockAudio, {capture: true});
+window.addEventListener("mousedown", unlockAudio, {capture: true});
+window.addEventListener("keydown", unlockAudio, {capture: true});
+document.addEventListener("click", unlockAudio, {capture: true});
+document.addEventListener("pointerdown", unlockAudio, {capture: true});
+
 function play(a){ 
   if(!sfxOn||!a)return; 
-  a.currentTime=0; 
-  a.volume=.55;
-  const p = a.play();
-  if(p !== undefined) p.catch(()=>{});
+  unlockAudio();
+  try {
+    a.currentTime=0; 
+    a.volume=.55;
+    const p = a.play();
+    if(p !== undefined && p.catch) p.catch(()=>{});
+  } catch(e) {}
 }
 let audioCtx = null;
 let blipBuffer = null;
@@ -361,6 +379,7 @@ function rampMusic(){
 function startMusic(){
   if(!musicOn)return;
   A.lantern.volume=0;
+  A.lantern.currentTime=0;
   const p=A.lantern.play();
   if(p&&p.then) p.then(rampMusic).catch(()=>{}); else rampMusic();
 }
@@ -419,23 +438,30 @@ const LANGS=[
 ];
 
 /* ================= state ================= */
-let PORT_VERSION="0.64";
+let PORT_VERSION="0.69";
+const STEAM_VERSION="v0.0.253";
 let steamHandle=null, manifest=null;
-let screen="main";        // "main" | "lang" | "ajustes"
+let screen="splash";        // "splash" | "web-lang" | "main" | "lang" | "ajustes"
+let webLangIdx=0;
 let selectedExtra=null;
 let pendingAction=null;
 let inTransition=false;   // idioma extra alem de EN/JP (unico)
-let active=0, busy=false, pending=false;   // pending = aguardando OK
+let active=0, busy=false, pending=false;  // pending = aguardando OK
+
 const MIRRORS = [
   { id: "mediafire", label: "Mediafire" },
-  { id: "gdrive", label: "Google Drive", manualOnly: true },
-  { id: "mega", label: "Mega", manualOnly: true },
+  { id: "gdrive", label: "Google Drive" },
+  { id: "mega", label: "Mega" },
   { id: "archive", label: "Internet Archive" }
 ];
-const MIRROR_NAMES = { mediafire: "Mediafire", gdrive: "Google Drive", mega: "Mega", archive: "Archive" };
-const VITA_ASSETS_URL = "https://github.com/WolffsRoom/DeltaruneVita/releases/download/webpatcher-assets/vita_assets.zip";
-let vitaAssetsZip = null;
-function manifestNeedsVitaAssets(m){ return (m.files||[]).some(r=>r.mode==="embed"); }
+
+const MIRROR_NAMES = {
+  mediafire: "Mediafire",
+  gdrive: "Google Drive",
+  mega: "Mega",
+  archive: "Archive"
+};
+
 const FALLBACK_MODS_LIST = {
   PTBR: {
     Mediafire: "https://download1472.mediafire.com/h9gwt1ys5weglxBXy6QIdOY8YR4x08_bI8wD6wcg2kPsQvho92G__KoPwKwaLDexs2o2hj3qfegZr8JwOeiP0lTr1trKNWf85tkPmEMpTRUqsfqM-sT4rFMsgsFZ7Orw0-KKJANu7YYHPn1SKmdWshgF5R3iI9l-BBnK0OffcfKjoMg/4ildqbqja3ehuq2/PTBR.zip",
@@ -444,9 +470,7 @@ const FALLBACK_MODS_LIST = {
     Archive: "https://archive.org/download/ptbr_20260725/PTBR.zip"
   }
 };
-// Prefetched na inicializacao (boot) para poder resolver a URL do mirror de forma
-// sincrona no fluxo manual — window.open() so funciona sem bloqueio de popup se
-// disparado dentro do mesmo gesto do usuario, sem nenhum await antes dele.
+
 let cachedModsList = null;
 async function fetchModsList(){
   if(cachedModsList) return cachedModsList;
@@ -458,20 +482,20 @@ async function fetchModsList(){
   }
   return cachedModsList;
 }
+
 function resolveMirrorUrlSync(mirrorId){
   const list = cachedModsList || FALLBACK_MODS_LIST;
   return list.PTBR[MIRROR_NAMES[mirrorId]] || list.PTBR.Archive;
 }
 
 const MAIN=[
-  {id:"lang",    label:"Idioma"},
-  {id:"steam",   label:"Arquivos"},
-  {id:"apply",   label:"Aplicar"},
-  {id:"ajustes", label:"Ajustes"},
-  {id:"talk",    label:"Conversar"},
+  {id:"lang",   label:"Idioma"},
+  {id:"steam",  label:"Arquivos"},
+  {id:"apply",  label:"Aplicar"},
+  {id:"ajustes",label:"Ajustes"},
+  {id:"talk",   label:"Conversar"},
 ];
 const SAIR={id:"sair", label:"Sair"};
-const STEAM_VERSION="v0.0.250";
 
 let webLang = "ptbr";
 const UI_TEXT = {
@@ -498,8 +522,8 @@ const UI_TEXT = {
     confirm_q: "Confirma?",
     yes: "Sim",
     no: "Não",
-    base_tag: "  (base)",
-    soon_tag: "  (em breve)",
+    base_tag: " (base)",
+    soon_tag: " (em breve)",
     lang_names: { CORE: "Original", PTBR: "Português (BR)", ES: "Español", DE: "Alemão" },
     version_line: "* {lang}, ótima escolha. A versão suportada é a v{ver}. \n* Agora clique em {btn} para continuar.",
     mirror_question: "* Selecione o servidor para o download:",
@@ -508,13 +532,7 @@ const UI_TEXT = {
     mirror_manual_question: "* De onde você quer baixar a tradução?",
     mirror_open_hint: "Quando baixar, selecione 'Anexar arquivo baixado'.",
     mirror_attach_option: "Anexar arquivo baixado",
-    vassets_question: "* Ei, eu preciso que anexe os assets exclusivos do Vita.",
-    vassets_download_option: "Baixar assets do Vita",
-    questions: {
-      lang: "* Qual língua deseja configurar?",
-      ajustes: "* O que deseja ajustar?",
-      talk: "* Sobre o que quer conversar?"
-    },
+    questions: { lang: "* Qual língua deseja configurar?", ajustes: "* O que deseja ajustar?", talk: "* Sobre o que quer conversar?" },
     intro:"* Hee Heee... Um viajante do outro mundo. O que deseja hoje?",
     choose:"* Escolha um idioma nas prateleiras, ou o que quiser. Você que sabe...",
     core:"* Inglês e Japonês são originais. Já vêm junto, viajante.",
@@ -550,461 +568,8 @@ const UI_TEXT = {
       wolff: "* O criador por trás de tudo isto.",
       butter: "* Uma curiosidade sobre o motor do porte."
     }
-  },
-  es: {
-    hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X volver",
-    btn_lang: "Idioma",
-    btn_steam: "Archivos",
-    btn_apply: "Aplicar",
-    btn_ajustes: "Ajustes",
-    btn_talk: "Hablar",
-    btn_sair: "Salir",
-    talk_about: "Sobre ti",
-    talk_project: "Sobre DeltaruneVita",
-    talk_wolff: "¿Quién es Wolff?",
-    talk_butter: "¿Qué es Butterscotch?",
-    sfx_on: "Encender sonido",
-    sfx_off: "Apagar sonido",
-    music_on: "Encender música",
-    music_off: "Apagar música",
-    cache_label: "¿Incluir caché?",
-    confirm_q: "¿Confirmar?",
-    yes: "Sí",
-    no: "No",
-    base_tag: "  (base)",
-    soon_tag: "  (próximamente)",
-    lang_names: { CORE: "Original", PTBR: "Portugués (BR)", ES: "Español", DE: "Alemán" },
-    version_line: "* {lang}, excelente elección. La versión soportada es la v{ver}. \n* Ahora haz clic en {btn} para continuar.",
-    mirror_question: "* Selecciona el servidor para la descarga:",
-    mirror_manual_option: "Descargar y adjuntar manualmente",
-    mirror_retry_fail: "* Vaya, no pude descargar por aquí. Prueba otra opción de descarga.",
-    mirror_manual_question: "* ¿Desde dónde quieres descargar la traducción?",
-    mirror_open_hint: "Al descargar, elige 'Adjuntar archivo descargado'.",
-    mirror_attach_option: "Adjuntar archivo descargado",
-    vassets_question: "* Oye, necesito que adjuntes los recursos exclusivos para la Vita.",
-    vassets_download_option: "Descargar assets de Vita",
-    questions: {
-      lang: "* ¿Qué idioma deseas configurar?",
-      ajustes: "* ¿Qué deseas ajustar?",
-      talk: "* ¿De qué quieres hablar?"
-    },
-    intro:"* Jua Jua... Un viajero de otro mundo. ¿Qué deseas hoy?",
-    choose:"* Elige un idioma de los estantes, o lo que quieras. Tú decides...",
-    core:"* Inglés y Japonés son originales. Ya vienen incluidos, viajero.",
-    rem:"* Sin ese idioma extra, entonces. Solo queda el original.",
-    soon:"* Este idioma aún no ha llegado al estante...",
-    needsteam:"* Primero muéstrame tu copia original de DELTARUNE de Steam.",
-    steamok:"* ¡DELTARUNE seleccionado! Asegúrate de que sea la versión "+STEAM_VERSION+", ¿vale? Haz clic en Aplicar.",
-    steambad:"* Hmm... esto no me parece DELTARUNE... Comprueba el archivo.",
-    nopicker:"* Tu navegador no abre carpetas. Usa Chrome o Edge, viajero.",
-    ajustes:"* Déjame abrir el cajón de ajustes...",
-    cacheon:"* Bueno, eso es bueno. Te ahorrará tiempo durante el juego.",
-    cacheoff:"* Sin caché, entonces.",
-    sair:"* Todo a su tiempo...",
-    done:"* ¡Listo! \n* Ahora extrae y coloca la carpeta 'deltarune/deltarunevita' en 'ux0:/data'. \n* ¡Buen juego!",
-    about_title: "* ACERCA DE",
-    talk: {
-      about: "* ¿Yo? He sido muchas cosas... Un juguete. Un guardián. Hoy, solo un viejo tendero en un rincón olvidado del mundo.",
-      project: "* DeltaruneVita es un proyecto que lleva el juego 'Deltarune' al portátil PS Vita. Un port hecho con cariño, posible gracias a proyectos como VitaGL y Butterscotch.",
-      wolff: "* Wolff, también conocido como 'WolffsRoom', es el responsable detrás de este port y de este patcher. ¿O tal vez no? \n* Je, je... ya ni lo sé.",
-      butter: "* ¿Butterscotch? Hmm... Si no me equivoco, es lo que hace girar los engranajes de DeltaruneVita dentro de todo. \n* Dulce y esencial."
-    },
-    explain: {
-      CORE: "* El inglés y el japonés siempre estarán incluidos en los archivos generados.",
-      PTBR: "* Descargará el mod 'PTBR' en los archivos generados por el Patcher.",
-      ES: "* Traducción al español. Aún no disponible.",
-      DE: "* Traducción al alemán. Aún no disponible.",
-      sfx: "* Activa o desactiva los efectos de sonido del menú.",
-      music: "* Activa o desactiva la música ambiental de la tienda.",
-      cache: "* Archivo de caché opcional para reducir los tiempos de carga en el juego.",
-      sair: "* Volver al menú anterior.",
-      about: "* Deja que el viejo Seam hable de sí mismo.",
-      project: "* Acerca de este port para el PS Vita.",
-      wolff: "* El creador detrás de todo esto.",
-      butter: "* Una curiosidad sobre el motor del port."
-    }
-  },
-  en: {
-    confirm_apply: "* So I will apply the {lang} mod on version v{ver} in {dir}{cache}.\n* Confirm?",
-    portrait_tip: "* If on mobile, please use portrait mode to prevent text overlap.",
-    press_continue: "Click or press a key to continue",
-    hint: "↑↓ move &nbsp; Z/Enter confirm &nbsp; X back",
-    btn_lang: "Language",
-    btn_steam: "Files",
-    btn_apply: "Apply",
-    btn_ajustes: "Settings",
-    btn_talk: "Talk",
-    btn_sair: "Exit",
-    talk_about: "About you",
-    talk_project: "About DeltaruneVita",
-    talk_wolff: "Who is Wolff?",
-    talk_butter: "What is Butterscotch?",
-    sfx_on: "Turn on sound",
-    sfx_off: "Turn off sound",
-    music_on: "Turn on music",
-    music_off: "Turn off music",
-    cache_label: "Include cache?",
-    confirm_q: "Confirm?",
-    yes: "Yes",
-    no: "No",
-    base_tag: "  (base)",
-    soon_tag: "  (coming soon)",
-    lang_names: { CORE: "Original", PTBR: "Portuguese (BR)", ES: "Spanish", DE: "German" },
-    version_line: "* {lang}, great choice. The supported version is v{ver}. \n* Now click {btn} to continue.",
-    mirror_question: "* Select the download server:",
-    mirror_manual_option: "Download and attach manually",
-    mirror_retry_fail: "* Ugh, couldn't download from there. Try another download option.",
-    mirror_manual_question: "* Where do you want to download the translation from?",
-    mirror_open_hint: "After download, select 'Attach downloaded file'.",
-    mirror_attach_option: "Attach downloaded file",
-    vassets_question: "* Hey, I need you to attach the Vita-exclusive assets.",
-    vassets_download_option: "Download Vita assets",
-    questions: {
-      lang: "* Which language do you want to configure?",
-      ajustes: "* What would you like to adjust?",
-      talk: "* What do you want to talk about?"
-    },
-    intro:"* Hee Heee... A traveler from another world. What do you wish for today?",
-    choose:"* Choose a language on the shelves, or whatever you want. It's up to you...",
-    core:"* English and Japanese are original. They come bundled, traveler.",
-    rem:"* Without that extra language then. Just the original stays.",
-    soon:"* That language hasn't arrived on the shelf yet...",
-    needsteam:"* First show me your original copy of DELTARUNE from Steam.",
-    steamok:"* DELTARUNE selected! Make sure it's version "+STEAM_VERSION+", alright? Click Apply to generate PS Vita data.",
-    steambad:"* Hmm... that doesn't look like DELTARUNE to me... Check the specified file.",
-    nopicker:"* Your browser cannot open folders. Use Chrome or Edge, traveler.",
-    ajustes:"* Let me open the settings drawer...",
-    cacheon:"* Well, that's good. It will save you time during the game.",
-    cacheoff:"* No cache then.",
-    sair:"* Everything in due time...",
-    done:"* All set! \n* Now just extract and place the 'deltarune/deltarunevita' folder in 'ux0:/data'. \n* Have fun!",
-    about_title: "* ABOUT",
-    talk: {
-      about: "* Me? I've been many things... A toy. A guardian. Today, just an old shopkeeper in a forgotten corner of the world.",
-      project: "* DeltaruneVita is a project that brings the game 'Deltarune' to the PS Vita handheld. A port made with love, made possible thanks to projects like VitaGL and Butterscotch.",
-      wolff: "* Wolff, also known as 'WolffsRoom', is the one responsible behind this port and this patcher. Or is he? \n* Hee hee.. I don't even know anymore.",
-      butter: "* Butterscotch? Hmm... If I'm not mistaken, it's what makes the gears of DeltaruneVita turn inside everything. \n* Sweet, and essential."
-    },
-    explain: {
-      CORE: "* English and Japanese will always be included in the generated files.",
-      PTBR: "* Will download the 'PTBR' mod in the files generated by the Patcher.",
-      ES: "* Spanish translation. Not available yet.",
-      DE: "* German translation. Not available yet.",
-      sfx: "* Turn on or off the menu sound effects.",
-      music: "* Turn on or off the shop's ambient music.",
-      cache: "* Optional cache file to reduce loading times in the game.",
-      sair: "* Return to the previous menu.",
-      about: "* Let the old Seam talk about himself.",
-      project: "* About this port to the PS Vita.",
-      wolff: "* The creator behind all of this.",
-      butter: "* A trivia about the engine of the port."
-    }
-  },
-  fr: {
-    confirm_apply: "* Je vais donc appliquer le mod {lang} sur la version v{ver} dans {dir}{cache}.\n* Confirmer ?",
-    portrait_tip: "* Sur mobile, veuillez utiliser le mode portrait pour éviter la superposition de texte.",
-    press_continue: "Cliquez ou appuyez sur une touche pour continuer",
-    hint: "↑↓ déplacer &nbsp; Z/Entrée confirmer &nbsp; X retour",
-    btn_lang: "Langue",
-    btn_steam: "Fichiers",
-    btn_apply: "Appliquer",
-    btn_ajustes: "Paramètres",
-    btn_talk: "Parler",
-    btn_sair: "Quitter",
-    talk_about: "À propos de vous",
-    talk_project: "À propos de DeltaruneVita",
-    talk_wolff: "Qui est Wolff ?",
-    talk_butter: "Qu'est-ce que Butterscotch ?",
-    sfx_on: "Activer le som",
-    sfx_off: "Désactiver le som",
-    music_on: "Activer la musique",
-    music_off: "Désactiver la musique",
-    cache_label: "Inclure le cache ?",
-    confirm_q: "Confirmer ?",
-    yes: "Oui",
-    no: "Non",
-    base_tag: "  (de base)",
-    soon_tag: "  (bientôt)",
-    lang_names: { CORE: "Original", PTBR: "Portugais (BR)", ES: "Espagnol", DE: "Allemand" },
-    version_line: "* {lang}, excellent choix. La version prise en charge est la v{ver}. \n* Cliquez maintenant sur {btn} pour continuer.",
-    mirror_question: "* Sélectionnez le serveur de téléchargement :",
-    mirror_manual_option: "Télécharger et joindre manuellement",
-    mirror_retry_fail: "* Zut, je n'ai pas pu télécharger depuis là. Essayez une autre option de téléchargement.",
-    mirror_manual_question: "* D'où voulez-vous télécharger la traduction ?",
-    mirror_open_hint: "Après téléchargement, choisir 'Joindre fichier'.",
-    mirror_attach_option: "Joindre le fichier téléchargé",
-    vassets_question: "* Salut, j'ai besoin que tu joignes les ressources exclusives à la Vita.",
-    vassets_download_option: "Télécharger les assets Vita",
-    questions: {
-      lang: "* Quelle langue souhaitez-vous configurer ?",
-      ajustes: "* Que souhaitez-vous ajuster ?",
-      talk: "* De quoi voulez-vous parler ?"
-    },
-    intro:"* Hee Heee... Un voyageur d'un autre monde. Que désires-tu aujourd'hui ?",
-    choose:"* Choisissez une langue sur les étagères. Comme vous voulez...",
-    core:"* L'anglais et le japonais sont originaux. Ils sont inclus, voyageur.",
-    rem:"* Pas de langue supplémentaire alors. Il ne reste que l'original.",
-    soon:"* Cette langue n'est pas encore arrivée en rayon...",
-    needsteam:"* Montrez-moi d'abord votre copie originale de DELTARUNE sur Steam.",
-    steamok:"* DELTARUNE sélectionné ! Assurez-se qu'il s'agit de la version "+STEAM_VERSION+", d'accord ?",
-    steambad:"* Hmm... cela ne ressemble pas à DELTARUNE... Vérifiez le fichier.",
-    nopicker:"* Votre navigateur ne peut pas ouvrir de dossiers. Utilisez Chrome ou Edge.",
-    ajustes:"* Laissez-moi ouvrir le tiroir des paramètres...",
-    cacheon:"* C'est une bonne chose. Cela vous fera gagner du temps pendant le jeu.",
-    cacheoff:"* Pas de cache alors.",
-    sair:"* Chaque chose en son temps...",
-    done:"* Terminé ! \n* Extrayez et placez le dossier 'deltarune/deltarunevita' dans 'ux0:/data'. \n* Bon jeu !",
-    about_title: "* À PROPOS",
-    talk: {
-      about: "* Moi ? J'ai été beaucoup de choses... Un jouet. Un gardien. Aujourd'hui, juste un vieux marchand dans un coin oublié du monde.",
-      project: "* DeltaruneVita est un projet qui apporte le jeu 'Deltarune' sur la console portable PS Vita. Un portage fait avec amour, rendu possible grâce à des projets comme VitaGL et Butterscotch.",
-      wolff: "* Wolff, également connu sous le nom de 'WolffsRoom', est le responsable derrière ce portage et ce patcher. Ou pas ? \n* Hé hé... je ne sais même plus.",
-      butter: "* Butterscotch ? Hmm... Si je ne m'abuse, c'est ce qui fait tourner les engrenages de DeltaruneVita à l'intérieur de tout. \n* Doux, et essentiel."
-    },
-    explain: {
-      CORE: "* L'anglais et le japonais seront toujours inclus dans les fichiers générés.",
-      PTBR: "* Téléchargera le mod 'PTBR' dans les fichiers générés par le Patcher.",
-      ES: "* Traduction espagnole. Pas encore disponible.",
-      DE: "* Traduction allemande. Pas encore disponible.",
-      sfx: "* Active ou désactive les effets sonores du menu.",
-      music: "* Active ou désactive la musique d'ambiance de la boutique.",
-      cache: "* Fichier de cache optionnel pour réduire les temps de chargement dans le jeu.",
-      sair: "* Retour au menu précédent.",
-      about: "* Laissez le vieux Seam parler de lui-même.",
-      project: "* À propos de ce portage sur PS Vita.",
-      wolff: "* Le créateur derrière tout cela.",
-      butter: "* Une anecdote sur le moteur du portage."
-    }
-  },
-  de: {
-    confirm_apply: "* Ich werde also den {lang}-Mod auf Version v{ver} in {dir}{cache} anwenden.\n* Bestätigen?",
-    portrait_tip: "* Auf dem Handy nutzen Sie bitte das Hochformat, um Textüberlagerungen zu vermeiden.",
-    press_continue: "Klicken oder drücken Sie eine Taste, um fortzufahren",
-    hint: "↑↓ bewegen &nbsp; Z/Enter bestätigen &nbsp; X zurück",
-    btn_lang: "Sprache",
-    btn_steam: "Dateien",
-    btn_apply: "Anwenden",
-    btn_ajustes: "Einstellungen",
-    btn_talk: "Sprechen",
-    btn_sair: "Beenden",
-    talk_about: "Über dich",
-    talk_project: "Über DeltaruneVita",
-    talk_wolff: "Wer ist Wolff?",
-    talk_butter: "Was ist Butterscotch?",
-    sfx_on: "Ton einschalten",
-    sfx_off: "Ton ausschalten",
-    music_on: "Musik einschalten",
-    music_off: "Musik ausschalten",
-    cache_label: "Cache einschließen?",
-    confirm_q: "Bestätigen?",
-    yes: "Ja",
-    no: "Nein",
-    base_tag: "  (basis)",
-    soon_tag: "  (demnächst)",
-    lang_names: { CORE: "Original", PTBR: "Portugiesisch (BR)", ES: "Spanisch", DE: "Deutsch" },
-    version_line: "* {lang}, gute Wahl. Die unterstützte Version ist v{ver}. \n* Klicke jetzt auf {btn}, um fortzufahren.",
-    mirror_question: "* Wähle den Download-Server:",
-    mirror_manual_option: "Manuell herunterladen und anhängen",
-    mirror_retry_fail: "* Verflixt, von dort konnte ich nicht herunterladen. Versuche eine andere Download-Option.",
-    mirror_manual_question: "* Von wo möchtest du die Übersetzung herunterladen?",
-    mirror_open_hint: "Nach Download 'Heruntergeladene Datei anhängen'.",
-    mirror_attach_option: "Heruntergeladene Datei anhängen",
-    vassets_question: "* Hey, du musst mir bitte die exklusiven Assets für die Vita beifügen.",
-    vassets_download_option: "Vita-Assets herunterladen",
-    questions: {
-      lang: "* Welche Sprache möchtest du konfigurieren?",
-      ajustes: "* Was möchtest du anpassen?",
-      talk: "* Worüber möchtest du sprechen?"
-    },
-    intro:"* Hee Heee... Ein Reisender aus einer anderen Welt. Was wünschst du dir heute?",
-    choose:"* Wähle eine Sprache aus den Regalen, ganz wie du willst...",
-    core:"* Englisch und Japanisch sind im Original enthalten, Reisender.",
-    rem:"* Ohne diese Zusatzsprache also. Es bleibt beim Original.",
-    soon:"* Diese Sprache ist noch nicht im Regal eingetroffen...",
-    needsteam:"* Zeige mir zuerst deine Originalkopie von DELTARUNE auf Steam.",
-    steamok:"* DELTARUNE ausgewählt! Stelle sicher, dass es Version "+STEAM_VERSION+" ist, in Ordnung?",
-    steambad:"* Hmm... das sieht mir nicht nach DELTARUNE aus... Überprüfe die Datei.",
-    nopicker:"* Dein Browser kann keine Ordner öffnen. Nutze Chrome oder Edge.",
-    ajustes:"* Lass mich die Einstellungsschublade öffnen...",
-    cacheon:"* Nun, das ist gut. Es spart dir Zeit beim Spielen.",
-    cacheoff:"* Dann ohne Cache.",
-    sair:"* Alles zu seiner Zeit...",
-    done:"* Fertig! \n* Entpacke und platziere den Ordner 'deltarune/deltarunevita' in 'ux0:/data'. \n* Viel Spaß!",
-    about_title: "* DETAILS",
-    talk: {
-      about: "* Ich? Ich war viele Dinge... Ein Spielzeug. Ein Wächter. Heute nur ein alter Ladenbesitzer in einer vergessenen Ecke der Welt.",
-      project: "* DeltaruneVita ist ein Projekt, das das Spiel 'Deltarune' auf die PS Vita bringt. Ein mit Liebe erstellter Port, ermöglicht durch Projekte wie VitaGL und Butterscotch.",
-      wolff: "* Wolff, auch bekannt als 'WolffsRoom', ist der Verantwortliche für diesen Port und diesen Patcher. Oder vielleicht doch nicht? \n* Hihi... ich weiß es gar nicht mehr.",
-      butter: "* Butterscotch? Hmm... Wenn ich mich nicht irre, bringt es die Zahnräder von DeltaruneVita im Inneren zum Laufen. \n* Süß und unverzichtbar."
-    },
-    explain: {
-      CORE: "* Englisch und Japanisch sind immer in den generierten Dateien enthalten.",
-      PTBR: "* Lädt den 'PTBR'-Mod in die vom Patcher generierten Dateien herunter.",
-      ES: "* Spanische Übersetzung. Noch nicht verfügbar.",
-      DE: "* Deutsche Übersetzung. Noch nicht verfügbar.",
-      sfx: "* Schaltet die Soundeffekte des Menüs ein oder aus.",
-      music: "* Schaltet die Hintergrundmusik des Ladens ein oder aus.",
-      cache: "* Optionale Cache-Datei zur Reduzierung der Ladezeiten im Spiel.",
-      sair: "* Zum vorherigen Menü zurückkehren.",
-      about: "* Lass den alten Seam von sich selbst erzählen.",
-      project: "* Über diesen Port für die PS Vita.",
-      wolff: "* Der Schöpfer hinter all dem.",
-      butter: "* Eine Kuriosität über die Engine des Ports."
-    }
-  },
-  ru: {
-    confirm_apply: "* Итак, я применю мод {lang} на версию v{ver} в {dir}{cache}.\n* Подтвердить?",
-    portrait_tip: "* На мобильном телефоне используйте портретный режим, чтобы избежать наложения текста.",
-    press_continue: "Нажмите или коснитесь клавиши для продолжения",
-    hint: "↑↓ перемыкать &nbsp; Z/Enter подтв &nbsp; X назад",
-    btn_lang: "Язык",
-    btn_steam: "Файлы",
-    btn_apply: "Применить",
-    btn_ajustes: "Настройки",
-    btn_talk: "Разговор",
-    btn_sair: "Выход",
-    talk_about: "О тебе",
-    talk_project: "О DeltaruneVita",
-    talk_wolff: "Кто такой Wolff?",
-    talk_butter: "Что такое Butterscotch?",
-    sfx_on: "Включить звук",
-    sfx_off: "Выключить звук",
-    music_on: "Включить музыку",
-    music_off: "Выключить музыку",
-    cache_label: "Включить кэш?",
-    confirm_q: "Подтвердить?",
-    yes: "Да",
-    no: "Нет",
-    base_tag: "  (базовый)",
-    soon_tag: "  (скоро)",
-    lang_names: { CORE: "Оригинал", PTBR: "Португальский (BR)", ES: "Испанский", DE: "Немецкий" },
-    version_line: "* {lang}, отличный выбор. Поддерживаемая версия — v{ver}. \n* Теперь нажми «{btn}», чтобы продолжить.",
-    mirror_question: "* Выбери сервер для загрузки:",
-    mirror_manual_option: "Скачать и прикрепить вручную",
-    mirror_retry_fail: "* Эх, не получилось скачать отсюда. Попробуй другой вариант загрузки.",
-    mirror_manual_question: "* Откуда хочешь скачать перевод?",
-    mirror_open_hint: "После загрузки выберите «Прикрепить файл».",
-    mirror_attach_option: "Прикрепить скачанный файл",
-    vassets_question: "* Привет, мне нужно, чтобы ты прислал материалы, предназначенные исключительно для Vita.",
-    vassets_download_option: "Скачать ассеты Vita",
-    questions: {
-      lang: "* Какой язык настроить?",
-      ajustes: "* Что изменить?",
-      talk: "* О чем поговорить?"
-    },
-    intro:"* Хе-хе... Путешественник из другого мира. Чего ты желаешь сегодня?",
-    choose:"* Выбери язык на полках, или что угодно. Решать тебе...",
-    core:"* Английский и японский оригинальные. Они идут в комплекте.",
-    rem:"* Без дополнительного языка. Остаётся оригинал.",
-    soon:"* Этот язык ещё не появился на полке...",
-    needsteam:"* Сначала покажи мне оригинальную копию DELTARUNE из Steam.",
-    steamok:"* DELTARUNE выбран! Убедись, что это версия "+STEAM_VERSION+", ладно?",
-    steambad:"* Хмм... это не похоже на DELTARUNE... Проверь файл.",
-    nopicker:"* Ваш браузер не может открывать папки. Используйте Chrome или Edge.",
-    ajustes:"* Открою-ка я ящик настроек...",
-    cacheon:"* Что ж, это хорошо. Сэкономит время в игре.",
-    cacheoff:"* Тогда без кэша.",
-    sair:"* Всему свое время...",
-    done:"* Готово! \n* Распакуй и помести папку 'deltarune/deltarunevita' в 'ux0:/data'. \n* Приятной игры!",
-    about_title: "* ОПИСАНИЕ",
-    talk: {
-      about: "* Я? Я был многим... Игрушкой. Хранителем. Сегодня просто старый лавочник в забытом уголке мира.",
-      project: "* DeltaruneVita — это проект по переносу игры 'Deltarune' на портативную консоль PS Vita. Порт, сделанный с любовью, благодаря таким проектам, как VitaGL и Butterscotch.",
-      wolff: "* Вольфф, также известный как 'WolffsRoom', отвечает за этот порт и этот патчер. Или нет? \n* Хе-хе... я уже и сам не знаю.",
-      butter: "* Butterscotch? Хм... Если я не ошибаюсь, это то, что заставляет шестерни DeltaruneVita вращаться внутри всего. \n* Сладкий и незаменимый."
-    },
-    explain: {
-      CORE: "* Английский и японский языки всегда будут включены в сгенерированные файлы.",
-      PTBR: "* Скачает мод 'PTBR' в файлы, генерируемые патчером.",
-      ES: "* Испанский перевод. Пока недоступен.",
-      DE: "* Немецкий перевод. Пока недоступен.",
-      sfx: "* Включает или выключает звуковые эффекты меню.",
-      music: "* Включает или выключает фоновую музыку магазина.",
-      cache: "* Дополнительный файл кэша для сокращения времени загрузки в игре.",
-      sair: "* Вернуться в предыдущее меню.",
-      about: "* Пусть старый Сим расскажет о себе.",
-      project: "* Об этом порте на PS Vita.",
-      wolff: "* Создатель всего этого.",
-      butter: "* Интересный факт о движке порта."
-    }
-  },
-  ja: {
-    confirm_apply: "* それでは、バージョン v{ver} の {dir}{cache} に {lang} モッドを適用します。\n* 決定しますか？",
-    portrait_tip: "* モバイル端末の場合は、テキストの重なりを防ぐために縦向き（ポートレート）モードでご利用ください。",
-    press_continue: "クリックまたはキーを押して続行します",
-    hint: "↑↓ 移動 &nbsp; Z/Enter 決定 &nbsp; X 戻る",
-    btn_lang: "言語",
-    btn_steam: "ファイル",
-    btn_apply: "適用",
-    btn_ajustes: "設定",
-    btn_talk: "会話",
-    btn_sair: "終了",
-    talk_about: "あなたについて",
-    talk_project: "DeltaruneVitaについて",
-    talk_wolff: "Wolffとは誰？",
-    talk_butter: "Butterscotchとは？",
-    sfx_on: "効果音オン",
-    sfx_off: "効果音オフ",
-    music_on: "BGMオン",
-    music_off: "BGMオフ",
-    cache_label: "キャッシュを含める？",
-    confirm_q: "決定しますか？",
-    yes: "はい",
-    no: "いいえ",
-    base_tag: "  (標準)",
-    soon_tag: "  (近日公開)",
-    lang_names: { CORE: "オリジナル", PTBR: "ポルトガル語 (BR)", ES: "スペイン語", DE: "ドイツ語" },
-    version_line: "* {lang}か、いい選択だね。対応バージョンはv{ver}だよ。\n* さあ、「{btn}」をクリックして続けよう。",
-    mirror_question: "* ダウンロードするサーバーを選んでね：",
-    mirror_manual_option: "手動でダウンロードして添付する",
-    mirror_retry_fail: "* うーん、そこからはダウンロードできなかったよ。別のダウンロード方法を試してみて。",
-    mirror_manual_question: "* どこから翻訳をダウンロードする？",
-    mirror_open_hint: "ダウンロード後、「ダウンロード済みファイルを添付」を選択。",
-    mirror_attach_option: "ダウンロードしたファイルを添付",
-    vassets_question: "* ねえ、Vita専用アセットを添付してほしいんだ。",
-    vassets_download_option: "Vitaアセットをダウンロード",
-    questions: {
-      lang: "* 設定する言語は？",
-      ajustes: "* 何を調整しますか？",
-      talk: "* 何について話す？"
-    },
-    intro:"* ヒッヒッヒ… 異世界からの旅人よ。今日は何を望むのかな？",
-    choose:"* 棚から言語を選びなさい。君の自由だよ…",
-    core:"* 英語と日本語はオリジナル版に含まれているよ。",
-    rem:"* 追加言語なしだね。オリジナルのみが残るよ。",
-    soon:"* その言語はまだ棚に届いていないようだね…",
-    needsteam:"* まずSteam of DELTARUNEオリジナル版を見せておくれ。",
-    steamok:"* DELTARUNEが選択されたよ！バージョン"+STEAM_VERSION+"であることを確認してね。",
-    steambad:"* ふーむ… これはDELTARUNEではないようだね… ファイルを確認しておくれ。",
-    nopicker:"* お使いのブラウザではフォルダを開けません。ChromeかEdgeをご利用ください。",
-    ajustes:"* 設定の引き出しを開けよう…",
-    cacheon:"* それは良いね。プレイ中の時間を節約できるよ。",
-    cacheoff:"* キャッシュなしだね。",
-    sair:"* 全ては然るべき時に…",
-    done:"* 完了だよ！ \n* 'deltarune/deltarunevita' フォルダを 'ux0:/data' に配置してね。 \n* 楽しんで！",
-    about_title: "* 説明",
-    talk: {
-      about: "* 私かい？ かつては色々なものだったよ… おもちゃ。守護者。今は世界の忘れ去られた片隅にいる、ただのしがない老店主さ。",
-      project: "* DeltaruneVitaは、ゲーム『Deltarune』を携帯機PS Vitaに移植するプロジェクトだよ。愛情を込めて作られた移植版で、VitaGLやButterscotchなどのプロジェクトのおかげで実現したんだ。",
-      wolff: "* Wolff… または『WolffsRoom』とも呼ばれるね… この移植版とパッチャーの責任者さ。それとも、違うのかな？ \n* ヒッヒッヒ… もう自分でもよく分からないよ。",
-      butter: "* Butterscotch（バタースコッチ）かい？ ふーむ… 間違っていなければ、DeltaruneVitaの内部で全ての歯車を回しているものだよ。 \n* 甘くて、欠かせないものさ。"
-    },
-    explain: {
-      CORE: "* 生成されるファイルには、英語と日本語が常に含まれるよ。",
-      PTBR: "* パッチャーによって生成されるファイルに『PTBR』モッドをダウンロードするよ。",
-      ES: "* スペイン語翻訳。まだ利用できないよ。",
-      DE: "* ドイツ語翻訳。まだ利用できないよ。",
-      sfx: "* メニューの効果音のオン/オフを切り替えるよ。",
-      music: "* お店のBGMのオン/オフを切り替えるよ。",
-      cache: "* ゲーム中のロード時間を短縮するためのオプションのキャッシュファイルだよ。",
-      sair: "* 前のメニューに戻るよ。",
-      about: "* 年老いたヌイに自分について語らせるよ。",
-      project: "* このPS Vitaへの移植版についてだよ。",
-      wolff: "* これらすべての生みの親についてだよ。",
-      butter: "* 移植版のエンジンに関する豆知識だよ。"
-    }
   }
-};;
+};
 let SEAM_LINES = UI_TEXT.ptbr;
 
 function applyWebLanguage(code) {
@@ -1013,72 +578,73 @@ function applyWebLanguage(code) {
   SEAM_LINES = T;
   $("hint").innerHTML = T.hint;
 }
+
 function versionLine(L){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   const langName = (T.lang_names && T.lang_names[L.code]) || L.label;
   const tmpl = T.version_line || UI_TEXT.ptbr.version_line;
   return tmpl.replace("{lang}", langName).replace("{ver}", PORT_VERSION).replace("{btn}", T.btn_steam || "Arquivos");
 }
+
 function speech(t){ type($("speech"),t); }
 
 function mainItems(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return [
-    {id:"lang", label: T.btn_lang},
-    {id:"steam", label: T.btn_steam},
-    {id:"apply", label: T.btn_apply},
-    {id:"ajustes", label: T.btn_ajustes},
-    {id:"talk", label: T.btn_talk},
+    {id:"lang",   label: T.btn_lang},
+    {id:"steam",  label: T.btn_steam},
+    {id:"apply",  label: T.btn_apply},
+    {id:"ajustes",label: T.btn_ajustes},
+    {id:"talk",   label: T.btn_talk},
   ];
 }
+
 function getSairItem(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return {id:"sair", label: T.btn_sair};
 }
+
 function talkItems(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return [
-    {id:"about",   label: T.talk_about},
-    {id:"project", label: T.talk_project},
-    {id:"wolff",   label: T.talk_wolff},
-    {id:"butter",  label: T.talk_butter},
-    getSairItem(),
-  ];
-}
-function langItems(){
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  return LANGS.map(L=>{
-    let label = (T.lang_names && T.lang_names[L.code]) || L.label;
-    if(L.base) label += (T.base_tag || "  (base)");
-    else if(!L.ready) label += (T.soon_tag || "  (em breve)");
-    return {...L, label};
-  }).concat(getSairItem());
-}
-function settingsItems(){
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  return [
-    {id:"sfx",   label:(sfxOn?T.sfx_off:T.sfx_on)},
-    {id:"music", label:(musicOn?T.music_off:T.music_on)},
-    {id:"cache", label:(cacheOn?"[x] ":"[  ] ")+T.cache_label},
+    {id:"about",  label: T.talk_about},
+    {id:"project",label: T.talk_project},
+    {id:"wolff",  label: T.talk_wolff},
+    {id:"butter", label: T.talk_butter},
     getSairItem(),
   ];
 }
 
-/* pergunta do Seam (vai para a caixa da direita) e explicacao (dialogplus) */
+function langItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return LANGS.map(L=>{
+    let label = (T.lang_names && T.lang_names[L.code]) || L.label;
+    if(L.base) label += (T.base_tag || " (base)");
+    else if(!L.ready) label += (T.soon_tag || " (em breve)");
+    return {...L, label};
+  }).concat(getSairItem());
+}
+
+function settingsItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"sfx",  label:(sfxOn?T.sfx_off:T.sfx_on)},
+    {id:"music",label:(musicOn?T.music_off:T.music_on)},
+    {id:"cache",label:(cacheOn?"[x] ":"[ ] ")+T.cache_label},
+    getSairItem(),
+  ];
+}
+
 function getQuestionText(sc){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return (T.questions && T.questions[sc]) || T.choose;
 }
 
-
-/* pergunta do Seam (vai para a caixa da direita) e explicacao (dialogplus) */
-
-
-
-
-/* ================= progress bar ================= */
 const pbar=$("pbar"), pfill=pbar.firstElementChild;
-function showBar(on){ pbar.style.display=on?"block":"none"; if(!on)pfill.style.width="0"; }
+function showBar(on){
+  pbar.style.display=on?"block":"none";
+  if(!on)pfill.style.width="0";
+}
 function setBar(p){
   const rounded = Math.round(Math.max(0,Math.min(100,p)));
   pfill.style.width=rounded+"%";
@@ -1086,10 +652,6 @@ function setBar(p){
   if(ptext) ptext.textContent = rounded+"%";
 }
 
-/* ================= render =================
-   MAIN:     menu na direita (#options), fala do Seam na esquerda (#speech)
-   SUBMENU:  lista na esquerda (#speech), pergunta do Seam na direita (#options),
-             explicacao no dialogplus (#plus) que sobe de baixo. */
 function mirrorItems(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return MIRRORS.concat([{ id: "manual", label: T.mirror_manual_option || "Baixar e anexar manualmente" }]);
@@ -1098,37 +660,47 @@ function attachItems(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return [{ id: "attach", label: T.mirror_attach_option || "Anexar arquivo baixado" }];
 }
-function vassetsItems(){
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  return [
-    { id: "download", label: T.vassets_download_option || "Baixar assets do Vita" },
-    { id: "attach", label: T.mirror_attach_option || "Anexar arquivo baixado" },
-  ];
-}
+
 function subList(){
-  return screen==="lang"? langItems()
-    : screen==="ajustes"? settingsItems()
-    : screen==="mirror"? mirrorItems()
-    : screen==="mirror-manual"? MIRRORS
-    : screen==="mirror-attach"? attachItems()
-    : screen==="vassets"? vassetsItems()
-    : talkItems();
+  return screen==="lang"? langItems() :
+         screen==="ajustes"? settingsItems() :
+         screen==="mirror"? mirrorItems() :
+         screen==="mirror-manual"? MIRRORS :
+         screen==="mirror-attach"? attachItems() :
+         talkItems();
 }
+
 const RET_INDEX={lang:0, ajustes:3, talk:4};
 function itemKey(it){ return it.code||it.id; }
-function sayQ(t){ type($("options"), t); }   // fala/pergunta do Seam -> caixa direita
+function sayQ(t){ type($("options"), t); }
 
 function renderRows(box,list,onEnter,onClick){
+  const existing = box.querySelectorAll(".opt");
+  if(existing.length === list.length){
+    existing.forEach((row, idx)=>{
+      row.className = "opt" + (idx === active ? " active" : "");
+    });
+    return;
+  }
   box.innerHTML="";
   list.forEach((it,idx)=>{
     const row=document.createElement("div");
     row.className="opt"+(idx===active?" active":"");
-    row.innerHTML='<img class="h" src="assets/hearth1.png">'+it.label;
-    row.onmouseenter=()=>{ if(!busy&&!pending&&active!==idx) onEnter(idx); };
-    row.onclick=(e)=>{ if(busy)return; row.blur(); onClick(idx); };
+    row.innerHTML='<span class="h">♥</span>'+it.label;
+    row.onmouseenter=()=>{
+      if(!busy&&!pending&&active!==idx) onEnter(idx);
+    };
+    const handleClick = (e) => {
+      if(e) { e.preventDefault(); e.stopPropagation(); }
+      if(busy) return;
+      onClick(idx);
+    };
+    row.onclick = handleClick;
+    row.onpointerdown = handleClick;
     box.appendChild(row);
   });
 }
+
 function wrapText(text, maxChars, maxLines) {
   if (!text) return "";
   const words = text.replace(/\n/g, " ").split(" ");
@@ -1160,56 +732,54 @@ function showExplain(){
   const wrapped = wrapText(explainText, 14, 6);
   $("plus").innerHTML='<div class="ptitle">' + (T.about_title || "* SOBRE") + '</div>'+wrapped.replace(/\n/g,"<br>");
 }
-let confirmSel=0;   // 0 = Sim, 1 = Nao
+
+let confirmSel=0;
 function renderConfirm(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  const box=$("options"); box.innerHTML="";
-  const q=document.createElement("div"); q.textContent="* " + (T.confirm_q || "Confirma?"); q.style.marginBottom=".25em";
+  const box=$("options");
+  box.innerHTML="";
+  const q=document.createElement("div");
+  q.textContent="* " + (T.confirm_q || "Confirma?");
+  q.style.marginBottom=".25em";
   box.appendChild(q);
   [(T.yes || "Sim"),(T.no || "Não")].forEach((lbl,idx)=>{
     const row=document.createElement("div");
     row.className="opt"+(idx===confirmSel?" active":"");
-    row.innerHTML='<img class="h" src="assets/hearth1.png">'+lbl;
-    row.onmouseenter=()=>{ if(!busy&&confirmSel!==idx){confirmSel=idx;play(A.move);renderConfirm();} };
-    row.onclick=()=>{ if(busy)return; confirmSel=idx; resolveConfirm(); };
+    row.innerHTML='<span class="h">♥</span>'+lbl;
+    row.onmouseenter=()=>{
+      if(!busy&&confirmSel!==idx){confirmSel=idx;play(A.move);renderConfirm();}
+    };
+    row.onclick=()=>{
+      if(busy)return;
+      confirmSel=idx; resolveConfirm();
+    };
     box.appendChild(row);
   });
 }
+
 function render(){
   const sub = screen!=="main";
-  const showPlus = sub && screen!=="talk" && screen!=="mirror" && screen!=="mirror-manual" && screen!=="mirror-attach" && screen!=="vassets";   // Conversar e telas de mirror/vassets nao usam o dialogplus
+  const showPlusPanel = sub && screen!=="talk" && screen!=="mirror" && screen!=="mirror-manual" && screen!=="mirror-attach";
   $("seam-wrap").classList.toggle("left", sub);
-  $("plusbg").classList.toggle("show", showPlus);
-  $("plus").classList.toggle("show", showPlus);
-  if(!showPlus) $("plus").innerHTML="";       // limpa o texto que ficava la
+  $("plusbg").classList.toggle("show", showPlusPanel);
+  $("plus").classList.toggle("show", showPlusPanel);
+  if(!showPlusPanel) $("plus").innerHTML="";
   if(!sub){
-    renderRows($("options"), mainItems(),
-      idx=>{active=idx;play(A.move);render();},
-      idx=>{active=idx;activate();});
+    renderRows($("options"), mainItems(), idx=>{active=idx;play(A.move);render();}, idx=>{active=idx;activate();});
     return;
   }
-  renderRows($("speech"), subList(),
-    idx=>{active=idx;play(A.move);render();},
-    idx=>{active=idx;activate();});
-  if(showPlus) showExplain();
+  renderRows($("speech"), subList(), idx=>{active=idx;play(A.move);render();}, idx=>{active=idx;activate();});
+  if(showPlusPanel) showExplain();
   if(pending) renderConfirm();
 }
 
-/* ================= interaction ================= */
 function enterSub(which){
-  screen=which; active=0; pending=false; play(A.sel);
-  setSeam("talk"); sayQ(getQuestionText(which)); render();
-}
-function openMirrorForManualAttach(mirrorId){
-  // Sincrono: sem await antes disso, senao o navegador bloqueia o popup.
-  window.open(resolveMirrorUrlSync(mirrorId), '_blank');
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  screen = "mirror-attach";
-  active = 0;
-  setSeam("talk");
+  screen=which; active=0; pending=false;
+  play(A.sel); setSeam("talk");
+  sayQ(getQuestionText(which));
   render();
-  sayQ(T.mirror_open_hint || "Quando baixar, selecione 'Anexar arquivo baixado'.");
 }
+
 function activate(){
   if(screen==="main"){
     const it=MAIN[active];
@@ -1220,104 +790,73 @@ function activate(){
     else if(it.id==="talk") enterSub("talk");
     return;
   }
-  // submenu
   if(pending) return resolveConfirm();
   if(screen === "mirror") {
     play(A.sel);
     const chosen = mirrorItems()[active];
     if(chosen.id === "manual") {
       const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-      screen = "mirror-manual";
-      active = 0;
-      setSeam("talk");
-      render();
+      screen = "mirror-manual"; active = 0;
+      setSeam("talk"); render();
       sayQ(T.mirror_manual_question || "* De onde você quer baixar a tradução?");
       return;
     }
-    if(chosen.manualOnly) {
-      // Mega e Google Drive nunca servem o zip direto (Mega exige descriptografia
-      // em JS, Google Drive devolve uma pagina HTML de confirmacao) - pular a
-      // tentativa automatica e ir direto pro fluxo manual com esse mirror.
-      openMirrorForManualAttach(chosen.id);
-      return;
-    }
-    screen = "main";
-    toSingle();
-    generate(chosen.id);
+    screen = "main"; toSingle(); generate(chosen.id);
     return;
   }
   if(screen === "mirror-manual") {
     play(A.sel);
-    openMirrorForManualAttach(MIRRORS[active].id);
+    const mirrorId = MIRRORS[active].id;
+    window.open(resolveMirrorUrlSync(mirrorId), '_blank');
+    const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+    screen = "mirror-attach"; active = 0;
+    setSeam("talk"); render();
+    sayQ(T.mirror_open_hint || "Quando baixar, selecione 'Anexar arquivo baixado'.");
     return;
   }
   if(screen === "mirror-attach") {
-    play(A.sel);
-    attachManualFile();
-    return;
-  }
-  if(screen === "vassets") {
-    play(A.sel);
-    const chosen = vassetsItems()[active];
-    if(chosen.id === "download") {
-      // Sincrono: sem await antes disso, senao o navegador bloqueia o popup.
-      window.open(VITA_ASSETS_URL, '_blank');
-      return;
-    }
-    attachVitaAssets();
+    play(A.sel); attachManualFile();
     return;
   }
   const it=subList()[active];
   if(it.id==="sair") return exitSub();
-  if(screen==="talk"){ return talkSpeak(it.id); }   // resultado no dialog1
+  if(screen==="talk"){ return talkSpeak(it.id); }
   if(screen==="lang"){
     if(it.base){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.core); return; }
     if(!it.ready){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.soon); return; }
   }
-  pending=true; confirmSel=0; play(A.sel); setSeam("talk"); render();   // Confirma? Sim ou Nao
+  pending=true; confirmSel=0; play(A.sel); setSeam("talk"); render();
 }
+
 function resolveConfirm(){
-  if(confirmSel===1) return cancelConfirm();   // Nao
+  if(confirmSel===1) return cancelConfirm();
   pending=false; play(A.sel);
-  
   if(pendingAction === "apply") {
     pendingAction = null;
-    if(confirmSel === 0) { // Sim / Yes
+    if(confirmSel === 0) {
       setSeam("laugh", 1200);
       if(selectedExtra === "PTBR") {
         const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-        screen = "mirror";
-        active = 3; // Default to Archive.org
-        setSeam("talk");
-        render();
+        screen = "mirror"; active = 3;
+        setSeam("talk"); render();
         sayQ(T.mirror_question || "* Selecione o servidor para o download:");
-      } else {
-        toSingle();
-        generate();
-      }
-    } else { // Não / No
-      setSeam("idle");
-      speech(SEAM_LINES.choose);
-      render();
-    }
+      } else { toSingle(); generate(); }
+    } else { setSeam("idle"); speech(SEAM_LINES.choose); render(); }
     return;
   }
-  
   const it=subList()[active];
   if(screen==="lang"){
     const L=LANGS[active];
     const ret = RET_INDEX[screen] ?? 0;
     if(selectedExtra===L.code){
-      selectedExtra=null;
-      screen="main"; active=ret; pending=false;
+      selectedExtra=null; screen="main"; active=ret; pending=false;
       setSeam("idle"); render(); speech(SEAM_LINES.rem);
     } else {
-      selectedExtra=L.code;
-      screen="main"; active=ret; pending=false;
+      selectedExtra=L.code; screen="main"; active=ret; pending=false;
       setSeam("laugh",1200); render(); speech(versionLine(L));
     }
     return;
-  }else{
+  } else {
     if(it.id==="sfx") sfxOn=!sfxOn;
     else if(it.id==="music"){ musicOn=!musicOn; musicOn?startMusic():stopMusic(); }
     else if(it.id==="cache") cacheOn=!cacheOn;
@@ -1326,611 +865,342 @@ function resolveConfirm(){
   }
   render();
 }
+
 function cancelConfirm(){
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  pending=false; 
+  pending=false;
   if(pendingAction === "apply") {
-    pendingAction = null;
-    setSeam("idle");
-    speech(SEAM_LINES.choose);
-    render();
-    return;
+    pendingAction = null; setSeam("idle"); speech(SEAM_LINES.choose); render(); return;
   }
   play(A.swing); setSeam("idle");
-  sayQ((T.questions && T.questions[screen]) || T.choose); render();
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  sayQ((T.questions && T.questions[screen]) || T.choose);
+  render();
 }
-/* Conversar: resultado ocupa o dialog1 (caixa unica); ao terminar volta as opcoes */
+
 let talking=false, talkTimer=null;
 function talkSpeak(id){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   play(A.sel); setSeam("laugh",1600); talking=true;
-  showDialog("single");                        // mostra dialog1, esconde speech/options
+  showDialog("single");
   $("plus").classList.remove("show"); $("plusbg").classList.remove("show");
-  $("seam-wrap").classList.remove("left");     // Seam volta ao centro
+  $("seam-wrap").classList.remove("left");
   const text = (T.talk && T.talk[id]) || (UI_TEXT.ptbr.talk && UI_TEXT.ptbr.talk[id]) || "";
   type($("single"), text, ()=>{ talkTimer=setTimeout(returnToTalk,2600); });
 }
+
 function returnToTalk(){
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   clearTimeout(talkTimer); talking=false;
   showDialog("split"); screen="talk"; pending=false;
-  sayQ((T.questions && T.questions.talk) || T.choose); render();
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  sayQ((T.questions && T.questions.talk) || T.choose);
+  render();
 }
+
 function exitSub(){
   play(A.sel); setSeam("idle");
   const ret = RET_INDEX[screen] ?? 0;
   screen="main"; active=ret; pending=false;
   render(); speech(SEAM_LINES.sair);
 }
+
 function back(){
   if(screen==="main"){ play(A.swing); return; }
-  if(screen==="mirror"){
-    screen="main";
-    active=0;
-    setSeam("idle");
-    speech(SEAM_LINES.choose);
-    render();
-    return;
-  }
+  if(screen==="mirror"){ screen="main"; active=0; setSeam("idle"); speech(SEAM_LINES.choose); render(); return; }
   if(screen==="mirror-manual"){
     const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-    screen="mirror";
-    active=0;
-    setSeam("talk");
-    render();
-    sayQ(T.mirror_question || "* Selecione o servidor para o download:");
-    return;
+    screen="mirror"; active=0; setSeam("talk"); render();
+    sayQ(T.mirror_question || "* Selecione o servidor para o download:"); return;
   }
   if(screen==="mirror-attach"){
     const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-    screen="mirror-manual";
-    active=0;
-    setSeam("talk");
-    render();
-    sayQ(T.mirror_manual_question || "* De onde você quer baixar a tradução?");
-    return;
+    screen="mirror-manual"; active=0; setSeam("talk"); render();
+    sayQ(T.mirror_manual_question || "* De onde você quer baixar a tradução?"); return;
   }
-  if(screen==="vassets"){
-    screen="main";
-    active=0;
-    setSeam("idle");
-    speech(SEAM_LINES.choose);
-    render();
-    return;
-  }
-  if(pending) return cancelConfirm();
   exitSub();
 }
 
-let doneState=false;
-document.addEventListener("keydown",e=>{
-  if(e.key === "Tab") { e.preventDefault(); return; }
-  if(busy || inTransition) { e.preventDefault(); return; }
-  if(e.repeat) { e.preventDefault(); return; }
-  if(e.key === " " || e.key === "Spacebar") { e.preventDefault(); }
-  if(inLangScreen){
-    e.preventDefault();
-    if(e.key==="ArrowDown"){ langActive=(langActive+1)%7; play(A.move); renderLangScreen(); return; }
-    if(e.key==="ArrowUp"){ langActive=(langActive+6)%7; play(A.move); renderLangScreen(); return; }
-    if(e.key==="Enter"||e.key==="z"||e.key==="Z"){ selectLangOption(langActive); return; }
-    return;
-  }
-  if(typeState){ e.preventDefault(); skipType(); return; }     // adianta a fala do Seam
-  if(introPlaying){
-      e.preventDefault();
-      if(introTimer){
-          clearTimeout(introTimer); introTimer=null; introPlaying=false;
-          showDialog("split"); speech(SEAM_LINES.choose); render(); resetIdle();
-      }
-      return;
-  }
-  if(doneState){
-      e.preventDefault();
-      if(["Enter", "z", "Z", "x", "X"].includes(e.key)){
-          doneState=false;
-          showDialog("split"); screen="main"; active=0;
-          speech(SEAM_LINES.choose); render(); resetIdle();
-      }
-      return;
-  }
-  if(busy){ e.preventDefault(); return; }
-  resetIdle();
-  if(talking){ e.preventDefault(); returnToTalk(); return; }   // pular resultado do Conversar
-  if(["ArrowDown","ArrowUp","ArrowLeft","ArrowRight"].includes(e.key)){ e.preventDefault();
-    if(pending){ confirmSel=(confirmSel+1)%2; play(A.move); renderConfirm(); return; }
-    if(e.key==="ArrowLeft"||e.key==="ArrowRight") return;
-    const n = screen==="main"? mainItems().length : subList().length;
-    active=(active+(e.key==="ArrowDown"?1:n-1))%n; play(A.move); render(); }
-  else if(e.key==="Enter"||e.key==="z"||e.key==="Z"){ e.preventDefault(); activate(); }
-  else if(e.key==="x"||e.key==="X"){ e.preventDefault(); back(); }
-});
-
-/* ================= File System Access + SHA-256 ================= */
-async function loadManifest(){ 
-  if(!manifest){ 
-    manifest=typeof manifestData!=='undefined'?manifestData:null; 
-    if(manifest) PORT_VERSION=manifest.port_version||PORT_VERSION; 
-  } 
-  return manifest; 
-}
-async function sha256(buf){ const h=await crypto.subtle.digest("SHA-256",buf);
-  return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
-async function getFile(dir,rel){
-  if(dir.isZip){
-    let zf=dir.zip.file(rel);
-    if(!zf){
-      const keys=Object.keys(dir.zip.files);
-      const match=keys.find(k=>k.endsWith(rel)||k.toLowerCase().endsWith(rel.toLowerCase()));
-      if(match) zf=dir.zip.file(match);
-    }
-    if(!zf) throw new Error("Missing in zip: "+rel);
-    const buf=await zf.async("arraybuffer");
-    return { size: buf.byteLength, arrayBuffer: async()=>buf };
-  }
-  const p=rel.split("/"); let h=dir;
-  for(let i=0;i<p.length;i++){
-    const part=p[i].toLowerCase();
-    let found=null;
-    for await(const entry of h.values()){
-      if(entry.name.toLowerCase()===part){
-        found=entry;
-        break;
-      }
-    }
-    if(!found) throw new Error("Not found: "+rel);
-    if(i===p.length-1){
-      if(found.kind!=="file") throw new Error("Not a file: "+rel);
-      return await found.getFile();
-    }
-    if(found.kind!=="directory") throw new Error("Not a dir: "+rel);
-    h=found;
-  }
-}
-
-async function pickSteam(){
-  play(A.sel);
-  if(!window.showDirectoryPicker){
-    setSeam("oh",1800);
-    speech("* Você gosta de maças, hein? Vai ser preciso compactar o arquivo antes de me enviar.");
-    $("zipInput").click();
-    return;
-  }
-  try{
-    let dir=await window.showDirectoryPicker({id:"deltarune-steam"});
-    try{ await dir.getFileHandle("DELTARUNE.exe"); }
-    catch(_){ dir=await dir.getDirectoryHandle("DELTARUNE"); }
-    await dir.getFileHandle("DELTARUNE.exe");
-    await dir.getFileHandle("data.win");
-    steamHandle=dir; setSeam("laugh",900); speech(SEAM_LINES.steamok);
-  }catch(err){ steamHandle=null; setSeam("oh",900); speech(SEAM_LINES.steambad); }
-  render();
-}
-
-$("zipInput").addEventListener("change", async (e)=>{
-  const file=e.target.files[0];
-  if(!file) return;
-  try{
-    setLine($("speech"), "* Lendo o arquivo .zip...");
-    const zip=await JSZip.loadAsync(file);
-    const keys=Object.keys(zip.files);
-    const hasExe=keys.some(k=>k.toLowerCase().endsWith("deltarune.exe"));
-    const hasData=keys.some(k=>k.toLowerCase().endsWith("data.win"));
-    if(!hasExe||!hasData) throw new Error("Zip invalido");
-    steamHandle={ isZip:true, zip:zip, name:file.name };
-    setSeam("laugh",900); speech(SEAM_LINES.steamok);
-  }catch(err){
-    steamHandle=null; setSeam("oh",900); speech(SEAM_LINES.steambad);
-  }
-  render();
-});
-
-/* ================= Aplicar (comenta + gera no dialog1) ================= */
-function toSingle(){                 // troca para o dialog1 (caixa unica)
+function toSingle(){
   showDialog("single");
   $("plus").classList.remove("show"); $("plusbg").classList.remove("show");
   $("seam-wrap").classList.remove("left");
 }
-async function apply(){
-  if(!steamHandle){ play(A.swing); setSeam("oh",900); speech(SEAM_LINES.needsteam); return; }
-  if(!vitaAssetsZip){
-    const m = await loadManifest();
-    if(m && manifestNeedsVitaAssets(m)){
-      const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-      screen = "vassets";
-      active = 0;
-      setSeam("talk");
-      render();
-      sayQ(T.vassets_question || "* Ei, eu preciso que anexe os assets exclusivos do Vita.");
-      return;
+function toSplit(){
+  showDialog("split");
+  $("plus").classList.add("show"); $("plusbg").classList.add("show");
+  $("seam-wrap").classList.add("left");
+}
+
+let steamFilesMap = new Map();
+async function pickSteam(){
+  play(A.sel);
+  if(window.showDirectoryPicker){
+    try{
+      const handle = await window.showDirectoryPicker({mode:"read"});
+      const dataWin = await findDataWinInHandle(handle);
+      if(!dataWin){ setSeam("oh",1500); speech(SEAM_LINES.steambad); return; }
+      steamHandle = handle; steamFilesMap = new Map();
+      setBar(0); showBar(true);
+      await scanDirectoryHandle(handle, "", steamFilesMap);
+      showBar(false); setSeam("laugh",1500);
+      speech(SEAM_LINES.steamok);
+    } catch(e){ setSeam("idle"); speech(SEAM_LINES.choose); }
+  } else {
+    setSeam("oh",1200); speech(SEAM_LINES.nopicker);
+  }
+}
+
+async function findDataWinInHandle(handle){
+  for await (const [name, entry] of handle.entries()){
+    if(entry.kind === "file" && name.toLowerCase() === "data.win") return entry;
+    if(entry.kind === "directory"){
+      const sub = await findDataWinInHandle(entry);
+      if(sub) return sub;
     }
   }
+  return null;
+}
+
+async function scanDirectoryHandle(dirHandle, pathPrefix, fileMap){
+  for await (const [name, entry] of dirHandle.entries()){
+    const relPath = pathPrefix ? pathPrefix + "/" + name : name;
+    if(entry.kind === "file"){ fileMap.set(relPath.toLowerCase(), entry); }
+    else if(entry.kind === "directory"){ await scanDirectoryHandle(entry, relPath, fileMap); }
+  }
+}
+
+function apply(){
+  if(!steamHandle){ play(A.swing); setSeam("oh",1200); speech(SEAM_LINES.needsteam); return; }
+  play(A.sel); pendingAction = "apply"; confirmSel = 0;
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  const L=selectedExtra?LANGS.find(x=>x.code===selectedExtra):null;
-  const langName=L? ((T.lang_names && T.lang_names[L.code]) || L.label) : ((T.lang_names && T.lang_names.CORE) || "Original");
-  const dir="'"+steamHandle.name+"'";
-  
-  let qText = T.confirm_apply || UI_TEXT.ptbr.confirm_apply;
-  qText = qText.replace("{lang}", langName)
-               .replace("{ver}", PORT_VERSION)
-               .replace("{dir}", dir)
-               .replace("{cache}", cacheOn ? " (+cache)" : "");
-
-  play(A.sel); setSeam("talk");
-  pending = true;
-  pendingAction = "apply";
-  confirmSel = 0; // default to Yes (Sim)
-  
-  speech(qText);
-  renderConfirm();
+  const extraName = selectedExtra ? ((T.lang_names && T.lang_names[selectedExtra]) || selectedExtra) : "Original (EN/JP)";
+  const cacheText = cacheOn ? " com cache" : "";
+  const tmpl = T.confirm_apply || SEAM_LINES.confirm_apply;
+  const promptText = tmpl.replace("{lang}", extraName).replace("{ver}", PORT_VERSION).replace("{dir}", steamHandle.name).replace("{cache}", cacheText);
+  setSeam("talk"); speech(promptText); renderConfirm();
 }
 
-async function finishGeneration(m, modZip){
-  const el=$("single");
-  try{
-    // FASE 2 — verificar a Steam
-    await typeAsync(el,"* Verificando os arquivos da Steam...");
-    const req=Object.entries(m.required_sources||{}); let bad=0;
-    for(let i=0;i<req.length;i++){
-      const [rel,exp]=req[i];
-      if(rel.toLowerCase().endsWith('.ini') || rel.toLowerCase().endsWith('.dll')) continue;
-      try{ const f=await getFile(steamHandle,rel);
-        if(f.size!==exp.size) throw 0;
-        if(await sha256(await f.arrayBuffer())!==exp.sha256) throw 0;
-      }catch(_){ bad++; console.error("Mismatch: " + rel); }
-      setBar((i+1)/req.length*100);
-      if(i%2===0||i===req.length-1){ setLine(el,"* Verificando Steam... "+(i+1)+"/"+req.length+" (SHA-256)"); await sleep(0); }
-    }
-    if(bad){ showBar(false); setSeam("oh",1800);
-      await typeAsync(el,"* "+bad+" arquivo(s) não conferem.\n* Não posso continuar assim, viajante.\n* Por favor, atualize seu jogo na Steam e confira se a versão é "+STEAM_VERSION+".");
-      doneState=true;
-      busy=false; return; }
-
-    // FASE 3 — aplicar o patch
-    await typeAsync(el,"* Aplicando o patch nos arquivos...");
-    const zip = new JSZip();
-    const outRoot = (m.output_folder || "deltarune") + "/";
-    const wanted=m.files.filter(r=>{ const mm=/deltarunevita\/mods\/([^/]+)\//.exec(r.output);
-      return mm? (selectedExtra===mm[1]) : true; });
-    let copies=0,embeds=0,unsupported=0;
-    for(let i=0;i<wanted.length;i++){
-      let fObj = wanted[i];
-      if(fObj.mode==="copy"){
-        copies++;
-        try {
-          const f = await getFile(steamHandle, fObj.source);
-          const arrayBuf = await f.arrayBuffer();
-          zip.file(outRoot+fObj.output, arrayBuf);
-        } catch(e) { console.error("Faltando:", fObj.source); }
-      } else if(fObj.mode==="embed"){
-        embeds++;
-        try {
-          if(!vitaAssetsZip) throw new Error("assets do Vita nao anexados");
-          const entry = vitaAssetsZip.file(fObj.output);
-          if(!entry) throw new Error("nao encontrado no zip de assets: "+fObj.output);
-          zip.file(outRoot+fObj.output, await entry.async("arraybuffer"));
-        } catch(e) { console.error("Falha ao buscar asset embutido:", fObj.output, e); }
-      } else {
-        // mode "patch" real (diff contra um arquivo Steam) — o Web Patcher nao
-        // aplica bsdiff; hoje nenhum registro do manifest usa esse modo, mas
-        // reportamos em vez de gerar silenciosamente um arquivo faltante.
-        unsupported++;
-        console.error("Modo 'patch' nao suportado pelo Web Patcher:", fObj.output);
-      }
-      setBar((i+1)/wanted.length*100);
-      if(i%15===0||i===wanted.length-1){ setLine(el,"* Aplicando patch... "+(i+1)+"/"+wanted.length+" arquivos"); await sleep(5); }
-    }
-
-    // FASE 3b — descompactar a traducao baixada dentro de deltarunevita/mods/PTBR
-    if(modZip){
-      setLine(el, "* Copiando arquivos da tradução...");
-      const modEntries = Object.values(modZip.files).filter(f=>!f.dir);
-      const hasPtbrRoot = modEntries.some(f=>/^ptbr[\/\\]/i.test(f.name));
-      for(const entry of modEntries){
-        let rel = hasPtbrRoot ? entry.name.replace(/^ptbr[\/\\]/i, "") : entry.name;
-        rel = rel.replace(/game\.droid$/i, "data.win");
-        const buf = await entry.async("arraybuffer");
-        zip.file(outRoot+"deltarunevita/mods/PTBR/"+rel, buf);
-      }
-    }
-
-    console.log("lang:",selectedExtra||"EN/JP","| copy:",copies,"| embed:",embeds,"| patch(unsupported):",unsupported,"| cache:",cacheOn);
-
-    showBar(true); setBar(100);
-    setLine(el,"* Empacotando arquivos (ZIP)... Isso pode demorar.");
-    await sleep(100);
-
-    const blob = await zip.generateAsync({type:"blob"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "deltarune_vita_patch.zip";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-
-    showBar(false);
-    setSeam("laugh",2400);
-    type(el,SEAM_LINES.done);
-    doneState = true;
-  }catch(err){
-    showBar(false); setSeam("oh",1800);
-    type(el,"* Algo deu errado ao gerar.\n* "+((err&&err.message)||err));
-    doneState = true;
-  }
-  busy=false;
+function attachManualFile(){
+  const input = $("zipInput");
+  input.value = "";
+  input.onchange = async () => {
+    if(!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    screen = "main"; toSingle();
+    generate(null, file);
+  };
+  input.click();
 }
 
-async function generate(chosenMirror){
-  if(busy||!steamHandle) return;
-  busy=true;
-  const el=$("single");
-  showBar(true); setBar(0);
-  try{
-    // manifesto: em file:// o fetch e bloqueado (CORS)
-    let m=await loadManifest();
-    if(!m) throw new Error("Não foi possível carregar o manifest.json (CORS ou erro de rede). Você abriu como file://? Tente rodar um servidor web local.");
-
-    // FASE 1 — baixar idioma
-    let modZip = null;
-    if(selectedExtra === "PTBR" && chosenMirror){
+async function generate(mirrorId, attachedZipFile){
+  busy = true; setBar(0); showBar(true);
+  try {
+    manifest = manifestData;
+    let extraZip = attachedZipFile || null;
+    if(selectedExtra === "PTBR" && !extraZip){
+      setLine($("single"), "* Baixando tradução em português...");
       const modsList = await fetchModsList();
-      const dlUrl = modsList.PTBR[MIRROR_NAMES[chosenMirror]] || modsList.PTBR.Archive;
-
-      await typeAsync(el, "* Iniciando download da tradução...");
-      let zipBlob = null;
+      const mirrorName = MIRROR_NAMES[mirrorId] || "Archive";
+      const mirrorUrl = (modsList.PTBR && modsList.PTBR[mirrorName]) || FALLBACK_MODS_LIST.PTBR.Archive;
       try {
-        const response = await fetch(dlUrl);
-        if(!response.ok) throw new Error();
-        const reader = response.body.getReader();
-        const contentLength = +response.headers.get('Content-Length') || 229429248;
-        let receivedLength = 0;
-        let chunks = [];
-        while(true) {
-          const {done, value} = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          receivedLength += value.length;
-          const p = Math.floor((receivedLength / contentLength) * 100);
-          setBar(p);
-          setLine(el, "* Baixando tradução... " + p + "%  (" + (receivedLength/1024/1024).toFixed(1) + " / " + (contentLength/1024/1024).toFixed(1) + " MB)");
+        let resp = await fetch("/proxy_download?url=" + encodeURIComponent(mirrorUrl));
+        if(!resp.ok){
+          resp = await fetch(mirrorUrl);
         }
-        zipBlob = new Blob(chunks);
-      } catch (err) {
-        // Sem rede/CORS: volta para a tela de mirrors (com a opcao manual) em vez
-        // de travar aqui. Retomar o download automatico de novo, ou ir manual.
-        console.error("Fetch failed, back to mirror picker", err);
-        busy = false;
-        showBar(false);
-        setSeam("oh", 1800);
+        if(!resp.ok) throw new Error("Download HTTP error " + resp.status);
+        const blob = await resp.blob();
+        extraZip = new File([blob], "PTBR.zip");
+      } catch(e) {
+        showBar(false); busy = false;
         const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-        screen = "mirror";
-        active = 0;
-        showDialog("split");
-        render();
+        screen = "mirror-manual"; active = 0; toSplit(); render();
         sayQ(T.mirror_retry_fail || "* Puts, não consegui baixar por aqui. Tente outra opção de download.");
         return;
       }
-
-      setLine(el, "* Carregando arquivo zip da tradução...");
-      modZip = await JSZip.loadAsync(zipBlob);
-    } else if(selectedExtra){
-      const L=LANGS.find(x=>x.code===selectedExtra);
-      await typeAsync(el,"* Baixando o idioma "+L.label+"...");
-      for(let p=0;p<=100;p+=4){ setBar(p);
-        setLine(el,"* Baixando "+L.label+"... "+p+"%  ("+(L.size*p/100).toFixed(1)+" / "+L.size.toFixed(1)+" MB)");
-        await sleep(45); }
-    }
-    if(cacheOn){
-      await typeAsync(el,"* Baixando o cache...");
-      for(let p=0;p<=100;p+=8){ setBar(p); setLine(el,"* Baixando o cache... "+p+"%"); await sleep(35); }
     }
 
-    await finishGeneration(m, modZip);
-  }catch(err){
-    showBar(false); setSeam("oh",1800);
-    type(el,"* Algo deu errado ao gerar.\n* "+((err&&err.message)||err));
-    doneState = true;
-    busy=false;
-  }
-}
-
-async function continueWithManualZip(file){
-  if(busy||!steamHandle) return;
-  busy=true;
-  const el=$("single");
-  showBar(true); setBar(0);
-  try{
-    let m=await loadManifest();
-    if(!m) throw new Error("Não foi possível carregar o manifest.json.");
-    setLine(el, "* Carregando arquivo zip da tradução...");
-    const modZip = await JSZip.loadAsync(file);
-    await finishGeneration(m, modZip);
-  }catch(err){
-    showBar(false); setSeam("oh",1800);
-    type(el,"* Algo deu errado ao gerar.\n* "+((err&&err.message)||err));
-    doneState = true;
-    busy=false;
-  }
-}
-
-let vassetsFileInput = null;
-function attachVitaAssets(){
-  if(!vassetsFileInput){
-    vassetsFileInput = document.createElement("input");
-    vassetsFileInput.type = "file";
-    vassetsFileInput.accept = ".zip";
-    vassetsFileInput.style.display = "none";
-    document.body.appendChild(vassetsFileInput);
-  }
-  vassetsFileInput.value = "";
-  vassetsFileInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if(file) loadVitaAssetsZip(file);
-  };
-  vassetsFileInput.click(); // sincrono, disparado direto pelo Enter/clique do usuario
-}
-async function loadVitaAssetsZip(file){
-  try{
-    const zip = await JSZip.loadAsync(file);
-    vitaAssetsZip = zip;
-    screen = "main"; active = 0;
-    setSeam("laugh", 900);
-    render();
-    speech(SEAM_LINES.choose);
-    apply(); // retoma o fluxo normal de Aplicar
-  }catch(e){
-    setSeam("oh", 1200);
-    render();
-    sayQ("* " + ((e&&e.message)||e));
-  }
-}
-
-let manualFileInput = null;
-function attachManualFile(){
-  if(!manualFileInput){
-    manualFileInput = document.createElement("input");
-    manualFileInput.type = "file";
-    manualFileInput.accept = ".zip";
-    manualFileInput.style.display = "none";
-    document.body.appendChild(manualFileInput);
-  }
-  manualFileInput.value = "";
-  manualFileInput.onchange = (e) => {
-    const file = e.target.files[0];
-    if(file){
-      toSingle();
-      continueWithManualZip(file);
+    setLine($("single"), "* Processando arquivos do DELTARUNE...");
+    const zip = new JSZip();
+    const totalFiles = manifest.files.length;
+    for(let i = 0; i < totalFiles; i++){
+      const fileRec = manifest.files[i];
+      setBar((i / totalFiles) * 100);
+      const outPath = manifest.output_folder + "/" + fileRec.output;
+      if(fileRec.mode === "embed"){
+        const res = await fetch("embedded/" + fileRec.output);
+        const buf = await res.arrayBuffer();
+        zip.file(outPath, buf);
+      } else if(fileRec.mode === "copy"){
+        const steamEntry = steamFilesMap.get(fileRec.source.toLowerCase());
+        if(!steamEntry) throw new Error("Arquivo Steam ausente: " + fileRec.source);
+        const f = await steamEntry.getFile();
+        const buf = await f.arrayBuffer();
+        zip.file(outPath, buf);
+      } else if(fileRec.mode === "browser_patch"){
+        const steamEntry = steamFilesMap.get(fileRec.source.toLowerCase());
+        if(!steamEntry) throw new Error("Arquivo Steam ausente: " + fileRec.source);
+        const f = await steamEntry.getFile();
+        const origBuf = new Uint8Array(await f.arrayBuffer());
+        const patchRes = await fetch("patch_data/patches/" + fileRec.patch);
+        if(!patchRes.ok) throw new Error("Patch ausente: " + fileRec.patch);
+        const patchBuf = new Uint8Array(await patchRes.arrayBuffer());
+        zip.file(outPath, await applyBrowserPatch(origBuf, patchBuf));
+      }
     }
-  };
-  manualFileInput.click(); // sincrono, disparado direto pelo Enter/clique do usuario
+
+    if(extraZip){
+      setLine($("single"), "* Aplicando mod de idioma extra...");
+      const modZip = await JSZip.loadAsync(extraZip);
+      for(const [relativePath, zipEntry] of Object.entries(modZip.files)){
+        if(!zipEntry.dir){
+          const buf = await zipEntry.async("arraybuffer");
+          zip.file(manifest.output_folder + "/" + relativePath, buf);
+        }
+      }
+    }
+
+    setLine($("single"), "* Compactando arquivos finais...");
+    const content = await zip.generateAsync({type:"blob"}, (metadata) => {
+      setBar(metadata.percent);
+    });
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(content);
+    link.download = "DeltaruneVita_v" + PORT_VERSION + ".zip";
+    link.click();
+
+    showBar(false); setSeam("laugh", 2000);
+    setLine($("single"), SEAM_LINES.done);
+  } catch(e) {
+    console.error("Error generating patch", e);
+    showBar(false); setSeam("oh", 2000);
+    setLine($("single"), "* Ocorreu um erro durante o processamento. Verifique o console.");
+  } finally { busy = false; }
 }
 
-
-
-/* ================= ocioso (Seam cutuca) ================= */
-let idleTimer=null;
-const IDLE_MS=45000;
-const NUDGES=[
-  "* Vamos, não tenho o dia todo...",
-  "* Estou esperando, viajante.",
-  "* Hm? Ainda está aí?",
-  "* Decida-se... eu tenho outras coisas para fazer, sabe?",
-];
-function resetIdle(){
-  clearTimeout(idleTimer);
-  if(!shopStarted||busy||talking||introPlaying) return;
-  idleTimer=setTimeout(()=>{
-    if(busy||talking||introPlaying) return;
-    setSeam("talk");
-    const t=NUDGES[Math.floor(Math.random()*NUDGES.length)];
-    (screen==="main")? speech(t) : sayQ(t);
-    resetIdle();
-  }, IDLE_MS);
-}
-window.addEventListener("click",resetIdle);
-window.addEventListener("mousemove",resetIdle);
-
-let introPlaying=false, introTimer=null;
-
-// clique adianta a fala do Seam (menos ao clicar numa opção do menu)
-window.addEventListener("click",e=>{
-  if(busy || inTransition) return;
-  if(typeState && !e.target.closest(".opt")) { skipType(); return; }
-  if(introPlaying && introTimer) {
-      clearTimeout(introTimer); introTimer=null; introPlaying=false;
-      showDialog("split"); speech(SEAM_LINES.choose); render(); resetIdle();
+async function applyBrowserPatch(oldBuf, compressedPatch){
+  if(typeof DecompressionStream === "undefined")
+    throw new Error("Seu navegador nao oferece descompactacao gzip. Use Edge ou Chrome atualizado.");
+  const stream = new Blob([compressedPatch]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const patchBuf = new Uint8Array(await new Response(stream).arrayBuffer());
+  if(patchBuf.length < 20 || String.fromCharCode(...patchBuf.slice(0,4)) !== "BSP1")
+    throw new Error("Formato de patch invalido");
+  const view = new DataView(patchBuf.buffer, patchBuf.byteOffset, patchBuf.byteLength);
+  const newSize = view.getUint32(4, true), count = view.getUint32(8, true);
+  const diffLen = view.getUint32(12, true), extraLen = view.getUint32(16, true);
+  let ctrlPos = 20, diffPos = ctrlPos + count * 12, extraPos = diffPos + diffLen;
+  if(extraPos + extraLen !== patchBuf.length) throw new Error("Patch truncado");
+  const out = new Uint8Array(newSize);
+  let oldPos = 0, newPos = 0;
+  for(let i=0;i<count;i++){
+    const x=view.getInt32(ctrlPos,true), y=view.getInt32(ctrlPos+4,true), z=view.getInt32(ctrlPos+8,true);
+    ctrlPos += 12;
+    if(x<0 || y<0 || newPos+x+y>out.length || diffPos+x>extraPos || extraPos+y>patchBuf.length)
+      throw new Error("Patch fora dos limites");
+    for(let j=0;j<x;j++){
+      const base = (oldPos+j>=0 && oldPos+j<oldBuf.length) ? oldBuf[oldPos+j] : 0;
+      out[newPos+j] = (base + patchBuf[diffPos+j]) & 255;
+    }
+    newPos += x; oldPos += x; diffPos += x;
+    out.set(patchBuf.subarray(extraPos, extraPos+y), newPos);
+    newPos += y; extraPos += y; oldPos += z;
   }
-});
+  if(newPos !== out.length) throw new Error("Tamanho final do patch invalido");
+  return out;
+}
 
-/* ================= language screen & boot ================= */
-let inLangScreen = false, langActive = 0;
-const LANG_CODES = ["ptbr", "es", "en", "fr", "de", "ru", "ja"];
-
-function renderLangScreen(){
+/* ================= Splash & Web Language Selection Flow ================= */
+function renderWebLangScreen() {
   const items = document.querySelectorAll("#lang-items .item");
-  const labels = ["PORTUGUESE", "SPANISH", "ENGLISH", "FRENCH", "GERMANY", "RUSSIAN", "JAPONES"];
-  items.forEach((el, idx) => {
-    if (idx === langActive) {
-      el.classList.add("active");
-      el.textContent = labels[idx];
-    } else {
-      el.classList.remove("active");
-      el.textContent = labels[idx];
-    }
-    el.onmouseenter = () => {
-      if(langActive !== idx){ langActive = idx; play(A.move); renderLangScreen(); }
-    };
-    el.onclick = (e) => { el.blur(); selectLangOption(idx); };
+  items.forEach((item, idx) => {
+    item.classList.toggle("active", idx === webLangIdx);
   });
 }
 
-function selectLangOption(idx){
-  if(!inLangScreen) return;
-  inLangScreen = false;
-  inTransition = true;
-  langActive = idx;
-  renderLangScreen();
-  play(A.sel);
-  if(A.drone){ A.drone.pause(); A.drone.currentTime = 0; }
-  
-  $("lang-screen").classList.remove("show");
-  $("fade").classList.remove("gone"); // fade to black
-  applyWebLanguage(LANG_CODES[langActive]);
-
-  setTimeout(()=>{
-    play(A.doorclose);
-    setTimeout(()=>{
-      startShop();
-      startMusic();
-    }, 500);
-  }, 900);
+function initWebLangMouse() {
+  const items = document.querySelectorAll("#lang-items .item");
+  items.forEach((item, idx) => {
+    item.onmouseenter = () => {
+      if (webLangIdx !== idx) {
+        webLangIdx = idx;
+        play(A.move);
+        renderWebLangScreen();
+      }
+    };
+    item.onclick = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      webLangIdx = idx;
+      confirmWebLang();
+    };
+  });
 }
 
-function startLangSelect(){
-  $("splash").classList.add("gone");
-  $("lang-screen").classList.add("show");
-  inLangScreen = true;
-  renderLangScreen();
-  play(A.appearance);
-  if(musicOn && A.drone){
-    A.drone.currentTime = 0;
-    A.drone.volume = 0.5;
-    const p = A.drone.play();
-    if(p !== undefined) p.catch(()=>{});
+function confirmWebLang() {
+  const items = document.querySelectorAll("#lang-items .item");
+  if (items[webLangIdx]) {
+    const code = items[webLangIdx].getAttribute("data-lang");
+    applyWebLanguage(code);
   }
+  play(A.sel);
+  const langScr = $("lang-screen");
+  if (langScr) langScr.classList.remove("show");
+  screen = "main";
+  toSplit();
+  speech(SEAM_LINES.intro);
+  render();
 }
 
-let shopStarted=false;
-function startShop(){
-  if(shopStarted) return; shopStarted=true;
-  introPlaying=true;
-  setTimeout(()=>{
-    $("fade").classList.add("gone");        // loja aparece do preto
-    inTransition = false;
-    type($("single"),SEAM_LINES.intro,()=>{
-      introTimer = setTimeout(()=>{ 
-          introTimer=null; introPlaying=false; 
-          showDialog("split"); speech(SEAM_LINES.choose); render(); resetIdle(); 
-      },3700);
-    });
-  },600);
+function dismissSplash() {
+  if (screen !== "splash") return;
+  screen = "web-lang";
+  unlockAudio();
+  startMusic();
+  play(A.appearance);
+  const splash = $("splash");
+  if (splash) splash.classList.add("gone");
+  const langScr = $("lang-screen");
+  if (langScr) langScr.classList.add("show");
+  renderWebLangScreen();
 }
-function boot(){
-  showDialog("single");                     // pronto por tras da splash
-  $("plusbg").classList.remove("show");
-  $("plus").classList.remove("show");
-  const go=(e)=>{
-    if(e && e.type === "keydown" && ["Alt", "Control", "Shift", "Meta", "Tab"].includes(e.key)) return;
-    $("splash").removeEventListener("click", go);
-    window.removeEventListener("keydown", go);
-    startLangSelect();
-  };
-  $("splash").addEventListener("click",go);
-  window.addEventListener("keydown",go);
-  fetchModsList();
+
+const splashEl = $("splash");
+if (splashEl) {
+  splashEl.onclick = dismissSplash;
+  splashEl.onpointerdown = dismissSplash;
 }
-boot();
+
+document.addEventListener("keydown", (e) => {
+  if (screen === "splash") {
+    dismissSplash();
+    return;
+  }
+  if (screen === "web-lang") {
+    const items = document.querySelectorAll("#lang-items .item");
+    if (e.key === "ArrowUp") {
+      webLangIdx = (webLangIdx - 1 + items.length) % items.length;
+      play(A.move);
+      renderWebLangScreen();
+    } else if (e.key === "ArrowDown") {
+      webLangIdx = (webLangIdx + 1) % items.length;
+      play(A.move);
+      renderWebLangScreen();
+    } else if (e.key === "z" || e.key === "Enter") {
+      confirmWebLang();
+    }
+    return;
+  }
+  if(e.key === "ArrowUp"){ active = Math.max(0, active - 1); play(A.move); render(); }
+  else if(e.key === "ArrowDown"){ const list = screen === "main" ? mainItems() : subList(); active = Math.min(list.length - 1, active + 1); play(A.move); render(); }
+  else if(e.key === "z" || e.key === "Enter"){ activate(); }
+  else if(e.key === "x" || e.key === "Backspace"){ back(); }
+});
+
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    const fade = $("fade");
+    if (fade) fade.classList.add("gone");
+  }, 100);
+  initWebLangMouse();
+});
 </script>
 </body>
 </html>

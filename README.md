@@ -238,6 +238,14 @@ Prepared atlases are stored outside the VPK under `ux0:data/deltarune/deltarunev
 
 This keeps the VPK small, lowers CDRAM pressure, and lets the patchers update texture data without reinstalling the application.
 
+#### Chapter 2 PT-BR atlas optimization (v0.70)
+
+The PT-BR Chapter 2 package contained a sparsely packed 4096x4096 page mixing battle UI, Queen/Cyber assets, shops, and Light World backgrounds. v0.70 repacks its 204 texture items intact into a 2048x2048 page. Pixel validation reported 204 matching items with no cropped, resized, or split frames. The external BC3 page was reduced from 16 MiB to 4 MiB, lowering CDRAM pressure in battles and Cyber World rooms.
+
+| Original 4096x4096 atlas | Optimized 2048x2048 atlas |
+|:--:|:--:|
+| <img src="docs/atlas-comparison/v0.70/chapter2-ptbr-page028-original-4096.png" width="360" alt="Original Chapter 2 PT-BR atlas"> | <img src="docs/atlas-comparison/v0.70/chapter2-ptbr-page028-optimized-2048.png" width="360" alt="Optimized Chapter 2 PT-BR atlas"> |
+
 ### Project Scope Update
 
 > [!NOTE]
@@ -559,6 +567,10 @@ This section briefly documents past versions, covering the initial Android resea
     <tr>
       <td><code>v0.69</code></td>
       <td>Adopted validated BC3/DXT5 texture pages, improved room and audio transitions, fixed multiple Chapter 2/3/5 softlocks and crashes, compressed dynamic borders, and added initial Spanish language-pack support.</td>
+    </tr>
+    <tr>
+      <td><code>v0.70</code></td>
+      <td>Added trophy support and initial 60 FPS mod compatibility, corrected Spanish language handling, disabled normal-user probe logging, and repacked the Chapter 2 PT-BR 4096x4096 atlas to 2048x2048 without splitting texture items.</td>
     </tr>
   </tbody>
 </table>

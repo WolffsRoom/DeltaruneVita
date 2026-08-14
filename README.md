@@ -244,7 +244,7 @@ The PT-BR Chapter 2 package contained a sparsely packed 4096x4096 page mixing ba
 
 | Original 4096x4096 atlas | Optimized 2048x2048 atlas |
 |:--:|:--:|
-| <img src="docs/atlas-comparison/v0.70/chapter2-ptbr-page028-original-4096.png" width="360" alt="Original Chapter 2 PT-BR atlas"> | <img src="docs/atlas-comparison/v0.70/chapter2-ptbr-page028-optimized-2048.png" width="360" alt="Optimized Chapter 2 PT-BR atlas"> |
+| <img src="https://github.com/WolffsRoom/DeltaruneVita/releases/download/v0.70/chapter2-ptbr-page028-original-4096.png" width="360" alt="Original Chapter 2 PT-BR atlas"> | <img src="https://github.com/WolffsRoom/DeltaruneVita/releases/download/v0.70/chapter2-ptbr-page028-optimized-2048.png" width="360" alt="Optimized Chapter 2 PT-BR atlas"> |
 
 ### Project Scope Update
 

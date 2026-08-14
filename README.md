@@ -238,13 +238,22 @@ Prepared atlases are stored outside the VPK under `ux0:data/deltarune/deltarunev
 
 This keeps the VPK small, lowers CDRAM pressure, and lets the patchers update texture data without reinstalling the application.
 
-#### Chapter 2 PT-BR atlas optimization (v0.70)
+#### PT-BR atlas optimization (v0.70)
 
-The PT-BR Chapter 2 package contained a sparsely packed 4096x4096 page mixing battle UI, Queen/Cyber assets, shops, and Light World backgrounds. v0.70 repacks its 204 texture items intact into a 2048x2048 page. Pixel validation reported 204 matching items with no cropped, resized, or split frames. The external BC3 page was reduced from 16 MiB to 4 MiB, lowering CDRAM pressure in battles and Cyber World rooms.
+The PT-BR package contained several oversized or sparsely packed 4096x4096 pages. v0.70 repacks their texture items intact into 2048x2048 pages. Pixel validation reported no changed, cropped, resized, or split frames across the modified Chapter 2, 3, and 4 data files.
 
-| Original 4096x4096 atlas | Optimized 2048x2048 atlas |
-|:--:|:--:|
-| <img src="https://github.com/WolffsRoom/DeltaruneVita/releases/download/v0.70/chapter2-ptbr-page028-original-4096.png" width="360" alt="Original Chapter 2 PT-BR atlas"> | <img src="https://github.com/WolffsRoom/DeltaruneVita/releases/download/v0.70/chapter2-ptbr-page028-optimized-2048.png" width="360" alt="Optimized Chapter 2 PT-BR atlas"> |
+<p align="center">
+  <img src="https://github.com/WolffsRoom/DeltaruneVita/releases/download/v0.70/ptbr-atlas-before-after.png" width="760" alt="PT-BR atlas before and after optimization">
+</p>
+
+Changed atlases:
+
+- Chapter 2 `page_028`: 1 x 4096x4096 -> 1 x 2048x2048; BC3 footprint reduced from 16 MiB to 4 MiB.
+- Chapter 3 `page_034`: 1 x 4096x4096 -> 4 x 2048x2048; enables selective loading while preserving its dense content.
+- Chapter 3 `page_035`: 1 x 4096x4096 -> 3 x 2048x2048; BC3 footprint reduced from 16 MiB to 12 MiB.
+- Chapter 4 `page_044`: 1 x 4096x4096 -> 2 x 2048x2048; BC3 footprint reduced from 16 MiB to 8 MiB.
+
+The Chapter 3 and 4 validation covered 35,038 texture items with identical before/after pixel hashes.
 
 ### Project Scope Update
 

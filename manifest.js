@@ -9,8 +9,8 @@ const manifestData = {
     "shared_chapter0_music": "identical chapter0/mus copies omitted",
     "canonical_mod_data": "identical game.droid copies omitted",
     "optional_ptbr": "downloaded on demand and not embedded",
-    "omitted_files": 592,
-    "omitted_bytes": 2480312499
+    "omitted_files": 594,
+    "omitted_bytes": 2480591539
   },
   "required_sources": {
     "data.win": {
@@ -445,17 +445,9 @@ const manifestData = {
       "size": 165423612,
       "sha256": "370dfd141d2955d5a1960122919b16e4092b52ffbb85fda541bc4680c6b3b85c"
     },
-    "chapter5_windows/execute_program_pipe_x64.dll": {
-      "size": 125440,
-      "sha256": "a594a7205f6a4ccff42cb460dfa08bb54442cb3317c7bdc0fa0437d636359402"
-    },
     "chapter5_windows/lang/lang_ja.json": {
       "size": 1934426,
       "sha256": "89b117add88ebd012f7eb45c0c3905c5d002e4e9401eeb42c412447fa132fabf"
-    },
-    "chapter5_windows/shader_replace_simple_x64.dll": {
-      "size": 153600,
-      "sha256": "c10210e3cd619774d63947116bd22fb3f60f2d992b21f3ffb0121393e596b124"
     },
     "chapter5_windows/snd_bigcar_yelp.ogg": {
       "size": 7778,
@@ -3281,24 +3273,10 @@ const manifestData = {
       "mode": "copy"
     },
     {
-      "output": "deltarunevita/chapter5/execute_program_pipe_x64.dll",
-      "source": "chapter5_windows/execute_program_pipe_x64.dll",
-      "size": 125440,
-      "sha256": "a594a7205f6a4ccff42cb460dfa08bb54442cb3317c7bdc0fa0437d636359402",
-      "mode": "copy"
-    },
-    {
       "output": "deltarunevita/chapter5/lang/lang_ja.json",
       "source": "chapter5_windows/lang/lang_ja.json",
       "size": 1934426,
       "sha256": "89b117add88ebd012f7eb45c0c3905c5d002e4e9401eeb42c412447fa132fabf",
-      "mode": "copy"
-    },
-    {
-      "output": "deltarunevita/chapter5/shader_replace_simple_x64.dll",
-      "source": "chapter5_windows/shader_replace_simple_x64.dll",
-      "size": 153600,
-      "sha256": "c10210e3cd619774d63947116bd22fb3f60f2d992b21f3ffb0121393e596b124",
       "mode": "copy"
     },
     {

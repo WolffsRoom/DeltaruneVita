@@ -9,17 +9,13 @@
     "shared_chapter0_music": "identical chapter0/mus copies omitted",
     "canonical_mod_data": "identical game.droid copies omitted",
     "optional_ptbr": "downloaded on demand and not embedded",
-    "omitted_files": 585,
-    "omitted_bytes": 2492894859
+    "omitted_files": 592,
+    "omitted_bytes": 2480312499
   },
   "required_sources": {
     "data.win": {
       "size": 2953218,
       "sha256": "82a7041a530407c5f17e439a97bdf53e4a24e30775a7ecbc2879369b9d2441d6"
-    },
-    "options.ini": {
-      "size": 40,
-      "sha256": "26e34ad8f1f4d5aabe3b32a44847cdbe86adbf94a5c05eefb1f3e578c53a64c6"
     },
     "chapter1_windows/AUDIO_INTRONOISE.ogg": {
       "size": 259154,
@@ -40,10 +36,6 @@
     "chapter1_windows/lang/lang_ja.json": {
       "size": 700438,
       "sha256": "63a096fb5ffb5b90df0a9e86530fd3a527f9b342263d5cbfa3249b6bd38fa17e"
-    },
-    "chapter1_windows/options.ini": {
-      "size": 40,
-      "sha256": "26e34ad8f1f4d5aabe3b32a44847cdbe86adbf94a5c05eefb1f3e578c53a64c6"
     },
     "chapter1_windows/snd_closet_fall.ogg": {
       "size": 119120,
@@ -92,10 +84,6 @@
     "chapter2_windows/lang/lang_ja.json": {
       "size": 1439144,
       "sha256": "d8c3b929a46c470502ecece6a86648d384bc85ad3b201b576cc5a2cfa9e085a5"
-    },
-    "chapter2_windows/options.ini": {
-      "size": 63,
-      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49"
     },
     "chapter2_windows/snd_bigcar_yelp.ogg": {
       "size": 7778,
@@ -216,10 +204,6 @@
     "chapter3_windows/lang/lang_ja.json": {
       "size": 1460118,
       "sha256": "164ae8054d5bd6b1de9046ce3be9b264c9f35288e841798a83ab4c96b400e1c3"
-    },
-    "chapter3_windows/options.ini": {
-      "size": 63,
-      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49"
     },
     "chapter3_windows/snd_bigcar_yelp.ogg": {
       "size": 7778,
@@ -349,10 +333,6 @@
       "size": 337354,
       "sha256": "3c045885f2f655aeabd3edcdf68765c73a7c3c40c9dc11da9fc3dd56e28c1712"
     },
-    "chapter4_windows/options.ini": {
-      "size": 63,
-      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49"
-    },
     "chapter4_windows/snd_bigcar_yelp.ogg": {
       "size": 7778,
       "sha256": "7227d899a1d8712dc069f3b3bc7229899865e425e21256636bc8c5605ea77ba8"
@@ -472,10 +452,6 @@
     "chapter5_windows/lang/lang_ja.json": {
       "size": 1934426,
       "sha256": "89b117add88ebd012f7eb45c0c3905c5d002e4e9401eeb42c412447fa132fabf"
-    },
-    "chapter5_windows/options.ini": {
-      "size": 133,
-      "sha256": "f3a19e09adf2d9edd2cb08b64999baf296543c3ba04a71a725119bf0a2ea0fe7"
     },
     "chapter5_windows/shader_replace_simple_x64.dll": {
       "size": 153600,
@@ -2555,20 +2531,6 @@
       "patch": "0085.bsp.gz"
     },
     {
-      "output": "deltarunevita/chapter0/dr.ini",
-      "source": null,
-      "size": 126,
-      "sha256": "eb1b87079d894cc82f9af4f0fc0be0b8c1a424cae28c99fb0a08582a3f0b801f",
-      "mode": "embed"
-    },
-    {
-      "output": "deltarunevita/chapter0/options.ini",
-      "source": "options.ini",
-      "size": 40,
-      "sha256": "26e34ad8f1f4d5aabe3b32a44847cdbe86adbf94a5c05eefb1f3e578c53a64c6",
-      "mode": "copy"
-    },
-    {
       "output": "deltarunevita/chapter1/AUDIO_INTRONOISE.ogg",
       "source": "chapter1_windows/AUDIO_INTRONOISE.ogg",
       "size": 259154,
@@ -2601,13 +2563,6 @@
       "source": "chapter1_windows/lang/lang_ja.json",
       "size": 700438,
       "sha256": "63a096fb5ffb5b90df0a9e86530fd3a527f9b342263d5cbfa3249b6bd38fa17e",
-      "mode": "copy"
-    },
-    {
-      "output": "deltarunevita/chapter1/options.ini",
-      "source": "chapter1_windows/options.ini",
-      "size": 40,
-      "sha256": "26e34ad8f1f4d5aabe3b32a44847cdbe86adbf94a5c05eefb1f3e578c53a64c6",
       "mode": "copy"
     },
     {
@@ -2686,20 +2641,13 @@
       "size": 66949750,
       "sha256": "94ea175468a76dbc5c18f20deca20e1c315f103757c3e48dcd1931f363b370d8",
       "mode": "browser_patch",
-      "patch": "0104.bsp.gz"
+      "patch": "0101.bsp.gz"
     },
     {
       "output": "deltarunevita/chapter2/lang/lang_ja.json",
       "source": "chapter2_windows/lang/lang_ja.json",
       "size": 1439144,
       "sha256": "d8c3b929a46c470502ecece6a86648d384bc85ad3b201b576cc5a2cfa9e085a5",
-      "mode": "copy"
-    },
-    {
-      "output": "deltarunevita/chapter2/options.ini",
-      "source": "chapter2_windows/options.ini",
-      "size": 63,
-      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49",
       "mode": "copy"
     },
     {
@@ -2910,13 +2858,6 @@
       "source": "chapter3_windows/lang/lang_ja.json",
       "size": 1460118,
       "sha256": "164ae8054d5bd6b1de9046ce3be9b264c9f35288e841798a83ab4c96b400e1c3",
-      "mode": "copy"
-    },
-    {
-      "output": "deltarunevita/chapter3/options.ini",
-      "source": "chapter3_windows/options.ini",
-      "size": 63,
-      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49",
       "mode": "copy"
     },
     {
@@ -3144,13 +3085,6 @@
       "mode": "copy"
     },
     {
-      "output": "deltarunevita/chapter4/options.ini",
-      "source": "chapter4_windows/options.ini",
-      "size": 63,
-      "sha256": "9661cdf7dd64de452729351b70833d24ca37ab80b3254c0a52b08c28bdca2e49",
-      "mode": "copy"
-    },
-    {
       "output": "deltarunevita/chapter4/snd_bigcar_yelp.ogg",
       "source": "chapter4_windows/snd_bigcar_yelp.ogg",
       "size": 7778,
@@ -3358,13 +3292,6 @@
       "source": "chapter5_windows/lang/lang_ja.json",
       "size": 1934426,
       "sha256": "89b117add88ebd012f7eb45c0c3905c5d002e4e9401eeb42c412447fa132fabf",
-      "mode": "copy"
-    },
-    {
-      "output": "deltarunevita/chapter5/options.ini",
-      "source": "chapter5_windows/options.ini",
-      "size": 133,
-      "sha256": "f3a19e09adf2d9edd2cb08b64999baf296543c3ba04a71a725119bf0a2ea0fe7",
       "mode": "copy"
     },
     {

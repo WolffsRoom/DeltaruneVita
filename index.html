@@ -1032,6 +1032,9 @@ async function generate(mirrorId, attachedZipFile){
     for(let i = 0; i < totalFiles; i++){
       const fileRec = manifest.files[i];
       setBar((i / totalFiles) * 100);
+      // INI files are optional local preferences. Ignore entries left in an
+      // older cached manifest instead of rejecting a valid Steam installation.
+      if((fileRec.source || fileRec.output || "").toLowerCase().endsWith(".ini")) continue;
       const outPath = manifest.output_folder + "/" + fileRec.output;
       if(fileRec.mode === "embed"){
         const res = await fetch("embedded/" + fileRec.output);

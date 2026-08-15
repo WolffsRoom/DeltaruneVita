@@ -20,7 +20,7 @@ Starting with v0.36, the project directly executes GameMaker data from the Windo
   <a href="https://github.com/WolffsRoom/DeltaruneVita/releases"><img src="https://img.shields.io/github/downloads/WolffsRoom/DeltaruneVita/total?style=for-the-badge&color=blue&logo=github" alt="Downloads"></a>
   <a href="https://github.com/WolffsRoom/DeltaruneVita/releases/latest"><img src="https://img.shields.io/github/v/release/WolffsRoom/DeltaruneVita?style=for-the-badge&color=brightgreen&logo=github" alt="Release"></a>
   <br>
-  <img src="https://img.shields.io/badge/OVERALL_PROGRESS-65%25-ffc107?style=for-the-badge" alt="Progress">
+  <img src="https://img.shields.io/badge/OVERALL_PROGRESS-70%25-ffc107?style=for-the-badge" alt="Progress">
   <img src="https://img.shields.io/badge/SOURCE-PC%2FSTEAM-004aa5?style=for-the-badge&logo=steam&logoColor=white" alt="Source">
   <img src="https://img.shields.io/badge/STATE-PLAYABLE-brightgreen?style=for-the-badge" alt="State">
 </div>
@@ -30,9 +30,9 @@ Starting with v0.36, the project directly executes GameMaker data from the Windo
 | Chapter | Details |
 | :--- | :--- |
 | **1** | Thoroughly reviewed room by room. The run fully verified. Maybe some optimizations remain to be checked. |
-| **2** | Received comprehensive fixes (audio, battles, transitions, textures, menus, performance). Some rooms are under observation. |
-| **3 and 4**| Fully bootable and playable, subject to testing, optimizations, and perhaps fixes at certain points. |
-| **5** | The primary optimization challenge. The city area is highly resource-intensive and may still result in low FPS or crashes. |
+| **2** | Playable with fixes for the mice and light-puzzle softlocks, battles, transitions, textures, menus, and audio. Some demanding rooms remain under observation. |
+| **3 and 4**| Bootable and playable, with fixes for chapter handoff, mini-games, textures, and runtime compatibility. Further room-by-room validation continues. |
+| **5** | Playable with reduced texture memory use, the Susie locker fix, compressed borders, and improved room transitions. Complex battles and some rooms still require optimization. |
 
 <div align="center">
   <img src="https://img.shields.io/badge/Please%2C%20support%20this%20and%20others%20projects-black?style=for-the-badge&labelColor=black&color=yellow&logoWidth=0" alt="Please, support this and others projects" style="font-family: 'Press Start 2P', monospace; height: 35px;">
@@ -63,17 +63,17 @@ To install the game correctly, follow these steps:
 
 ### HOW TO APPLY THE PATCH:
 
-The patchers require an official, unmodified DELTARUNE installation. The version currently supported by v0.64 is Steam **v0.0.250**.
+The patchers require an official, unmodified DELTARUNE installation. The version currently supported by v0.69 is Steam **v0.0.253**.
 
 > [!IMPORTANT]
-> v0.64 requires freshly generated data. Do not reuse the data folder produced by an older patcher.
+> v0.69 requires freshly generated data. Do not reuse the data folder produced by an older patcher.
 
 1. Purchase and install [DELTARUNE for PC](https://store.steampowered.com/app/1671210/) through Steam.
-2. Confirm that the installation is updated to **v0.0.250** and contains no modified files.
-3. Download `Deltarune-v0.64.vpk` and one of the patchers from the [latest release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
+2. Confirm that the installation is updated to **v0.0.253** and contains no modified files.
+3. Download `Deltarune-v0.69.vpk` and one of the patchers from the [latest release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
 4. Generate the Vita data using either the traditional desktop patcher, Seam's Patcher, or the [Web Patcher](https://wolffsroom.github.io/DeltaruneVita/).
 5. Copy the generated `deltarune` folder to `ux0:data/` on the PS Vita. USB transfer or an SD card reader is recommended.
-6. Install `Deltarune-v0.64.vpk` using VitaShell.
+6. Install `Deltarune-v0.69.vpk` using VitaShell.
 
 The language selected at startup changes only the patcher interface. In-game languages are installed separately through the available mod option.
 
@@ -145,11 +145,11 @@ The control layout is based on and adapted from the PS4 version, with additional
   <img src="docs/media/v0.64/settings/Dev.png" alt="Developer settings" width="31%">
 </p>
 
-## v0.64 Showcase
+## v0.69 Showcase
 
 <div align="center">
-  <a href="https://youtu.be/qxZaAjv8iiE" target="_blank" title="Watch the v0.64 showcase on YouTube">
-    <img src="https://img.youtube.com/vi/qxZaAjv8iiE/maxresdefault.jpg" alt="DELTARUNE Vita v0.64 showcase" width="760">
+  <a href="https://youtu.be/41NiqU7HHVg" target="_blank" title="Watch the v0.69 showcase on YouTube">
+    <img src="https://img.youtube.com/vi/41NiqU7HHVg/maxresdefault.jpg" alt="DELTARUNE Vita v0.69 showcase" width="760">
   </a>
   <br>
   <sup><em>Click the image to watch the full showcase on YouTube.</em></sup>
@@ -182,8 +182,8 @@ The control layout is based on and adapted from the PS4 version, with additional
       <td>• Dynamic console borders based on active chapter and area</td>
     </tr>
     <tr>
-      <td>• <code>Game Settings</code> menu in English and Portuguese</td>
-      <td>• Save states, per-chapter mods, and PT-BR localization support</td>
+      <td>• Custom <code>Game Settings</code> menu with physical and touch input</td>
+      <td>• Per-chapter language packs, including PT-BR and initial Spanish support</td>
     </tr>
     <tr>
       <td>• Independent volume sliders for music and SFX</td>
@@ -191,10 +191,54 @@ The control layout is based on and adapted from the PS4 version, with additional
     </tr>
     <tr>
       <td>• Animated chapter loading screen and prepared texture cache</td>
-      <td>• Original, Medium, and Low graphics profiles</td>
+      <td>• BC3/DXT5 atlas loading, compressed borders, and configurable graphics profiles</td>
     </tr>
   </tbody>
 </table>
+
+### Texture Compression and External Assets
+
+The original GameMaker texture pages use RGBA8888 and can consume 16 MiB for a 2048x2048 atlas. Earlier builds generated an RGBA4444 texture cache, reducing this to 8 MiB. v0.69 adopts validated BC3/DXT5 atlases where appropriate, reducing the same page to 4 MiB while retaining alpha and avoiding the severe artifacts found during the PVRTC experiments.
+
+Prepared atlases are stored outside the VPK and loaded from `ux0:data/deltarune/deltarunevita/`. Language packs keep their own texture set when their `data.win` changes atlas contents or indices; an atlas generated for English is never assumed to match PT-BR or Spanish. Fonts and other precision-sensitive pages can still use the safer prepared cache when required.
+
+This keeps the VPK small, lowers CDRAM pressure, and allows texture data to be updated through the patchers without reinstalling the application.
+
+#### PT-BR atlas optimization (v0.70)
+
+The PT-BR package contained several oversized or sparsely packed 4096x4096 pages. v0.70 repacks their texture items intact into 2048x2048 pages. Pixel validation reported no changed, cropped, resized, or split frames across the modified Chapter 2, 3, and 4 data files.
+
+<p align="center">
+  <img src="https://github.com/WolffsRoom/DeltaruneVita/releases/download/v0.70/ptbr-atlas-before-after.png" width="760" alt="PT-BR atlas before and after optimization">
+</p>
+
+Changed atlases:
+
+- Chapter 2 `page_028`: 1 x 4096x4096 -> 1 x 2048x2048; BC3 footprint reduced from 16 MiB to 4 MiB.
+- Chapter 3 `page_034`: 1 x 4096x4096 -> 4 x 2048x2048; enables selective loading while preserving its dense content.
+- Chapter 3 `page_035`: 1 x 4096x4096 -> 3 x 2048x2048; BC3 footprint reduced from 16 MiB to 12 MiB.
+- Chapter 4 `page_044`: 1 x 4096x4096 -> 2 x 2048x2048; BC3 footprint reduced from 16 MiB to 8 MiB.
+
+The Chapter 3 and 4 validation covered 35,038 texture items with identical before/after pixel hashes.
+
+### Native MP4 Playback (v0.70)
+
+Chapter 3 and Chapter 5 videos are decoded through the PS Vita `SceAvPlayer`. Original and translated `data.win` files now resolve MP4 names through the same shared directory:
+
+```text
+ux0:data/deltarune/deltarunevita/vid/
+```
+
+The runner extracts the filename from the GameMaker path instead of opening a language-local copy:
+
+```c
+videoName = strrchr(path, '/');
+snprintf(resolvedPath, sizeof(resolvedPath),
+         "ux0:data/deltarune/deltarunevita/vid/%s",
+         videoName != NULL ? videoName + 1 : path);
+```
+
+Before entering `room_dw_couch_video`, stale room atlases are released so the native decoder can reserve contiguous memory for H.264 video and AAC audio. The decoded frame is presented after the GameMaker composite, while subtitles remain controlled by the original room logic. The Chapter 3 video room uses `border_dw_blue_0` in every language.
 
 ### Project Scope Update
 
@@ -241,7 +285,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build-butterscotch-probe.ps1
 
 Mod support was implemented specifically to load the community PT-BR translation from [Teiarruma/deltarune-ptbr](https://github.com/teiarruma/deltarune-ptbr). The translation files are not distributed within this repository or its releases.
 
-After obtaining the translation from the original project, place it inside `mods/PTBR` and run:
+After obtaining a translation, place it inside `mods/Lang/<Language>` (for example, `mods/Lang/Portuguese-BR`) and run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\prepare-vita-mods.ps1
@@ -363,6 +407,18 @@ This section briefly documents past versions, covering the initial Android resea
       <td><code>v0.64</code></td>
       <td>Public release with direct <code>data.win</code> loading, Chapter 2 light-puzzle fixes, Chapter 3 pathfinding and performance fixes, Chapter 5 runtime compatibility, Web Patcher, Seam's Patcher, and Steam v0.0.250 support.</td>
     </tr>
+    <tr>
+      <td><code>v0.65 - v0.68</code></td>
+      <td>Internal builds used to validate external texture formats, room-aware loading, border transitions, additional GameMaker behavior, multilingual data layouts, and broader chapter compatibility.</td>
+    </tr>
+    <tr>
+      <td><code>v0.69</code></td>
+      <td>Adopted validated BC3/DXT5 texture pages, improved room and audio transitions, fixed multiple Chapter 2/3/5 softlocks and crashes, compressed dynamic borders, and added initial Spanish language-pack support.</td>
+    </tr>
+    <tr>
+      <td><code>v0.70</code></td>
+      <td>Added the trophy interface and initial 60 FPS mod support, corrected Spanish language handling, disabled normal-user probe logging, and repacked the Chapter 2 PT-BR 4096x4096 atlas to 2048x2048 without splitting texture items.</td>
+    </tr>
   </tbody>
 </table>
 </details>
@@ -409,6 +465,26 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 > [!TIP]
 > Logging features will be removed once the final version is released. Until then, if you encounter any bugs or issues, please attach the `.log` file when submitting a report on the [Issues](https://github.com/WolffsRoom/DeltaruneVita/issues).
 
+## Game Settings Assets
+
+`Game Settings` was created specifically for this port and follows DELTARUNE's dialogue styling:
+
+- Interface sounds in `data/assets/sounds` were adapted from the DELTARUNE common sound-effects collection available through [The Sounds Resource](https://www.sounds-resource.com/pc_computer/deltarune/).
+- PlayStation button images in `data/assets/ui` were extracted from the official `game.win` owned by the user during patch generation.
+- The menu reuses the game's dialogue border and text style to remain visually consistent.
+- Additional controller artwork was created by Niccbilac and documented in [issue #25](https://github.com/WolffsRoom/DeltaruneVita/issues/25).
+
+## Development Tools
+
+- [UndertaleModTool](https://github.com/UnderminersTeam/UndertaleModTool): inspected, decompiled, patched, and validated GameMaker data and scripts.
+- [FFmpeg](https://github.com/FFmpeg/FFmpeg): inspected and converted audio/video assets for Vita-compatible playback and packaging.
+- [PVRTexTool](https://developer.imaginationtech.com/downloads/): generated and compared GPU-ready texture formats during the PVRTC and BC3/DXT5 evaluation.
+
+## Technical References
+
+- [Butterscotch DataWin](https://github.com/ButterscotchRunner/DataWin): fundamental documentation for GameMaker data chunks and parsing.
+- Special thanks to [MrPowerGamerBR](https://github.com/MrPowerGamerBR) for technical references and contributions shared with the GameMaker porting community.
+
 ## Credits
 
 - DELTARUNE by Toby Fox and team. [Official website and purchase](https://deltarune.com/).
@@ -427,9 +503,9 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 
 GPT-5.6 Sol (Codex IDE) was integrated into the workflow to support development (specifically for the loader's programming logic), diagnostics, project organization, and documentation.
 
-## Licença e dados do jogo
+## License and Game Data
 
-Portions derived from `Butterscotch` remain under the Mozilla Public License 2.0. See [LICENSE](LICENSE).
+Butterscotch is distributed under the Mozilla Public License 2.0. Modified MPL-covered source files in this project remain available under the same license, with their copyright and license notices preserved. The MPL applies at file level: files merely combined with the covered code may use different terms. See [LICENSE](LICENSE) and the corresponding source files for details.
 
 <p align="center">
   <img src="https://deltarune.com/assets/images/key-art.gif" alt="DELTARUNE official key art" width="760">

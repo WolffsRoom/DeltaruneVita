@@ -3532,6 +3532,13 @@
       "mode": "copy"
     },
     {
+      "output": "deltarunevita/first_load.mp4",
+      "source": null,
+      "size": 646282,
+      "sha256": "641a9beb87ea67844dffa6b635c1ebcc0ddf9b0c6d8fa916f56318b4bcf477d5",
+      "mode": "embed"
+    },
+    {
       "output": "deltarunevita/mods/Borders/border1.png",
       "source": null,
       "size": 102095,
@@ -6122,6 +6129,986 @@
       "mode": "embed"
     },
     {
+      "output": "deltarunevita/ui/first_load/frame_000.png",
+      "source": null,
+      "size": 71683,
+      "sha256": "42e7ecfd2e20adf8cf4938c96650946d3ea11a257e36406163eb01707dc7b97f",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_001.png",
+      "source": null,
+      "size": 72003,
+      "sha256": "1034c07f678c302fe53636c736d6902a3cfa75afa095726a8bb580d75451965f",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_002.png",
+      "source": null,
+      "size": 72138,
+      "sha256": "5d9e1be423af839f812cf85e8150e2e8df2db35bf0d7a20b07c276c4eb92e6ff",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_003.png",
+      "source": null,
+      "size": 72466,
+      "sha256": "2869afa06642a2488b5af67d693bf59e4a43f7ed84a1c23f75b112426b4f76a6",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_004.png",
+      "source": null,
+      "size": 72324,
+      "sha256": "a643e51de9de1a80ccf692f59fc68acc0b8123312ba7efb73fe4ff2526a8bebf",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_005.png",
+      "source": null,
+      "size": 72851,
+      "sha256": "6ac15e3f9ccc598863a14118bbd194b4c352fed1d3154f864839e525308cecb9",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_006.png",
+      "source": null,
+      "size": 72728,
+      "sha256": "67b81304376899a9eeda2c99f0b9cca7c6e47ee07aa90be8c395cfb452a77690",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_007.png",
+      "source": null,
+      "size": 72884,
+      "sha256": "63ac3d86084539acc33725609d380389fd32e3652051650485ced00def5e88c4",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_008.png",
+      "source": null,
+      "size": 72793,
+      "sha256": "af79bcc4d0ffb0b49399f2f06a09bc9894d97f6d98bb5a84a0ad43b3eb00763d",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_009.png",
+      "source": null,
+      "size": 72818,
+      "sha256": "f2aa1e283cef5712ce47e0c25f69ec8fbee9b3746155005c84c2130644cf29a7",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_010.png",
+      "source": null,
+      "size": 72850,
+      "sha256": "24f21dfeaf7a8c64c37a9590965501c9ec0dd284ce07f4c0a5139d731b4508c1",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_011.png",
+      "source": null,
+      "size": 73050,
+      "sha256": "f2ff1fd45be6894191aa45b3b3f851fb25b3b3f316155d6e0097f96bd3beb221",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_012.png",
+      "source": null,
+      "size": 73006,
+      "sha256": "f8c64786b9991ce7b0c775022254699de08859ea798863453fd6a3735a89df61",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_013.png",
+      "source": null,
+      "size": 72991,
+      "sha256": "aa3069a0d6a85c1101833bfec9e3dec70857a3e124294e05a887409f8749ed43",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_014.png",
+      "source": null,
+      "size": 73058,
+      "sha256": "e113c437470bdb8cba3d38a89dde56f3cf95b17a3b7507cb1799741ad7dfc876",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_015.png",
+      "source": null,
+      "size": 73155,
+      "sha256": "82b38f5cd19179828d109bd4d786b0a8e28e3397ed452acaddd2538f23727478",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_016.png",
+      "source": null,
+      "size": 73234,
+      "sha256": "1b6dfebca4d4d17828e827fb574d24d45963300ebed3a39bc57875e6f5b81f23",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_017.png",
+      "source": null,
+      "size": 73177,
+      "sha256": "f82b3ac623c9c2338da56e25de91fd4ff6306a510890b7ef2fe10b302028748d",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_018.png",
+      "source": null,
+      "size": 73234,
+      "sha256": "c883dd8fc172542e2760c34b677ac24a4e7e6921e86ab9feee1962694cbd9d69",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_019.png",
+      "source": null,
+      "size": 73239,
+      "sha256": "61d7bdca95917533c42682ee8a7d67a772487d53edad2584094a17d3efb0df04",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_020.png",
+      "source": null,
+      "size": 73234,
+      "sha256": "450f0cc1e4cd89ceac8bbd1d735da9cd3e3b2d16eb6cd9acdf05f91e05226459",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_021.png",
+      "source": null,
+      "size": 73043,
+      "sha256": "9f16c10fe8795ccd4bb6105be5dfc88fb1c56ff695d73938fc8cfc6ec6bb906f",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_022.png",
+      "source": null,
+      "size": 73275,
+      "sha256": "647e8df2f7fb68160da583a446a9fd73c75f239231c6140560d2fd73444ffcb3",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_023.png",
+      "source": null,
+      "size": 73255,
+      "sha256": "36d7242f8121ce25b9f01883c93b83f8ee4c21aa873bea3cf8680103b974ca2f",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_024.png",
+      "source": null,
+      "size": 73366,
+      "sha256": "7a5c2e9354dc09616f69410a184a9ed236dc7eff54d117da2358f6e175965117",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_025.png",
+      "source": null,
+      "size": 73293,
+      "sha256": "e84675a9e85fcd7cac6593d3eb1fbca48b99ec2767b3e76257b448209e8c4e1b",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_026.png",
+      "source": null,
+      "size": 73402,
+      "sha256": "22d0a7989e4f2c7fbaf0c299b003a85e06aaf9238f0d3c257f7b594aa0a20a76",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_027.png",
+      "source": null,
+      "size": 73457,
+      "sha256": "d174cf0543ddc777b4a1ac1470be2a82f80bb4c95c1f51fe3e7e211b621e26a6",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_028.png",
+      "source": null,
+      "size": 73367,
+      "sha256": "1234be7469d8762f3f711a3e105ec3e7412e8928950cc997d46e3064ba353217",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_029.png",
+      "source": null,
+      "size": 73142,
+      "sha256": "a051db216b22a2501cc8c76a30291f51792ed2e79652010a5dec8c35e3b50365",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_030.png",
+      "source": null,
+      "size": 73250,
+      "sha256": "8d57e6c7ef587256a029515341fce705beaf30dbedbff3451b6e00b660b1d5d5",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_031.png",
+      "source": null,
+      "size": 73261,
+      "sha256": "1749fb5d84894aeb8ac60ee0abcdea3b2453d90da456987ffa867498b2dff6d4",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_032.png",
+      "source": null,
+      "size": 73297,
+      "sha256": "19cf6570cf3c57b3b879b8344e77e58c8e0eba7289465cb0936ca3a2eb9810f0",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_033.png",
+      "source": null,
+      "size": 73154,
+      "sha256": "c928dee24e26e1bb57dfd5938069a314fbb3ccac8773dde041de55b83ae3dfe9",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_034.png",
+      "source": null,
+      "size": 73394,
+      "sha256": "c3864b26f6531721392905115c30b1500d2e52a19650ee8a7a76d03eccf386a2",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_035.png",
+      "source": null,
+      "size": 73394,
+      "sha256": "d1cce7c9c90f3e95acf0ea8ec4ff9de7ece07dc87a8a38c132077a8e0b0ad138",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_036.png",
+      "source": null,
+      "size": 73471,
+      "sha256": "9bfe5dcf409d0777b2006186da50a366ff7f048929045281d7d0ae03f5b29d29",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_037.png",
+      "source": null,
+      "size": 73362,
+      "sha256": "81809058fd5b8efd964b900efdf06c9a9f11d64bf4b6736fdc63568e93a1daae",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_038.png",
+      "source": null,
+      "size": 73464,
+      "sha256": "69c60f42d92aee5799f1c297b871557a9cbbe06ba431c5d64a08fabca85f9b14",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_039.png",
+      "source": null,
+      "size": 73532,
+      "sha256": "2f266f4995aa9b0441884d598532675ea3dae31d72f4d852879151dd870c5a03",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_040.png",
+      "source": null,
+      "size": 73803,
+      "sha256": "8d72318d98db980db2197aa3541df3ad5d587e126f5adeb8cc3e14a084cda2ad",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_041.png",
+      "source": null,
+      "size": 73563,
+      "sha256": "972805504ef84d6a0bbd2cd455b38faad3ae63d0fd8a02fd11bee81869147465",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_042.png",
+      "source": null,
+      "size": 73674,
+      "sha256": "6d32edd4dd939815d152b80b1e4f8e0e4da1bd58044286dd54bb16a169abfa47",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_043.png",
+      "source": null,
+      "size": 73749,
+      "sha256": "b1a72a04c8fca6e195b790f6d459596ed90e1be9687e800467d7e7ba69e3b7c3",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_044.png",
+      "source": null,
+      "size": 74060,
+      "sha256": "90e53cc87503852b84b3c720acf5fa4f5826580458bc3f1c57f0c3b67c0b367c",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_045.png",
+      "source": null,
+      "size": 73478,
+      "sha256": "2ddd039c324de6b2b9dd25f5dd4dc65d05e79547b10f7c83a3b1d30155c52af5",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_046.png",
+      "source": null,
+      "size": 73670,
+      "sha256": "ac14af1d949a5a06ab02c40c97990881312cfb83375165d977524e1d9b34ee60",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_047.png",
+      "source": null,
+      "size": 73958,
+      "sha256": "99e0b4d016883c712b48c7abda80ea5700e98e883f4fb2a693a83c5775a440d4",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_048.png",
+      "source": null,
+      "size": 74057,
+      "sha256": "ab85c587568005a66a9b31cba99c8bdfff87bad4f0d00b9c0e91880518207fbf",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_049.png",
+      "source": null,
+      "size": 73994,
+      "sha256": "0246d29b5b6a6ba9ce98431c2eff8e79d998baba07fa01d8a6b151826fe67ff0",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_050.png",
+      "source": null,
+      "size": 74010,
+      "sha256": "61c04e7ee122bb9a08c134d1da282eb3f7d5506f55da9807488d48d9190f0d2f",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_051.png",
+      "source": null,
+      "size": 74002,
+      "sha256": "abf08a02f14a428a1985f137e728b53c2d5a9ec1bc30e24f12207fc2011d9531",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_052.png",
+      "source": null,
+      "size": 73945,
+      "sha256": "8e03e48250ed9cc711c36a6b0a2a68617b126cfd81632050fd5f7f83870dbdd5",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_053.png",
+      "source": null,
+      "size": 74209,
+      "sha256": "028ba45c3342cf9afa2996d28551637f591883e680e318d9e7ad200ac3b7aee3",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_054.png",
+      "source": null,
+      "size": 73969,
+      "sha256": "169742ad195b4619ccad0034ebd9594d6974ba02ee7e377071daab68607560ef",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_055.png",
+      "source": null,
+      "size": 73719,
+      "sha256": "3ef552a9cae5214d6f63455ea5845644b049e168c68c2b0d2ed7326e529ab97b",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_056.png",
+      "source": null,
+      "size": 73751,
+      "sha256": "dd20aa4e42b23aff555f2a2d1ae6227467cd75b25cf7b853b114089ca5d99976",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_057.png",
+      "source": null,
+      "size": 73107,
+      "sha256": "683e56450115cc843ad4c2b9531e27a0c62633cf97e446bf9d4ed9881d86a3ed",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_058.png",
+      "source": null,
+      "size": 72911,
+      "sha256": "bfb3c04e518bd6d2a880f2991bf3be9c6b5d898e5a5c8bfc47cf1dd3cde051bf",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_059.png",
+      "source": null,
+      "size": 72220,
+      "sha256": "4c99af5d3d76e8cf7d4f8eca07eec438cb8ba9c66189ab202cc88fd985b1dd10",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_060.png",
+      "source": null,
+      "size": 71773,
+      "sha256": "cbc518fc01c22adadd50253ac113fd318c0893e21ed28bbd7a0a4dbd44c244cf",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_061.png",
+      "source": null,
+      "size": 72190,
+      "sha256": "34c5dca64cf22efc2a8200af869e9a129597016c1cc11ef1087a724b5e661aab",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_062.png",
+      "source": null,
+      "size": 73688,
+      "sha256": "8692261acc1f03c8ec2d6b84c03390b76bd8402ca57b654f398ac6790f0424ae",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_063.png",
+      "source": null,
+      "size": 71157,
+      "sha256": "6aa1a2af2d322749e01e0f591830e8a81da349013f7515e02226c12c18aad90f",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_064.png",
+      "source": null,
+      "size": 72859,
+      "sha256": "cd3604435d25456a8cc402e618667421209ff8f1d31a0e8c810f8eee06e05175",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_065.png",
+      "source": null,
+      "size": 68047,
+      "sha256": "f89ebc3107064b3e34b128ad078833ce4c66c0580b201f2e24c0ae3b1946f3b3",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_066.png",
+      "source": null,
+      "size": 69111,
+      "sha256": "109953cfff14faeca37584ec91051d88cd59bd8536a76e0310df1443408c9d53",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_067.png",
+      "source": null,
+      "size": 70298,
+      "sha256": "a87b9f6dd8df2e9251b6bf3809a7904bd33302735d750c3af8c94890bb2ffabc",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_068.png",
+      "source": null,
+      "size": 72598,
+      "sha256": "87405a681828b0b4991f83a6d634ea9367c408ef9442ada94d9d9dcda0f9006d",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_069.png",
+      "source": null,
+      "size": 71952,
+      "sha256": "3e643133a9609940869d6ace6b9055ba308c096e979716aa43add3457971eeba",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_070.png",
+      "source": null,
+      "size": 74197,
+      "sha256": "90fe33416d939c6b62eff87d6ce8b641778c9d4948195d73c1dbd70b8cc8e2d7",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_071.png",
+      "source": null,
+      "size": 74260,
+      "sha256": "cae1c09e9a7daecfae927923abf7a54409b3f16eadcac7ee7bd2806842479fc6",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_072.png",
+      "source": null,
+      "size": 84682,
+      "sha256": "879aa7d93bbd5324358f1919c4f0016f0d9e79458dcd5d48ff3dc3302c239dcf",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_073.png",
+      "source": null,
+      "size": 74082,
+      "sha256": "e0bfce5f0bf26f61a640fbc319552e4bf35ededee75feb3e04183c61c3f32e52",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_074.png",
+      "source": null,
+      "size": 74703,
+      "sha256": "214e0d4b13b7f96c33d5c750a0b768f4f741d1eaa7e3e8d3175aa14b1d02fc25",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_075.png",
+      "source": null,
+      "size": 76840,
+      "sha256": "4168263cb2d89292147486c9ab3da7ebdd60d17391c3e8ef9d5877ef916e9cf7",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_076.png",
+      "source": null,
+      "size": 73908,
+      "sha256": "031649ff1f7662efa3ed68e1eb3cddd473454886cff8405c1f125f602fd98e44",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_077.png",
+      "source": null,
+      "size": 79677,
+      "sha256": "7ec4af16bd5a458ff506d772ac7d338aebc4b631e7df44894938e1e076b50d74",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_078.png",
+      "source": null,
+      "size": 72931,
+      "sha256": "fc94bf26a61fc6c5b8eaa3a75c32e093c4c6493f1279d70ead04ade953b664f6",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_079.png",
+      "source": null,
+      "size": 81964,
+      "sha256": "a026f5d4c4d4d5e94fda58716dfd366d49c62ad07ce675ebddb51fda72123346",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_080.png",
+      "source": null,
+      "size": 73622,
+      "sha256": "6c0298735149d4bf122640fdd81aeb1b86251faee66c69d3b59365138b13ae48",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_081.png",
+      "source": null,
+      "size": 74540,
+      "sha256": "3761041bd587afbcfb1914684dc5aebd2184a6e60e468d11807847461bf26398",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_082.png",
+      "source": null,
+      "size": 72586,
+      "sha256": "c60cc9e11aa697b09c47e4f2ae341d79cd6ec0739bfe059b396fe506a391aaa2",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_083.png",
+      "source": null,
+      "size": 73081,
+      "sha256": "fbdf9e92c46e98e6e6039e678030544002fb541f5cc759e08fdd857df9bb15dd",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_084.png",
+      "source": null,
+      "size": 73342,
+      "sha256": "d852582ad943f1b91cdafd2ffa490a2a871b7c8719499c4153bdedd90bf14d39",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_085.png",
+      "source": null,
+      "size": 73040,
+      "sha256": "41edf191735a5a8bd6ebe7c31ee741c6c569f7f930cdcb515200bc107141e0cf",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_086.png",
+      "source": null,
+      "size": 73754,
+      "sha256": "a54bc0beba4a542e948fd2de78fde42196d47bb0b49c6ba0732d5cc0f2ffc69d",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_087.png",
+      "source": null,
+      "size": 73951,
+      "sha256": "f7ef2d3ed1a2d2be2bd6fde0a3f29a7116804a49e1312536f676391d6ef31912",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_088.png",
+      "source": null,
+      "size": 73923,
+      "sha256": "7a3da6a2376add2c62b301fdae382047f5a11b7a7772e67411696e815ba75d27",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_089.png",
+      "source": null,
+      "size": 73962,
+      "sha256": "60208f11d7db63dca7b6f60994194ff8c9e8972f3faff09bd509ec924b09048f",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_090.png",
+      "source": null,
+      "size": 73955,
+      "sha256": "c3e4e49172ea624f89a063e9dac3069592c3588c950ad0dbb5d0ace4568c82e5",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_091.png",
+      "source": null,
+      "size": 74055,
+      "sha256": "a4c15f0268df3696126c1528e506d781950abacf52023634b2f2a823ca199f97",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_092.png",
+      "source": null,
+      "size": 74059,
+      "sha256": "1c3227dba6c623cc8bc9a8e6126db989fcfe674905f9882dd6c8f23996134ecc",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_093.png",
+      "source": null,
+      "size": 74319,
+      "sha256": "984b459f55402800d8b9b18129d33a11723b8ff8561e7491e3141c8102cbeec5",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_094.png",
+      "source": null,
+      "size": 74321,
+      "sha256": "8df753a9c8a37b080ddef2970692db68eee7fee174525f15b74d995842e52d08",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_095.png",
+      "source": null,
+      "size": 74305,
+      "sha256": "4bf74a52e539c61f8acf4e155f76d77efee4f4e6c29243536ff67ca91e29c3db",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_096.png",
+      "source": null,
+      "size": 74465,
+      "sha256": "44c1ea0ca77c98aa78ec0c8c57cf657459c62b4594428be1220a29bd12f1759d",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_097.png",
+      "source": null,
+      "size": 74559,
+      "sha256": "b17fb355851129731280fa9c1578720ff75fd1cd431891ed01ab89a37a2833de",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_098.png",
+      "source": null,
+      "size": 74448,
+      "sha256": "1db5ab014e5d0e941a075684ff6bce01343fd6106c52740aa3dc282abcc021fe",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_099.png",
+      "source": null,
+      "size": 74462,
+      "sha256": "e1231ffdc1728bb1969bc9a4ab2e67c34e9e87afd833cfad9eeedb969c432a08",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_100.png",
+      "source": null,
+      "size": 74533,
+      "sha256": "350f1518040e442a0f86f1c6fd8b3104c933c4555a2962baf77102b68694e1e6",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_101.png",
+      "source": null,
+      "size": 74549,
+      "sha256": "6e8574aaf009eac6b7accc70e768368acb56a9fb82e6b603a80779789aced218",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_102.png",
+      "source": null,
+      "size": 74783,
+      "sha256": "392070c5ee0e7588cd530e5131c734553c59e7c6a32193af6401ded9aaecbd06",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_103.png",
+      "source": null,
+      "size": 74796,
+      "sha256": "1e5a9397ecea1a48143f793ce3406aa6a6e5c01dba157875f2733e0a998bfa53",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_104.png",
+      "source": null,
+      "size": 74926,
+      "sha256": "51d2b4655bb7d2ca52814d493fdc8b1b8cdc8658e6fedd554e6912c0e5a75ac5",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_105.png",
+      "source": null,
+      "size": 74989,
+      "sha256": "b1e342f37a1a605fca15c6b1f645166a0adb6f50c6a6bbcc434979c9e8a49529",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_106.png",
+      "source": null,
+      "size": 75149,
+      "sha256": "6df42d954c74346fac0e5dd1406b2cc4c41e1cfcead58d6040c60eaaa8c1f6de",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_107.png",
+      "source": null,
+      "size": 75189,
+      "sha256": "aaa1c48d66c30c07975c782fa8852a95e2fa0a4a609fd63a231a2a768901c6be",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_108.png",
+      "source": null,
+      "size": 75189,
+      "sha256": "7d7fa7e9f3eb033baa27823a0e89d529d180648fe098773126b7e404e0e6f1d3",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_109.png",
+      "source": null,
+      "size": 75165,
+      "sha256": "12cd8d8902b2c8e0c0efed0bc850cfb7171ccc6146694bdaf045682b0e17c9ef",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_110.png",
+      "source": null,
+      "size": 75080,
+      "sha256": "32ac0914749cbc0aab92f9a092509caf2cee6db22a08c84f06b5492bd422fe9b",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_111.png",
+      "source": null,
+      "size": 75119,
+      "sha256": "b8447a5cefef032d09c4b2248ee7b0d81438931ad1a8848142ff6e1d10981fb4",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_112.png",
+      "source": null,
+      "size": 75154,
+      "sha256": "46db551695ece79d5f0ac7ebce588fca2f8cf5981a7b106a8e79232fcaa69ebb",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_113.png",
+      "source": null,
+      "size": 75254,
+      "sha256": "2824354ba0da33b8e732794bb7af84632a4b34b19bf27288dc2514cdb7281739",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_114.png",
+      "source": null,
+      "size": 75340,
+      "sha256": "8d09eaf31234b4e3772f1b04c574ad967c12190b4b31e8c0c0b43536f9beb176",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_115.png",
+      "source": null,
+      "size": 75262,
+      "sha256": "561ff3564011ab9ffd006ae18e99dc46fc3bb6242d5db1ac92d327e2b256bbbe",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_116.png",
+      "source": null,
+      "size": 75300,
+      "sha256": "f747b9699d930ac0851fe149bf8deffc157410659f22ed5f13407005ec6dfd03",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_117.png",
+      "source": null,
+      "size": 75269,
+      "sha256": "d3d16ef25d4cf6eae82b46960771e137fe86a6c19a1a23b17fb3eee897853b20",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_118.png",
+      "source": null,
+      "size": 75382,
+      "sha256": "02dcda207bf0d978724cb04c35645d0c8a3ebefb5badf4611c1e07ca91f6e736",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_119.png",
+      "source": null,
+      "size": 75418,
+      "sha256": "9742980141867db2c365db90c173ab4f633b4b588696d73438cb3f9a881ba147",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_120.png",
+      "source": null,
+      "size": 75290,
+      "sha256": "ac02db73e0e8d682020d614ef98b3cad8eef502574b1e3722d8b2fcdc3dca108",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_121.png",
+      "source": null,
+      "size": 75275,
+      "sha256": "21e99b2467911025e43e1658a0d80f176831fc1ed22cc460999c1b26c6b882f2",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_122.png",
+      "source": null,
+      "size": 75299,
+      "sha256": "5c313b612277ca27cbc681aefd06689f59d5d4331607e8471b7a25b3d78bbef9",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_123.png",
+      "source": null,
+      "size": 75312,
+      "sha256": "0d0244e12840c8cf8ddf75d1f93704fe351ad8bfbb14d3d2cbf81032d77f7d71",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_124.png",
+      "source": null,
+      "size": 75177,
+      "sha256": "24b5d33b398443a61c77baf9c51812d725678a4fbb316de462eff32b83beb0ab",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_125.png",
+      "source": null,
+      "size": 75068,
+      "sha256": "7f9d2fafdaed9151391a0775d58d891a397f84c76df4bd4ee55edd74b62e94bd",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_126.png",
+      "source": null,
+      "size": 75208,
+      "sha256": "ae2d284ad5636c420da7207ffda82018e418944c32f38c9df2cedf4d73079d78",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_127.png",
+      "source": null,
+      "size": 75305,
+      "sha256": "735305171c3f498c8fa8e5b797603a4cdc5c49db5f318cc9402d2670e39c2182",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_128.png",
+      "source": null,
+      "size": 75305,
+      "sha256": "934a6fed7b6fb02d4989b81a986b12836d536010f2c2e75a23f01f66979a6521",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_129.png",
+      "source": null,
+      "size": 75374,
+      "sha256": "57e7f5f4cea811629389d29bf89482cbc5cfe1cec5ad27ba92efb6e37ad59565",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_130.png",
+      "source": null,
+      "size": 75499,
+      "sha256": "cfee02fac4b4c5b8ee48284aea11d879e1307a9d6d77ebd72fa28f90c6b3da01",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_131.png",
+      "source": null,
+      "size": 75574,
+      "sha256": "6d2f0c625d876f8eb68e6e83c917b1b5230077b345eaaff20ff2d1c646fb992f",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/first_load/frame_132.png",
+      "source": null,
+      "size": 75516,
+      "sha256": "6e2b52200c006fc3790042e064c95e5acd460fda6f88342658e66196c4681137",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/Lang/English.ini",
+      "source": null,
+      "size": 2666,
+      "sha256": "d9754d7d2f5839ba0b268e3609ae83663da11e324e496d4b839febc9d95aa12d",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/Lang/German.ini",
+      "source": null,
+      "size": 2747,
+      "sha256": "569510d5e561c3700b83b5cfa94af82af48fa78a75b105074ed5881c3ee9432c",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/Lang/Italian.ini",
+      "source": null,
+      "size": 2666,
+      "sha256": "baf8fccf8337753a61c6e8e6004ccd51f9798f96675278f9fbf8b48e47592290",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/Lang/Portuguese-BR.ini",
+      "source": null,
+      "size": 2949,
+      "sha256": "46ca8a29286f3bf6fd6c980718feeeed9cb2e01bd94181a5d3050e1aba3da9fb",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/Lang/Russian.ini",
+      "source": null,
+      "size": 2744,
+      "sha256": "8a18a4e753bfd2ab5b7c059f11d9a19f1bf5d9b52f549d68f5f3bef2f45f6c97",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/Lang/Spanish.ini",
+      "source": null,
+      "size": 2863,
+      "sha256": "f98940964e18e14f61a42218ab1891c42d0d0a8c9d8e0e9b5aff3280da72c976",
+      "mode": "embed"
+    },
+    {
+      "output": "deltarunevita/ui/Lang/Turkish.ini",
+      "source": null,
+      "size": 2665,
+      "sha256": "4bc65570efdc8a877cc94a3a84fce7526e09aa98636ac9268e7534a8fdf4469e",
+      "mode": "embed"
+    },
+    {
       "output": "deltarunevita/vid/ch5_intro_en.mp4",
       "source": "chapter5_windows/vid/ch5_intro_en.mp4",
       "size": 4520993,
@@ -6134,6 +7121,13 @@
       "size": 4482399,
       "sha256": "7b7bc761a65685ea379cfc8389b396487351c6052d6396a461a504dde60b6a67",
       "mode": "copy"
+    },
+    {
+      "output": "deltarunevita/vid/first_load.mp4",
+      "source": null,
+      "size": 646282,
+      "sha256": "641a9beb87ea67844dffa6b635c1ebcc0ddf9b0c6d8fa916f56318b4bcf477d5",
+      "mode": "embed"
     },
     {
       "output": "deltarunevita/vid/tennaIntroF1_compressed_28.mp4",

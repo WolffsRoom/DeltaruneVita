@@ -224,7 +224,8 @@
   <img id="borda" class="layer" src="assets/borda.png" alt="">
   <div id="vignette"></div>
   <div id="version">Patcher v0.72</div>
-  <input type="file" id="zipInput" accept=".zip" style="display:none">
+  <input type="file" id="zipInput" accept=".zip,application/zip" style="display:none">
+  <input type="file" id="steamZipInput" accept=".zip,application/zip" style="display:none">
   <div id="fade"></div>
   <div id="splash">
     <img src="assets/LogoDeltaruneVita.png" alt="DELTARUNE Vita">
@@ -1568,8 +1569,54 @@ function toSplit(){
 }
 
 let steamFilesMap = new Map();
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const IS_MOBILE = IS_IOS || /Android|Mobile/i.test(navigator.userAgent);
+
+async function steamEntryArrayBuffer(entry){
+  if(!entry) throw new Error("Arquivo Steam ausente");
+  if(typeof entry.getFile === "function"){
+    const f=await entry.getFile();
+    return await f.arrayBuffer();
+  }
+  if(typeof entry.async === "function") return await entry.async("arraybuffer");
+  throw new Error("Entrada Steam inválida");
+}
+
+async function pickSteamZip(){
+  const input=$("steamZipInput");
+  input.value="";
+  input.onchange=async()=>{
+    if(!input.files || !input.files[0]) return;
+    const file=input.files[0];
+    try{
+      setBar(0); showBar(true); setSeam("talk");
+      const z=await JSZip.loadAsync(file);
+      const files=Object.values(z.files).filter(e=>!e.dir);
+      const dataEntry=files.find(e=>/(^|\/)data\.win$/i.test(e.name));
+      if(!dataEntry){ showBar(false); setSeam("oh",1500); speech(SEAM_LINES.steambad); return; }
+      const rootPrefix=dataEntry.name.slice(0, dataEntry.name.length-"data.win".length);
+      steamFilesMap=new Map();
+      for(const e of files){
+        if(!e.name.startsWith(rootPrefix)) continue;
+        const rel=e.name.slice(rootPrefix.length).replace(/^\/+/,"");
+        if(rel) steamFilesMap.set(rel.toLowerCase(), e);
+      }
+      steamHandle={name:file.name.replace(/\.zip$/i,"") || "DELTARUNE.zip", sourceType:"zip"};
+      showBar(false); setSeam("laugh",1500); speech(SEAM_LINES.steamok);
+    }catch(e){
+      console.error("ZIP Steam error",e); showBar(false); setSeam("oh",1500); speech(SEAM_LINES.steambad);
+    }
+  };
+  input.click();
+}
+
 async function pickSteam(){
   play(A.sel);
+  // iOS/Safari cannot use the File System Access directory picker reliably.
+  // On iPhone/iPad, accept a ZIP of the original DELTARUNE folder instead.
+  if(IS_IOS || !window.showDirectoryPicker){
+    return pickSteamZip();
+  }
   if(window.showDirectoryPicker){
     try{
       const handle = await window.showDirectoryPicker({mode:"read"});
@@ -1584,7 +1631,7 @@ async function pickSteam(){
       speech(SEAM_LINES.steamok);
     } catch(e){ setSeam("idle"); speech(SEAM_LINES.choose); }
   } else {
-    setSeam("oh",1200); speech(SEAM_LINES.nopicker);
+    return pickSteamZip();
   }
 }
 
@@ -1717,7 +1764,7 @@ async function applySelectedLanguagePacks(zip){
       if(rec.mode==="extra") data=new Uint8Array(await pack.file(rec.extra).async("arraybuffer"));
       else{
         const steamEntry=findSteamEntry(rec.source); if(!steamEntry) throw new Error("Arquivo Steam ausente: "+rec.source);
-        const sf=await steamEntry.getFile(); const oldBuf=new Uint8Array(await sf.arrayBuffer());
+        const oldBuf=new Uint8Array(await steamEntryArrayBuffer(steamEntry));
         if(rec.source_size && oldBuf.length!==rec.source_size) throw new Error("Arquivo Steam incompatível: "+rec.source);
         if(rec.source_sha256 && (await sha256Hex(oldBuf)).toLowerCase()!==rec.source_sha256.toLowerCase()) throw new Error("Arquivo Steam incompatível: "+rec.source);
         if(rec.mode==="copy") data=oldBuf;
@@ -1747,15 +1794,13 @@ async function generate(mirrorId, attachedZipFile){
       } else if(fileRec.mode === "copy"){
         const steamEntry = findSteamEntry(fileRec.source);
         if(steamEntry){
-          const f = await steamEntry.getFile();
-          const buf = await f.arrayBuffer();
+          const buf = await steamEntryArrayBuffer(steamEntry);
           zip.file(outPath, buf);
         }
       } else if(fileRec.mode === "browser_patch"){
         const steamEntry = findSteamEntry(fileRec.source);
         if(steamEntry){
-          const f = await steamEntry.getFile();
-          const origBuf = new Uint8Array(await f.arrayBuffer());
+          const origBuf = new Uint8Array(await steamEntryArrayBuffer(steamEntry));
           const patchRes = await fetch("patch_data/patches/" + fileRec.patch);
           const patchBuf = new Uint8Array(await patchRes.arrayBuffer());
           const patchedBuf = await applyBrowserPatch(origBuf, patchBuf);
@@ -1766,14 +1811,29 @@ async function generate(mirrorId, attachedZipFile){
     await applySelectedLanguagePacks(zip);
 
     setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).progress_compressing || "Compressing final files..."));
-    const content = await zip.generateAsync({type:"blob"}, (metadata) => {
-      setBar(metadata.percent);
-    });
+    let content;
+    if(IS_MOBILE){
+      // Avoid a second giant contiguous allocation on mobile browsers.
+      const chunks=[];
+      const stream=zip.generateInternalStream({type:"uint8array", streamFiles:true});
+      content=await new Promise((resolve,reject)=>{
+        stream.on("data", chunk=>chunks.push(chunk));
+        stream.on("error", reject);
+        stream.on("end", ()=>resolve(new Blob(chunks,{type:"application/zip"})));
+        stream.resume();
+      });
+    }else{
+      content = await zip.generateAsync({type:"blob", streamFiles:true}, (metadata) => setBar(metadata.percent));
+    }
 
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(content);
+    const downloadUrl=URL.createObjectURL(content);
+    link.href = downloadUrl;
     link.download = "DeltaruneVita_v" + PORT_VERSION + ".zip";
+    link.style.display="none";
+    document.body.appendChild(link);
     link.click();
+    setTimeout(()=>{ URL.revokeObjectURL(downloadUrl); link.remove(); }, 60000);
 
     showBar(false); setSeam("laugh", 2000);
     setLine($("single"), SEAM_LINES.done);

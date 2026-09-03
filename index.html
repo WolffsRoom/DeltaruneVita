@@ -455,6 +455,7 @@ let steamHandle=null, manifest=null;
 let screen="splash";        // "splash" | "web-lang" | "main" | "lang" | "ajustes"
 let webLangIdx=0;
 let selectedExtras=new Set();
+let languageSelectionTouched=false;
 let languageCatalog=null;
 let pendingAction=null;
 let inTransition=false;   // idiomas extras opcionais; selecao multipla
@@ -536,7 +537,7 @@ const UI_TEXT = {
     no: "Não",
     base_tag: " (base)",
     soon_tag: " (em breve)",
-    lang_names: { CORE: "Original", PTBR: "Português (BR)", ES: "Español", DE: "Alemão" },
+    lang_names: { CORE: "Original", PTBR: "Português (BR)", ES: "Español", FR: "Français", DE: "Alemão", RU: "Russo", TR: "Turco" },
     version_line: "* {lang}, ótima escolha. A versão suportada é a v{ver}. \n* Agora clique em {btn} para continuar.",
     mirror_question: "* Selecione o servidor para o download:",
     mirror_manual_option: "Baixar e anexar manualmente",
@@ -546,6 +547,12 @@ const UI_TEXT = {
     mirror_attach_option: "Anexar arquivo baixado",
     questions: { lang: "* Qual língua deseja configurar?", ajustes: "* O que deseja ajustar?", talk: "* Sobre o que quer conversar?" },
     suggest_translation: "* Hmmm, notei que você selecionou \"{lang}\". Devo incluir essa tradução para você?",
+    progress_download: "Baixando pacote de idioma: {lang}...",
+    progress_processing: "Processando arquivos do DELTARUNE...",
+    progress_compressing: "Compactando arquivos finais...",
+    processing_error: "Ocorreu um erro durante o processamento. Verifique o console.",
+    original_label: "Original (EN/JP)",
+    cache_suffix: " com cache",
     welcome:"* Bem-vindo!",
     intro:"* Hee Heee... Um viajante do outro mundo. O que deseja hoje?",
     choose:"* Escolha um idioma nas prateleiras, ou o que quiser. Você que sabe...",
@@ -571,8 +578,11 @@ const UI_TEXT = {
     explain: {
       CORE: "Inglês e Japonês sempre estarão incluídos nos arquivos gerados.",
       PTBR: "* Baixará o mod 'PTBR' nos arquivos gerados pelo Patcher.",
-      ES: "* Tradução em espanhol. Ainda não disponível.",
-      DE: "* Tradução em alemão. Ainda não disponível.",
+      ES: "* Tradução em espanhol disponível para inclusão.",
+      DE: "* Tradução em alemão disponível para inclusão.",
+      FR: "* Tradução em francês disponível para inclusão.",
+      RU: "* Tradução em russo disponível para inclusão.",
+      TR: "* Tradução em turco disponível para inclusão.",
       sfx: "* Liga ou desliga os efeitos sonoros do menu.",
       music: "* Liga ou desliga a música ambiente da loja.",
       cache: "* Opcional. Inclui PVR/BC3/RGBA4444 pré-gerados quando disponíveis; sem isso, o Vita gera o cache sozinho.",
@@ -608,7 +618,7 @@ const UI_TEXT = {
     no: "No",
     base_tag: "  (base)",
     soon_tag: "  (próximamente)",
-    lang_names: { CORE: "Original", PTBR: "Portugués (BR)", ES: "Español", DE: "Alemán" },
+    lang_names: { CORE: "Original", PTBR: "Portugués (BR)", ES: "Español", FR: "Francés", DE: "Alemán", RU: "Ruso", TR: "Turco" },
     version_line: "* {lang}, excelente elección. La versión soportada es la v{ver}. \n* Ahora haz clic en {btn} para continuar.",
     mirror_question: "* Selecciona el servidor para la descarga:",
     mirror_manual_option: "Descargar y adjuntar manualmente",
@@ -624,6 +634,12 @@ const UI_TEXT = {
       talk: "* ¿De qué quieres hablar?"
     },
     suggest_translation: "* Hmmm, noté que seleccionaste \"{lang}\". ¿Quieres que incluya esta traducción?",
+    progress_download: "Descargando paquete de idioma: {lang}...",
+    progress_processing: "Procesando archivos de DELTARUNE...",
+    progress_compressing: "Comprimiendo archivos finales...",
+    processing_error: "Ocurrió un error durante el procesamiento. Revisa la consola.",
+    original_label: "Original (EN/JP)",
+    cache_suffix: " con caché",
     welcome:"* ¡Bienvenido!",
     intro:"* Jua Jua... Un viajero de otro mundo. ¿Qué deseas hoy?",
     choose:"* Elige un idioma de los estantes, o lo que quieras. Tú decides...",
@@ -649,8 +665,11 @@ const UI_TEXT = {
     explain: {
       CORE: "* El inglés y el japonés siempre estarán incluidos en los archivos generados.",
       PTBR: "* Descargará el mod 'PTBR' en los archivos generados por el Patcher.",
-      ES: "* Traducción al español. Aún no disponible.",
-      DE: "* Traducción al alemán. Aún no disponible.",
+      ES: "* Traducción al español disponible para incluir.",
+      DE: "* Traducción al alemán disponible para incluir.",
+      FR: "* Traducción al francés disponible para incluir.",
+      RU: "* Traducción al ruso disponible para incluir.",
+      TR: "* Traducción al turco disponible para incluir.",
       sfx: "* Activa o desactiva los efectos de sonido del menú.",
       music: "* Activa o desactiva la música ambiental de la tienda.",
       cache: "* Archivo de caché opcional para reducir los tiempos de carga en el juego.",
@@ -686,7 +705,7 @@ const UI_TEXT = {
     no: "No",
     base_tag: "  (base)",
     soon_tag: "  (coming soon)",
-    lang_names: { CORE: "Original", PTBR: "Portuguese (BR)", ES: "Spanish", DE: "German" },
+    lang_names: { CORE: "Original", PTBR: "Portuguese (BR)", ES: "Spanish", FR: "French", DE: "German", RU: "Russian", TR: "Turkish" },
     version_line: "* {lang}, great choice. The supported version is v{ver}. \n* Now click {btn} to continue.",
     mirror_question: "* Select the download server:",
     mirror_manual_option: "Download and attach manually",
@@ -702,6 +721,12 @@ const UI_TEXT = {
       talk: "* What do you want to talk about?"
     },
     suggest_translation: "* Hmmm, I noticed you selected \"{lang}\". Should I include this translation for you?",
+    progress_download: "Downloading language pack: {lang}...",
+    progress_processing: "Processing DELTARUNE files...",
+    progress_compressing: "Compressing final files...",
+    processing_error: "An error occurred during processing. Check the console.",
+    original_label: "Original (EN/JP)",
+    cache_suffix: " with cache",
     welcome:"* Welcome!",
     intro:"* Hee Heee... A traveler from another world. What do you wish for today?",
     choose:"* Choose a language on the shelves, or whatever you want. It's up to you...",
@@ -727,8 +752,11 @@ const UI_TEXT = {
     explain: {
       CORE: "* English and Japanese will always be included in the generated files.",
       PTBR: "* Will download the 'PTBR' mod in the files generated by the Patcher.",
-      ES: "* Spanish translation. Not available yet.",
-      DE: "* German translation. Not available yet.",
+      ES: "* Spanish translation available to include.",
+      DE: "* German translation available to include.",
+      FR: "* French translation available to include.",
+      RU: "* Russian translation available to include.",
+      TR: "* Turkish translation available to include.",
       sfx: "* Turn on or off the menu sound effects.",
       music: "* Turn on or off the shop's ambient music.",
       cache: "* Optional cache file to reduce loading times in the game.",
@@ -764,7 +792,7 @@ const UI_TEXT = {
     no: "Non",
     base_tag: "  (de base)",
     soon_tag: "  (bientôt)",
-    lang_names: { CORE: "Original", PTBR: "Portugais (BR)", ES: "Espagnol", DE: "Allemand" },
+    lang_names: { CORE: "Original", PTBR: "Portugais (BR)", ES: "Espagnol", FR: "Français", DE: "Allemand", RU: "Russe", TR: "Turc" },
     version_line: "* {lang}, excellent choix. La version prise en charge est la v{ver}. \n* Cliquez maintenant sur {btn} pour continuer.",
     mirror_question: "* Sélectionnez le serveur de téléchargement :",
     mirror_manual_option: "Télécharger et joindre manuellement",
@@ -780,6 +808,12 @@ const UI_TEXT = {
       talk: "* De quoi voulez-vous parler ?"
     },
     suggest_translation: "* Hmmm, j’ai remarqué que vous avez sélectionné « {lang} ». Dois-je inclure cette traduction ?",
+    progress_download: "Téléchargement du pack de langue : {lang}...",
+    progress_processing: "Traitement des fichiers DELTARUNE...",
+    progress_compressing: "Compression des fichiers finaux...",
+    processing_error: "Une erreur est survenue pendant le traitement. Consultez la console.",
+    original_label: "Original (EN/JP)",
+    cache_suffix: " avec cache",
     welcome:"* Bienvenue !",
     intro:"* Hee Heee... Un voyageur d'un autre monde. Que désires-tu aujourd'hui ?",
     choose:"* Choisissez une langue sur les étagères. Comme vous voulez...",
@@ -805,8 +839,11 @@ const UI_TEXT = {
     explain: {
       CORE: "* L'anglais et le japonais seront toujours inclus dans les fichiers générés.",
       PTBR: "* Téléchargera le mod 'PTBR' dans les fichiers générés par le Patcher.",
-      ES: "* Traduction espagnole. Pas encore disponible.",
-      DE: "* Traduction allemande. Pas encore disponible.",
+      ES: "* Traduction espagnole disponible.",
+      DE: "* Traduction allemande disponible.",
+      FR: "* Traduction française disponible.",
+      RU: "* Traduction russe disponible.",
+      TR: "* Traduction turque disponible.",
       sfx: "* Active ou désactive les effets sonores du menu.",
       music: "* Active ou désactive la musique d'ambiance de la boutique.",
       cache: "* Fichier de cache optionnel pour réduire les temps de chargement dans le jeu.",
@@ -842,7 +879,7 @@ const UI_TEXT = {
     no: "Nein",
     base_tag: "  (basis)",
     soon_tag: "  (demnächst)",
-    lang_names: { CORE: "Original", PTBR: "Portugiesisch (BR)", ES: "Spanisch", DE: "Deutsch" },
+    lang_names: { CORE: "Original", PTBR: "Portugiesisch (BR)", ES: "Spanisch", FR: "Französisch", DE: "Deutsch", RU: "Russisch", TR: "Türkisch" },
     version_line: "* {lang}, gute Wahl. Die unterstützte Version ist v{ver}. \n* Klicke jetzt auf {btn}, um fortzufahren.",
     mirror_question: "* Wähle den Download-Server:",
     mirror_manual_option: "Manuell herunterladen und anhängen",
@@ -858,6 +895,12 @@ const UI_TEXT = {
       talk: "* Worüber möchtest du sprechen?"
     },
     suggest_translation: "* Hmmm, ich sehe, du hast „{lang}“ gewählt. Soll ich diese Übersetzung hinzufügen?",
+    progress_download: "Sprachpaket wird heruntergeladen: {lang}...",
+    progress_processing: "DELTARUNE-Dateien werden verarbeitet...",
+    progress_compressing: "Enddateien werden komprimiert...",
+    processing_error: "Bei der Verarbeitung ist ein Fehler aufgetreten. Prüfe die Konsole.",
+    original_label: "Original (EN/JP)",
+    cache_suffix: " mit Cache",
     welcome:"* Willkommen!",
     intro:"* Hee Heee... Ein Reisender aus einer anderen Welt. Was wünschst du dir heute?",
     choose:"* Wähle eine Sprache aus den Regalen, ganz wie du willst...",
@@ -883,8 +926,11 @@ const UI_TEXT = {
     explain: {
       CORE: "* Englisch und Japanisch sind immer in den generierten Dateien enthalten.",
       PTBR: "* Lädt den 'PTBR'-Mod in die vom Patcher generierten Dateien herunter.",
-      ES: "* Spanische Übersetzung. Noch nicht verfügbar.",
-      DE: "* Deutsche Übersetzung. Noch nicht verfügbar.",
+      ES: "* Spanische Übersetzung verfügbar.",
+      DE: "* Deutsche Übersetzung verfügbar.",
+      FR: "* Französische Übersetzung verfügbar.",
+      RU: "* Russische Übersetzung verfügbar.",
+      TR: "* Türkische Übersetzung verfügbar.",
       sfx: "* Schaltet die Soundeffekte des Menüs ein oder aus.",
       music: "* Schaltet die Hintergrundmusik des Ladens ein oder aus.",
       cache: "* Optionale Cache-Datei zur Reduzierung der Ladezeiten im Spiel.",
@@ -920,7 +966,7 @@ const UI_TEXT = {
     no: "Нет",
     base_tag: "  (базовый)",
     soon_tag: "  (скоро)",
-    lang_names: { CORE: "Оригинал", PTBR: "Португальский (BR)", ES: "Испанский", DE: "Немецкий" },
+    lang_names: { CORE: "Оригинал", PTBR: "Португальский (BR)", ES: "Испанский", FR: "Французский", DE: "Немецкий", RU: "Русский", TR: "Турецкий" },
     version_line: "* {lang}, отличный выбор. Поддерживаемая версия — v{ver}. \n* Теперь нажми «{btn}», чтобы продолжить.",
     mirror_question: "* Выбери сервер для загрузки:",
     mirror_manual_option: "Скачать и прикрепить вручную",
@@ -936,6 +982,12 @@ const UI_TEXT = {
       talk: "* О чем поговорить?"
     },
     suggest_translation: "* Хммм, я заметил, что ты выбрал «{lang}». Добавить этот перевод?",
+    progress_download: "Загрузка языкового пакета: {lang}...",
+    progress_processing: "Обработка файлов DELTARUNE...",
+    progress_compressing: "Сжатие итоговых файлов...",
+    processing_error: "Во время обработки произошла ошибка. Проверь консоль.",
+    original_label: "Оригинал (EN/JP)",
+    cache_suffix: " с кэшем",
     welcome:"* Добро пожаловать!",
     intro:"* Хе-хе... Путешественник из другого мира. Чего ты желаешь сегодня?",
     choose:"* Выбери язык на полках, или что угодно. Решать тебе...",
@@ -961,8 +1013,11 @@ const UI_TEXT = {
     explain: {
       CORE: "* Английский и японский языки всегда будут включены в сгенерированные файлы.",
       PTBR: "* Скачает мод 'PTBR' в файлы, генерируемые патчером.",
-      ES: "* Испанский перевод. Пока недоступен.",
-      DE: "* Немецкий перевод. Пока недоступен.",
+      ES: "* Испанский перевод доступен.",
+      DE: "* Немецкий перевод доступен.",
+      FR: "* Французский перевод доступен.",
+      RU: "* Русский перевод доступен.",
+      TR: "* Турецкий перевод доступен.",
       sfx: "* Включает или выключает звуковые эффекты меню.",
       music: "* Включает или выключает фоновую музыку магазина.",
       cache: "* Дополнительный файл кэша для сокращения времени загрузки в игре.",
@@ -998,7 +1053,7 @@ const UI_TEXT = {
     no: "いいえ",
     base_tag: "  (標準)",
     soon_tag: "  (近日公開)",
-    lang_names: { CORE: "オリジナル", PTBR: "ポルトガル語 (BR)", ES: "スペイン語", DE: "ドイツ語" },
+    lang_names: { CORE: "オリジナル", PTBR: "ポルトガル語 (BR)", ES: "スペイン語", FR: "フランス語", DE: "ドイツ語", RU: "ロシア語", TR: "トルコ語" },
     version_line: "* {lang}か、いい選択だね。対応バージョンはv{ver}だよ。\n* さあ、「{btn}」をクリックして続けよう。",
     mirror_question: "* ダウンロードするサーバーを選んでね：",
     mirror_manual_option: "手動でダウンロードして添付する",
@@ -1014,6 +1069,12 @@ const UI_TEXT = {
       talk: "* 何について話す？"
     },
     suggest_translation: "* ふむ…「{lang}」を選んだようだね。この翻訳も含めようか？",
+    progress_download: "言語パックをダウンロード中: {lang}...",
+    progress_processing: "DELTARUNEファイルを処理中...",
+    progress_compressing: "最終ファイルを圧縮中...",
+    processing_error: "処理中にエラーが発生しました。コンソールを確認してください。",
+    original_label: "オリジナル (EN/JP)",
+    cache_suffix: "（キャッシュあり）",
     welcome:"* ようこそ！",
     intro:"* ヒッヒッヒ… 異世界からの旅人よ。今日は何を望むのかな？",
     choose:"* 棚から言語を選びなさい。君の自由だよ…",
@@ -1039,8 +1100,11 @@ const UI_TEXT = {
     explain: {
       CORE: "* 生成されるファイルには、英語と日本語が常に含まれるよ。",
       PTBR: "* パッチャーによって生成されるファイルに『PTBR』モッドをダウンロードするよ。",
-      ES: "* スペイン語翻訳。まだ利用できないよ。",
-      DE: "* ドイツ語翻訳。まだ利用できないよ。",
+      ES: "* スペイン語翻訳を追加できるよ。",
+      DE: "* ドイツ語翻訳を追加できるよ。",
+      FR: "* フランス語翻訳を追加できるよ。",
+      RU: "* ロシア語翻訳を追加できるよ。",
+      TR: "* トルコ語翻訳を追加できるよ。",
       sfx: "* メニューの効果音のオン/オフを切り替えるよ。",
       music: "* お店のBGMのオン/オフを切り替えるよ。",
       cache: "* ゲーム中のロード時間を短縮するためのオプションのキャッシュファイルだよ。",
@@ -1161,7 +1225,9 @@ function renderRows(box,list,onEnter,onClick){
   const existing = box.querySelectorAll(".opt");
   if(existing.length === list.length){
     existing.forEach((row, idx)=>{
+      const it=list[idx];
       row.className = "opt" + (idx === active ? " active" : "");
+      row.innerHTML='<span class="h">♥</span>'+(it.flag ? '<img class="lang-flag" src="'+it.flag+'" alt=""> ' : '')+it.label;
     });
     return;
   }
@@ -1308,6 +1374,11 @@ function activate(){
   if(screen==="lang"){
     if(it.base){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.core); return; }
     if(!it.ready){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.soon); return; }
+    languageSelectionTouched=true;
+    if(selectedExtras.has(it.code)) selectedExtras.delete(it.code);
+    else selectedExtras.add(it.code);
+    play(A.sel); setSeam(selectedExtras.has(it.code)?"laugh":"idle",700); render();
+    return;
   }
   pending=true; confirmSel=0; play(A.sel); setSeam("talk"); render();
 }
@@ -1329,15 +1400,7 @@ function resolveConfirm(){
     return;
   }
   const it=subList()[active];
-  if(screen==="lang"){
-    const L=LANGS[active];
-    const ret = RET_INDEX[screen] ?? 0;
-    if(selectedExtras.has(L.code)) selectedExtras.delete(L.code);
-    else selectedExtras.add(L.code);
-    pending=false; screen="lang"; setSeam(selectedExtras.has(L.code)?"laugh":"idle",900); render();
-    speech(selectedExtras.has(L.code) ? versionLine(L) : SEAM_LINES.rem);
-    return;
-  } else {
+  {
     if(it.id==="sfx") sfxOn=!sfxOn;
     else if(it.id==="music"){ musicOn=!musicOn; musicOn?startMusic():stopMusic(); }
     else if(it.id==="cache") cacheOn=!cacheOn;
@@ -1348,6 +1411,9 @@ function resolveConfirm(){
 }
 
 function cancelConfirm(){
+  if(pendingAction && pendingAction.startsWith("apply-suggest:")){
+    pendingAction=null; pending=false; showApplyConfirmation(); return;
+  }
   pending=false;
   if(pendingAction === "apply") {
     pendingAction = null; setSeam("idle"); speech(SEAM_LINES.choose); render(); return;
@@ -1465,15 +1531,28 @@ function findSteamEntry(source){
   return matches.length === 1 ? matches[0] : null;
 }
 
-function apply(){
-  if(!steamHandle){ play(A.swing); setSeam("oh",1200); speech(SEAM_LINES.needsteam); return; }
-  play(A.sel); pendingAction = "apply"; confirmSel = 0;
-  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  const extraName = selectedExtras.size ? Array.from(selectedExtras).map(c => (T.lang_names && T.lang_names[c]) || c).join(", ") : "Original (EN/JP)";
-  const cacheText = cacheOn ? " com cache" : "";
+function showApplyConfirmation(){
+  pendingAction = "apply"; confirmSel = 0; pending=true;
+  const T = UI_TEXT[webLang] || UI_TEXT.en;
+  const extraName = selectedExtras.size ? Array.from(selectedExtras).map(c => (T.lang_names && T.lang_names[c]) || (LANGS.find(x=>x.code===c)?.label || c)).join(", ") : (T.original_label || "Original (EN/JP)");
+  const cacheText = cacheOn ? (T.cache_suffix || " with cache") : "";
   const tmpl = T.confirm_apply || SEAM_LINES.confirm_apply;
   const promptText = tmpl.replace("{lang}", extraName).replace("{ver}", PORT_VERSION).replace("{dir}", steamHandle.name).replace("{cache}", cacheText);
   setSeam("talk"); speech(promptText); renderConfirm();
+}
+
+function apply(){
+  if(!steamHandle){ play(A.swing); setSeam("oh",1200); speech(SEAM_LINES.needsteam); return; }
+  play(A.sel);
+  const suggested=LANGS.find(L=>!L.base && L.ready && (L.interface_codes||[]).includes(webLang));
+  if(!languageSelectionTouched && suggested && !selectedExtras.has(suggested.code)){
+    pendingAction="apply-suggest:"+suggested.code; pending=true; confirmSel=0;
+    const T=UI_TEXT[webLang] || UI_TEXT.en;
+    const tmpl=T.suggest_translation || UI_TEXT.en.suggest_translation;
+    setSeam("talk"); speech(tmpl.replace("{lang}", suggested.label)); renderConfirm();
+    return;
+  }
+  showApplyConfirmation();
 }
 
 function attachManualFile(){
@@ -1532,7 +1611,7 @@ async function applySelectedLanguagePacks(zip){
     const L=LANGS.find(x=>x.code===code); if(!L || !L.packId) continue;
     const entry=(catalog.languages||[]).find(x=>x.id===L.packId && x.ready);
     if(!entry || !entry.url) throw new Error("Language Pack indisponível: "+L.label);
-    setLine($("single"), "* Baixando Language Pack: "+L.label+"...");
+    setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).progress_download || "Downloading language pack: {lang}...").replace("{lang}",L.label));
     let res=await fetch(entry.url, {cache:"no-store"});
     if(!res.ok && location.hostname==="127.0.0.1") res=await fetch("/proxy_download?url="+encodeURIComponent(entry.url));
     if(!res.ok) throw new Error("Falha ao baixar "+L.label+" (HTTP "+res.status+")");
@@ -1564,7 +1643,7 @@ async function generate(mirrorId, attachedZipFile){
   busy = true; setBar(0); showBar(true);
   try {
     manifest = manifestData;
-    setLine($("single"), "* Processando arquivos do DELTARUNE...");
+    setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).progress_processing || "Processing DELTARUNE files..."));
     const zip = new JSZip();
     const totalFiles = manifest.files.length;
     for(let i = 0; i < totalFiles; i++){
@@ -1596,7 +1675,7 @@ async function generate(mirrorId, attachedZipFile){
     }
     await applySelectedLanguagePacks(zip);
 
-    setLine($("single"), "* Compactando arquivos finais...");
+    setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).progress_compressing || "Compressing final files..."));
     const content = await zip.generateAsync({type:"blob"}, (metadata) => {
       setBar(metadata.percent);
     });
@@ -1611,7 +1690,7 @@ async function generate(mirrorId, attachedZipFile){
   } catch(e) {
     console.error("Error generating patch", e);
     showBar(false); setSeam("oh", 2000);
-    setLine($("single"), "* Ocorreu um erro durante o processamento. Verifique o console.");
+    setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).processing_error || "An error occurred during processing. Check the console."));
   } finally { busy = false; }
 }
 

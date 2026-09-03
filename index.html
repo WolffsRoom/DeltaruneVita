@@ -1811,7 +1811,10 @@ function initWebLangMouse() {
   });
 }
 
+let webLangTransition=false;
 function confirmWebLang() {
+  if(webLangTransition) return;
+  webLangTransition=true;
   const items = document.querySelectorAll("#lang-items .item");
   if (items[webLangIdx]) {
     const code = items[webLangIdx].getAttribute("data-lang");
@@ -1824,7 +1827,9 @@ function confirmWebLang() {
   toSplit();
   render();
   type($("speech"), SEAM_LINES.welcome || "* Welcome!", ()=>{
-    type($("speech"), SEAM_LINES.intro);
+    setTimeout(()=>{
+      type($("speech"), SEAM_LINES.intro, ()=>{ webLangTransition=false; });
+    }, 850);
   });
 }
 

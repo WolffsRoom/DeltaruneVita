@@ -530,6 +530,9 @@ const UI_TEXT = {
     btn_back: "Voltar",
     lang_single_comment: "* Boa escolha: {lang}!",
     lang_polyglot_comment: "* Hee hee... Poliglota, hein?",
+    lang_confirm_none: "* Hee hee... Ficamos com o original. Agora já podemos Aplicar o patch.",
+    lang_confirm_one: "* Hee hee... Bom, agora que o idioma foi selecionado, já podemos Aplicar o patch.",
+    lang_confirm_many: "* Hee hee... Bom, agora que os idiomas foram selecionados, já podemos Aplicar o patch.",
     talk_about: "Sobre você",
     talk_project: "Sobre o DeltaruneVita",
     talk_wolff: "Quem é Wolff?",
@@ -615,6 +618,9 @@ const UI_TEXT = {
     btn_back: "Volver",
     lang_single_comment: "* Buena elección: {lang}!",
     lang_polyglot_comment: "* Je, je... ¡Políglota!",
+    lang_confirm_none: "* Je, je... Nos quedamos con el original. Ya podemos Aplicar el parche.",
+    lang_confirm_one: "* Je, je... Bien, ya elegimos el idioma. Ahora podemos Aplicar el parche.",
+    lang_confirm_many: "* Je, je... Bien, ya elegimos los idiomas. Ahora podemos Aplicar el parche.",
     talk_about: "Sobre ti",
     talk_project: "Sobre DeltaruneVita",
     talk_wolff: "¿Quién es Wolff?",
@@ -706,6 +712,9 @@ const UI_TEXT = {
     btn_back: "Back",
     lang_single_comment: "* Good choice: {lang}!",
     lang_polyglot_comment: "* Hee hee... A polyglot!",
+    lang_confirm_none: "* Hee hee... We will keep the original. Now we can Apply the patch.",
+    lang_confirm_one: "* Hee hee... Good, the language is selected. Now we can Apply the patch.",
+    lang_confirm_many: "* Hee hee... Good, the languages are selected. Now we can Apply the patch.",
     talk_about: "About you",
     talk_project: "About DeltaruneVita",
     talk_wolff: "Who is Wolff?",
@@ -797,6 +806,9 @@ const UI_TEXT = {
     btn_back: "Retour",
     lang_single_comment: "* Bon choix : {lang} !",
     lang_polyglot_comment: "* Hé hé... Polyglotte !",
+    lang_confirm_none: "* Hé hé... On garde l’original. Nous pouvons maintenant Appliquer le patch.",
+    lang_confirm_one: "* Hé hé... Bien, la langue est choisie. Nous pouvons maintenant Appliquer le patch.",
+    lang_confirm_many: "* Hé hé... Bien, les langues sont choisies. Nous pouvons maintenant Appliquer le patch.",
     talk_about: "À propos de vous",
     talk_project: "À propos de DeltaruneVita",
     talk_wolff: "Qui est Wolff ?",
@@ -888,6 +900,9 @@ const UI_TEXT = {
     btn_back: "Zurück",
     lang_single_comment: "* Gute Wahl: {lang}!",
     lang_polyglot_comment: "* Hee hee... Ein Polyglott!",
+    lang_confirm_none: "* Hee hee... Wir bleiben beim Original. Jetzt können wir den Patch Anwenden.",
+    lang_confirm_one: "* Hee hee... Gut, die Sprache ist gewählt. Jetzt können wir den Patch Anwenden.",
+    lang_confirm_many: "* Hee hee... Gut, die Sprachen sind gewählt. Jetzt können wir den Patch Anwenden.",
     talk_about: "Über dich",
     talk_project: "Über DeltaruneVita",
     talk_wolff: "Wer ist Wolff?",
@@ -979,6 +994,9 @@ const UI_TEXT = {
     btn_back: "Назад",
     lang_single_comment: "* Хороший выбор: {lang}!",
     lang_polyglot_comment: "* Хе-хе... Полиглот!",
+    lang_confirm_none: "* Хе-хе... Оставим оригинал. Теперь можно применить патч.",
+    lang_confirm_one: "* Хе-хе... Хорошо, язык выбран. Теперь можно применить патч.",
+    lang_confirm_many: "* Хе-хе... Хорошо, языки выбраны. Теперь можно применить патч.",
     talk_about: "О тебе",
     talk_project: "О DeltaruneVita",
     talk_wolff: "Кто такой Wolff?",
@@ -1070,6 +1088,9 @@ const UI_TEXT = {
     btn_back: "戻る",
     lang_single_comment: "* {lang}、いい選択だね！",
     lang_polyglot_comment: "* ヒッヒッヒ… 多言語だね！",
+    lang_confirm_none: "* ヒッヒッヒ… オリジナルのままだね。これでパッチを適用できるよ。",
+    lang_confirm_one: "* ヒッヒッヒ… よし、言語は選べたね。これでパッチを適用できるよ。",
+    lang_confirm_many: "* ヒッヒッヒ… よし、言語は選べたね。これでパッチを適用できるよ。",
     talk_about: "あなたについて",
     talk_project: "DeltaruneVitaについて",
     talk_wolff: "Wolffとは誰？",
@@ -1413,10 +1434,15 @@ function activate(){
   if(screen==="talk"){ return talkSpeak(it.id); }
   if(screen==="lang"){
     if(it.id==="lang-confirm"){
-      play(A.sel); screen="main"; active=RET_INDEX.lang; pending=false; pendingAction=null; setSeam("idle");
+      play(A.sel); screen="main"; active=RET_INDEX.lang; pending=false; pendingAction=null; setSeam("laugh",900);
       $("speech").classList.remove("lang-options");
       $("speech").innerHTML=""; $("options").innerHTML="";
-      render(); speech(SEAM_LINES.choose);
+      render();
+      const T=UI_TEXT[webLang] || UI_TEXT.en;
+      const msg = selectedExtras.size===0 ? (T.lang_confirm_none || T.choose) :
+                  selectedExtras.size===1 ? (T.lang_confirm_one || T.choose) :
+                  (T.lang_confirm_many || T.choose);
+      speech(msg);
       return;
     }
     if(it.id==="lang-back"){ return exitSub(); }

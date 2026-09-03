@@ -1,0 +1,1218 @@
+﻿import sys
+from pathlib import Path
+
+index_path = Path(r"c:\Users\wolff\Documents\SDKVita\DeltaruneVita\artifacts\Patcher\Build_Patch\webpatcher\index.html")
+
+header_part = """<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/x-icon" href="./favicon.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seam's Patcher - DeltaruneVita</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --white:#ffffff;
+    --yellow:#ffd94a;
+    --orange:#ff8f2b;
+    --gray:#9a9a9a;
+    --heart:#ff2b2b;
+  }
+  @font-face{
+    font-family:"DTRune";
+    src:url("assets/undertale-deltarune-extended-fixed.otf") format("opentype");
+    font-display:swap;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#000;
+    color:var(--white);
+    font-family:"DTRune","Courier New",ui-monospace,monospace;
+    font-weight:normal;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;overflow:hidden;
+  }
+  img{image-rendering:pixelated;-webkit-user-drag:none;user-select:none}
+
+  /* frame authored at 1920x1080 â€” all layers overlap perfectly */
+  #frame{
+    position:relative;
+    width:min(80vw, 142.2vh);
+    aspect-ratio:16/9;
+    background:#000;
+    overflow:hidden;
+    /* text scales with the frame */
+    font-size:min(1.78vw, 3.16vh);
+    line-height:1.35;
+  }
+  .layer{position:absolute;inset:0;width:100%;height:100%}
+  #borda{z-index:5;pointer-events:none}
+  /* black vignette fades the border edges into the black background */
+  #vignette{position:absolute;inset:0;z-index:7;pointer-events:none;
+    box-shadow:inset 0 0 7vw 2.2vw #000}
+  #fundo{z-index:10}
+  #shopbg{z-index:20}
+  #seam-wrap{
+    position:absolute;z-index:30;
+    left:50%;bottom:52%;transform:translate(-50%,30px);   /* acima do dialog2, 30px pra baixo */
+    width:25.7%;                 /* 135% do tamanho anterior (19%) */
+    transition:left .35s ease;
+  }
+  #seam-wrap.left{ left:35%; }
+  #seam{width:100%;display:block;filter:drop-shadow(0 .35vw 0 rgba(0,0,0,.55))}
+  #dialog{z-index:40;pointer-events:none}
+
+  /* text overlays live above the dialog art */
+  .text-layer{position:absolute;z-index:50;color:var(--white);
+    text-shadow:.08em .08em 0 #000;white-space:pre-wrap}
+
+  /* single wide box (intro / final) */
+  #single{left:19.5%;right:19.5%;top:55.5%;bottom:8%;display:none}
+
+  /* split: SAM speech (left) */
+  #speech{left:19%;top:56%;width:37%;height:34%;display:none}
+
+  /* split: options (right) */
+  #options{left:61.5%;top:57%;width:20%;height:32%;display:none;
+    flex-direction:column;gap:.15em}
+
+  /* dialogplus (explanation panel, upper-right) â€” slides up from below */
+  #plusbg{z-index:44;opacity:0;visibility:hidden;transform:translateY(7%);
+    transition:opacity .3s ease, transform .3s ease}
+  #plusbg.show{opacity:1;visibility:visible;transform:translateY(0)}
+  #plus{left:60.5%;top:13%;width:22%;height:37%;
+    display:flex;flex-direction:column;gap:.12em;
+    opacity:0;visibility:hidden;transform:translateY(7%);
+    transition:opacity .3s ease, transform .3s ease}
+  #plus.show{opacity:1;visibility:visible;transform:translateY(0)}
+  #plus .ptitle{color:var(--orange);font-size:.68em;letter-spacing:.1em;margin-bottom:.15em}
+  #plus .okrow{position:relative;padding-left:1.5em;margin-top:.4em;color:var(--white)}
+  #plus .okrow .h{position:absolute;left:0;top:.06em;width:1.05em;height:1.05em;image-rendering:pixelated}
+
+  /* all options are white; the heart pointer is the only highlight */
+  .opt{position:relative;padding-left:1.5em;cursor:pointer;color:var(--white);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .opt .h{position:absolute;left:0;top:.08em;width:1.05em;height:1.05em;
+    opacity:0;image-rendering:pixelated}
+  .opt.active .h{opacity:1}
+  .opt .pr{color:var(--white);font-size:.78em;margin-left:.4em}
+
+  /* download / patch progress bar (in the speech box) */
+  #pbar{position:absolute;z-index:50;left:50%;top:73%;transform:translateX(-50%);width:55%;height:5%;
+    display:none;border:.15em solid var(--white);background:#000;box-sizing:border-box}
+  #pbar > i{display:block;height:100%;width:0;background:var(--yellow);transition:width .08s linear}
+  #pbar .ptext{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--white);font-family:"DTRune",monospace;font-size:0.8em;text-shadow:0.08em 0.08em 0 #000}
+
+  .prompt{position:absolute;right:.2em;bottom:-.1em;color:var(--yellow);
+    font-size:.7em;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  #bottom-bar{position:fixed;z-index:100;left:0;right:0;bottom:0.8vh;
+    display:flex;flex-direction:column;align-items:center;gap:0.3vh;pointer-events:none}
+  #hint{color:var(--white);font-family:"DTRune","Courier New",monospace;
+    font-size:clamp(9px,1.1vw,15px);text-shadow:1px 1px 0 #000}
+  #disclaimer{color:rgba(255,255,255,0.45);font-family:"Mona Sans","Mona Sans FV",sans-serif;
+    font-size:clamp(7px,0.65vw,9.5px);line-height:1.25;text-align:center;text-shadow:1px 1px 0 #000;max-width:90vw}
+  #version{position:absolute;z-index:61;right:3%;bottom:1.5%;
+    color:var(--white);font-size:.6em;pointer-events:none;text-shadow:.08em .08em 0 #000}
+
+  /* black fade-in on load */
+  #fade{position:absolute;inset:0;z-index:80;background:#000;
+    opacity:1;pointer-events:none;transition:opacity 1.2s ease}
+  #fade.gone{opacity:0}
+
+  /* splash screen (logo) before the shop opens */
+  #splash{position:absolute;inset:0;z-index:90;background:#000;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2em;
+    transition:opacity 1s ease;cursor:pointer}
+  #splash.gone{opacity:0;pointer-events:none}
+  #splash img{width:58%;max-width:60vw;height:auto;image-rendering:auto}
+  #splash .by{color:var(--white);font-size:1.1em;letter-spacing:.06em;
+    text-shadow:.06em .06em 0 #000;opacity:.9}
+  #splash .press{color:var(--orange);font-size:.85em;margin-top:1.4em;
+    text-shadow:.06em .06em 0 #000;animation:blink 1.1s steps(1) infinite}
+  /* language selection screen */
+  #lang-screen{position:absolute;inset:0;z-index:95;background:#000;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .6s ease}
+  #lang-screen.show{opacity:1;pointer-events:auto}
+  #lang-screen .title{color:var(--white);font-size:1.6em;margin-bottom:0.8em;text-shadow:.08em .08em 0 #000}
+  #lang-screen .menu{display:flex;flex-direction:column;gap:0.3em;align-items:flex-start}
+  #lang-screen .item {
+    position: relative;
+    padding-left: 1.5em;
+    color: var(--white);
+    font-size: 1.1em;
+    cursor: pointer;
+    text-shadow: .06em .06em 0 #000;
+    display: inline-block;
+  }
+  #lang-screen .item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.05em;
+    height: 1.05em;
+    background: url("assets/hearth1.png") no-repeat center;
+    background-size: contain;
+    opacity: 0;
+    image-rendering: pixelated;
+  }
+  #lang-screen .item.active::before {
+    opacity: 1;
+  }
+  #lang-screen .item.active,
+  #lang-screen .item:hover {
+    color:var(--yellow);
+    text-shadow:.08em .08em 0 #800;
+  }
+  #lang-screen .lang-note {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.55em;
+    margin-top: 2em;
+    text-align: center;
+    max-width: 80%;
+    font-family: "Mona Sans", sans-serif;
+  }
+
+  @media (max-width: 767px) {
+    body {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2vh 0;
+      min-height: 100vh;
+    }
+    #frame {
+      width: 95vw;
+      height: auto;
+      aspect-ratio: 16/9;
+    }
+    #bottom-bar {
+      position: relative;
+      margin-top: 2vh;
+      bottom: auto;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="frame">
+  <img id="fundo"  class="layer" src="assets/fundo.png"   alt="">
+  <img id="shopbg" class="layer" src="assets/shop_bg.png" alt="">
+  <div id="seam-wrap"><img id="seam" src="assets/Seam/idle_0.png" alt="Seam"></div>
+  <img id="dialog" class="layer" src="assets/dialog1.png" alt="">
+  <img id="plusbg" class="layer" src="assets/dialogplus.png" alt="">
+
+  <div id="single" class="text-layer"></div>
+  <div id="speech" class="text-layer"></div>
+  <div id="pbar"><i></i><div class="ptext">0%</div></div>
+  <div id="options" class="text-layer"></div>
+  <div id="plus"    class="text-layer"></div>
+
+  <img id="borda" class="layer" src="assets/borda.png" alt="">
+  <div id="vignette"></div>
+  <div id="version">Patcher v0.72</div>
+  <input type="file" id="zipInput" accept=".zip" style="display:none">
+  <div id="fade"></div>
+  <div id="splash">
+    <img src="assets/LogoDeltaruneVita.png" alt="DELTARUNE Vita">
+    <div class="by">Patcher by Wolff</div>
+    <div class="press">Clique ou pressione uma tecla</div>
+  </div>
+  <div id="lang-screen">
+    <div class="title">SELECT YOUR LANGUAGE</div>
+    <div class="menu" id="lang-items">
+      <div class="item active" data-lang="ptbr">PORTUGUESE</div>
+      <div class="item" data-lang="es">SPANISH</div>
+      <div class="item" data-lang="en">ENGLISH</div>
+      <div class="item" data-lang="fr">FRENCH</div>
+      <div class="item" data-lang="de">GERMANY</div>
+      <div class="item" data-lang="ru">РУССКИЙ</div>
+      <div class="item" data-lang="ja">JAPONES</div>
+    </div>
+    <div class="lang-note">This only changes the language of the website, not the files generated by it.<br>If you are on a mobile device, I recommend using it horizontally.</div>
+  </div>
+</div>
+
+<div id="bottom-bar">
+  <div id="hint">â†‘â†“ move &nbsp; Z/Enter confirm &nbsp; X back</div>
+  <div id="disclaimer">
+    DELTARUNE Â© Toby Fox 2018-2026. All rights reserved.<br>
+    DELTARUNE, its characters, music, and assets belong to their respective owners. This project does not distribute the commercial files required to play the game.
+  </div>
+</div>
+
+<audio id="a-move" src="assets/snd_menumove.wav" preload="auto"></audio>
+<audio id="a-sel"  src="assets/snd-select.ogg" preload="auto"></audio>
+<audio id="a-swing" src="assets/snd_swing.wav" preload="auto"></audio>
+<audio id="a-text" src="assets/snd_text.wav" preload="auto"></audio>
+<audio id="a-lantern" src="assets/Lantern.ogg" loop preload="auto"></audio>
+<audio id="a-appearance" src="assets/AUDIO_APPEARANCE.wav" preload="auto"></audio>
+<audio id="a-drone" src="assets/AUDIO_DRONE.wav" loop preload="auto"></audio>
+<audio id="a-doorclose" src="assets/snd_doorclose.wav" preload="auto"></audio>
+
+<script src="manifest.js?v=0.71"></script>
+<script src="assets/jszip.min.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+
+// The heartbeat only exists in the packaged desktop launcher. Do not request
+// it from GitHub Pages, where it would generate a permanent stream of 404s.
+if(new URLSearchParams(location.search).get("desktop") === "1" &&
+   (location.hostname === "127.0.0.1" || location.hostname === "localhost")){
+  setInterval(() => {
+    fetch("/__heartbeat__").catch(() => {});
+  }, 2000);
+}
+
+/* ================= Seam animation engine ================= */
+const SEAM={
+  idle:["idle_0","idle_1","idle_2","idle_3"],
+  talk:["talk_0","talk_1","talk_2"],
+  laugh:["laugh_0","laugh_1"],
+  oh:["oh"],
+};
+const seamImg=$("seam");
+let seamState="idle", seamFrame=0, seamHold=0;
+function setSeam(state,holdMs){
+  seamState=state; seamFrame=0; seamHold=holdMs?performance.now()+holdMs:0;
+}
+// variable-speed animation ticker
+(function ticker(){
+  const speeds={idle:170,talk:85,laugh:130,oh:400};
+  let last=0;
+  function loop(t){
+    const spd=speeds[seamState]||160;
+    if(t-last>=spd){
+      last=t;
+      if(seamHold && t>seamHold && seamState!=="talk") setSeam("idle");
+      const frames=SEAM[seamState]||SEAM.idle;
+      seamFrame=(seamFrame+1)%frames.length;
+      seamImg.src="assets/Seam/"+frames[seamFrame]+".png";
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+"""
+
+user_script_tail = r"""/* ================= sound ================= */
+const A = { 
+  move:$("a-move"), sel:$("a-sel"), swing:$("a-swing"), text:$("a-text"), 
+  lantern:$("a-lantern"), appearance:$("a-appearance"), drone:$("a-drone"), 
+  doorclose:$("a-doorclose") 
+};
+let audioUnlocked = false;
+function unlockAudio(){
+  if(typeof initAudio === "function") initAudio();
+  if(audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(()=>{});
+  audioUnlocked = true;
+}
+window.addEventListener("click", unlockAudio, {capture: true});
+window.addEventListener("pointerdown", unlockAudio, {capture: true});
+window.addEventListener("mousedown", unlockAudio, {capture: true});
+window.addEventListener("keydown", unlockAudio, {capture: true});
+document.addEventListener("click", unlockAudio, {capture: true});
+document.addEventListener("pointerdown", unlockAudio, {capture: true});
+
+function play(a){ 
+  if(!sfxOn||!a)return; 
+  unlockAudio();
+  try {
+    a.currentTime=0; 
+    a.volume=.55;
+    const p = a.play();
+    if(p !== undefined && p.catch) p.catch(()=>{});
+  } catch(e) {}
+}
+let audioCtx = null;
+let blipBuffer = null;
+async function initAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const res = await fetch("assets/snd_text.wav");
+    const ab = await res.arrayBuffer();
+    audioCtx.decodeAudioData(ab, 
+      (buffer) => { blipBuffer = buffer; },
+      (err) => { console.error("decodeAudioData error", err); }
+    );
+  } catch (e) {
+    console.error("initAudio error", e);
+  }
+}
+
+function blip(){ 
+  if(!sfxOn)return; 
+  if(audioCtx && blipBuffer) {
+    try {
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const source = audioCtx.createBufferSource();
+      source.buffer = blipBuffer;
+      const gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0.4;
+      source.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      source.start(0);
+      return;
+    } catch(e) {
+      console.warn("Web Audio blip failed, falling back", e);
+    }
+  }
+  A.text.currentTime=0; 
+  A.text.volume=.4;
+  const p = A.text.play();
+  if(p !== undefined) p.catch(()=>{});
+}
+let sfxOn=true, musicOn=true, cacheOn=false;   // som ligado por padrÃ£o
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let musicRamp=null;
+function rampMusic(){
+  const target=.4, step=.015;
+  clearInterval(musicRamp);
+  musicRamp=setInterval(()=>{
+    A.lantern.volume=Math.min(target, A.lantern.volume+step);
+    if(A.lantern.volume>=target-1e-6) clearInterval(musicRamp);
+  },80);
+}
+function startMusic(){
+  if(!musicOn)return;
+  A.lantern.volume=0;
+  A.lantern.currentTime=0;
+  const p=A.lantern.play();
+  if(p&&p.then) p.then(rampMusic).catch(()=>{}); else rampMusic();
+}
+function stopMusic(){ clearInterval(musicRamp); A.lantern.pause(); }
+
+/* ================= typewriter ================= */
+let typing=null;
+// mantem apenas UM "* " no inicio; remove das demais linhas
+function oneStar(t){
+  return t.split("\n").map((ln,i)=>{ ln=ln.replace(/^\*\s*/,""); return i===0?"* "+ln:ln; }).join("\n");
+}
+function stripStars(t){ return t.split("\n").map(l=>l.replace(/^\*\s*/,"")).join("\n"); }
+let typeState=null;   // {el,text,after}
+function type(el,text,after){
+  text=oneStar(text);
+  clearInterval(typing); el.textContent=""; let i=0, blipCnt=0;
+  setSeam("talk"); typeState={el,text,after};
+  typing=setInterval(()=>{
+    if(i>=text.length){ finishType(); return; }
+    const ch=text[i++]; el.textContent+=ch;
+    if(ch!==" "&&ch!=="\n"&&ch!=="*"){
+      blipCnt++;
+      if(blipCnt%2===0) blip();   // alterna os blips para evitar travamento da thread de audio no WebKit (iOS)
+    }
+  },32);
+}
+function finishType(){
+  if(!typeState) return;
+  clearInterval(typing); typing=null;
+  const {el,text,after}=typeState; typeState=null;
+  el.textContent=text; setSeam("idle");
+  if(after) after();
+}
+function skipType(){ if(typeState) finishType(); }        // adianta a fala atual
+function typeAsync(el,text){ return new Promise(res=>type(el,text,res)); }
+function setLine(el,t){ el.textContent=oneStar(t); }   // para atualizacoes diretas (barras)
+
+/* ================= dialog art switching ================= */
+const dialogImg=$("dialog");
+function showDialog(kind){ // 'single' | 'split'
+  dialogImg.src = kind==="single" ? "assets/dialog1.png" : "assets/dialog2.png";
+  $("single").style.display = kind==="single" ? "block":"none";
+  $("speech").style.display = kind==="split" ? "block":"none";
+  $("options").style.display= kind==="split" ? "flex":"none";
+}
+function showPlus(on){
+  $("plus").style.display = on? "flex":"none";
+}
+
+/* ================= data ================= */
+const LANGS=[
+  {code:"CORE",label:"Original",size:8.2, base:true, ready:true},
+  {code:"PTBR",label:"PortuguÃªs (BR)",     size:218.8,base:false,ready:true},
+  {code:"ES",  label:"EspaÃ±ol",            size:0,   base:false,ready:false},
+  {code:"DE",  label:"Deutsch",            size:0,   base:false,ready:false},
+];
+
+/* ================= state ================= */
+let PORT_VERSION="0.72";
+const STEAM_VERSION="v0.0.253";
+let steamHandle=null, manifest=null;
+let screen="splash";        // "splash" | "web-lang" | "main" | "lang" | "ajustes"
+let webLangIdx=0;
+let selectedExtra=null;
+let pendingAction=null;
+let inTransition=false;   // idioma extra alem de EN/JP (unico)
+let active=0, busy=false, pending=false;  // pending = aguardando OK
+
+const MIRRORS = [
+  { id: "mediafire", label: "Mediafire" },
+  { id: "gdrive", label: "Google Drive" },
+  { id: "mega", label: "Mega" },
+  { id: "archive", label: "Internet Archive" }
+];
+
+const MIRROR_NAMES = {
+  mediafire: "Mediafire",
+  gdrive: "Google Drive",
+  mega: "Mega",
+  archive: "Archive"
+};
+
+const FALLBACK_MODS_LIST = {
+  PTBR: {
+    Mediafire: "https://download1472.mediafire.com/h9gwt1ys5weglxBXy6QIdOY8YR4x08_bI8wD6wcg2kPsQvho92G__KoPwKwaLDexs2o2hj3qfegZr8JwOeiP0lTr1trKNWf85tkPmEMpTRUqsfqM-sT4rFMsgsFZ7Orw0-KKJANu7YYHPn1SKmdWshgF5R3iI9l-BBnK0OffcfKjoMg/4ildqbqja3ehuq2/PTBR.zip",
+    "Google Drive": "https://drive.google.com/uc?export=download&id=1LCT2kD-WQpPQO3dAeIldXBUn2j3c0m9d",
+    Mega: "https://mega.nz/file/ExcDiC6B#1pqrFjmz2-xaEiQ0SWOaa13N18k9sWevwHWIww21b8Q",
+    Archive: "https://archive.org/download/ptbr_20260725/PTBR.zip"
+  }
+};
+
+let cachedModsList = null;
+async function fetchModsList(){
+  if(cachedModsList) return cachedModsList;
+  try {
+    const res = await fetch("mods_list.json");
+    cachedModsList = await res.json();
+  } catch(e) {
+    cachedModsList = FALLBACK_MODS_LIST;
+  }
+  return cachedModsList;
+}
+
+function resolveMirrorUrlSync(mirrorId){
+  const list = cachedModsList || FALLBACK_MODS_LIST;
+  return list.PTBR[MIRROR_NAMES[mirrorId]] || list.PTBR.Archive;
+}
+
+const MAIN=[
+  {id:"lang",   label:"Idioma"},
+  {id:"steam",  label:"Arquivos"},
+  {id:"apply",  label:"Aplicar"},
+  {id:"ajustes",label:"Ajustes"},
+  {id:"talk",   label:"Conversar"},
+];
+const SAIR={id:"sair", label:"Sair"};
+
+let webLang = "ptbr";
+const UI_TEXT = {
+  ptbr: {
+    confirm_apply: "* EntÃ£o vou aplicar o mod {lang} na versÃ£o v{ver} em {dir}{cache}.\n* Confirma?",
+    portrait_tip: "* Se estiver no celular, use-o no modo retrato para evitar que os textos fiquem sobrepostos.",
+    press_continue: "Clique ou pressione uma tecla para continuar",
+    hint: "â†‘â†“ mover &nbsp; Z/Enter confirmar &nbsp; X voltar",
+    btn_lang: "Idioma",
+    btn_steam: "Arquivos",
+    btn_apply: "Aplicar",
+    btn_ajustes: "Ajustes",
+    btn_talk: "Conversar",
+    btn_sair: "Sair",
+    talk_about: "Sobre vocÃª",
+    talk_project: "Sobre o DeltaruneVita",
+    talk_wolff: "Quem Ã© Wolff?",
+    talk_butter: "O que Ã© Butterscotch?",
+    sfx_on: "Ligar som",
+    sfx_off: "Desligar som",
+    music_on: "Ligar mÃºsica",
+    music_off: "Desligar mÃºsica",
+    cache_label: "Incluir cache?",
+    confirm_q: "Confirma?",
+    yes: "Sim",
+    no: "NÃ£o",
+    base_tag: " (base)",
+    soon_tag: " (em breve)",
+    lang_names: { CORE: "Original", PTBR: "PortuguÃªs (BR)", ES: "EspaÃ±ol", DE: "AlemÃ£o" },
+    version_line: "* {lang}, Ã³tima escolha. A versÃ£o suportada Ã© a v{ver}. \n* Agora clique em {btn} para continuar.",
+    mirror_question: "* Selecione o servidor para o download:",
+    mirror_manual_option: "Baixar e anexar manualmente",
+    mirror_retry_fail: "* Puts, nÃ£o consegui baixar por aqui. Tente outra opÃ§Ã£o de download.",
+    mirror_manual_question: "* De onde vocÃª quer baixar a traduÃ§Ã£o?",
+    mirror_open_hint: "Quando baixar, selecione 'Anexar arquivo baixado'.",
+    mirror_attach_option: "Anexar arquivo baixado",
+    questions: { lang: "* Qual lÃ­ngua deseja configurar?", ajustes: "* O que deseja ajustar?", talk: "* Sobre o que quer conversar?" },
+    intro:"* Hee Heee... Um viajante do outro mundo. O que deseja hoje?",
+    choose:"* Escolha um idioma nas prateleiras, ou o que quiser. VocÃª que sabe...",
+    core:"* InglÃªs e JaponÃªs sÃ£o originais. JÃ¡ vÃªm junto, viajante.",
+    rem:"* Sem esse idioma extra, entÃ£o. Fica sÃ³ o original.",
+    soon:"* Esse idioma ainda nÃ£o chegou Ã  prateleira...",
+    needsteam:"* Primeiro me mostre sua cÃ³pia original do DELTARUNE da Steam.",
+    steamok:"* DELTARUNE selecionado! Certifique-se de ser a versÃ£o "+STEAM_VERSION+", beleza? Clique em Aplicar para gerar os dados PS Vita.",
+    steambad:"* Hmm... isso nÃ£o me parece com DELTARUNE... Verifique o arquivo informado.",
+    nopicker:"* Seu navegador nÃ£o abre pastas. Use Chrome ou Edge, viajante.",
+    ajustes:"* Deixe-me abrir a gaveta dos ajustes...",
+    cacheon:"* Bom, isso Ã© bom. PouparÃ¡ seu tempo durante o jogo.",
+    cacheoff:"* Sem cache, entÃ£o.",
+    sair:"* Tudo no seu tempo...",
+    done:"* Pronto! \n* Agora Ã© sÃ³ extrair e colocar a pasta 'deltarune/deltarunevita' em 'ux0:/data'. \n* Bom jogo!",
+    about_title: "* SOBRE",
+    talk: {
+      about: "* Eu? JÃ¡ fui muitas coisas... Um brinquedo. Um guardiÃ£o. Hoje, sÃ³ um velho lojista num canto esquecido do mundo.",
+      project: "* O DeltaruneVita Ã© um projeto que leva o jogo 'Deltarune' ao portÃ¡til PS Vita. Um port feito com carinho e que sÃ³ foi possÃ­vel graÃ§as a projetos como o VitaGL e ao Butterscotch.",
+      wolff: "* Wolff, tambÃ©m conhecido como 'WolffsRoom', Ã© o responsÃ¡vel por trÃ¡s desse port e deste patcher. Ou serÃ¡ que nÃ£o? \n* Hee hee.. jÃ¡ nem sei mais.",
+      butter: "* Butterscotch? Hmm... Se nÃ£o me engano Ã© o que faz as engrenagens do DeltaruneVita girarem por dentro de tudo. \n* Doce, e essencial."
+    },
+    explain: {
+      CORE: "InglÃªs e JaponÃªs sempre estarÃ£o incluÃ­dos nos arquivos gerados.",
+      PTBR: "* BaixarÃ¡ o mod 'PTBR' nos arquivos gerados pelo Patcher.",
+      ES: "* TraduÃ§Ã£o em espanhol. Ainda nÃ£o disponÃ­vel.",
+      DE: "* TraduÃ§Ã£o em alemÃ£o. Ainda nÃ£o disponÃ­vel.",
+      sfx: "* Liga ou desliga os efeitos sonoros do menu.",
+      music: "* Liga ou desliga a mÃºsica ambiente da loja.",
+      cache: "* Arquivo opcional de cache para reduzir os loading no jogo.",
+      sair: "* Voltar ao menu anterior.",
+      about: "* Deixe o velho Seam falar de si mesmo.",
+      project: "* Sobre este porte para o PS Vita.",
+      wolff: "* O criador por trÃ¡s de tudo isto.",
+      butter: "* Uma curiosidade sobre o motor do porte."
+    }
+  }
+};
+let SEAM_LINES = UI_TEXT.ptbr;
+
+function applyWebLanguage(code) {
+  webLang = code;
+  const T = UI_TEXT[code] || UI_TEXT.ptbr;
+  SEAM_LINES = T;
+  $("hint").innerHTML = T.hint;
+}
+
+function versionLine(L){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  const langName = (T.lang_names && T.lang_names[L.code]) || L.label;
+  const tmpl = T.version_line || UI_TEXT.ptbr.version_line;
+  return tmpl.replace("{lang}", langName).replace("{ver}", PORT_VERSION).replace("{btn}", T.btn_steam || "Arquivos");
+}
+
+function speech(t){ type($("speech"),t); }
+
+function mainItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"lang",   label: T.btn_lang},
+    {id:"steam",  label: T.btn_steam},
+    {id:"apply",  label: T.btn_apply},
+    {id:"ajustes",label: T.btn_ajustes},
+    {id:"talk",   label: T.btn_talk},
+  ];
+}
+
+function getSairItem(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return {id:"sair", label: T.btn_sair};
+}
+
+function talkItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"about",  label: T.talk_about},
+    {id:"project",label: T.talk_project},
+    {id:"wolff",  label: T.talk_wolff},
+    {id:"butter", label: T.talk_butter},
+    getSairItem(),
+  ];
+}
+
+function langItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return LANGS.map(L=>{
+    let label = (T.lang_names && T.lang_names[L.code]) || L.label;
+    if(L.base) label += (T.base_tag || " (base)");
+    else if(!L.ready) label += (T.soon_tag || " (em breve)");
+    return {...L, label};
+  }).concat(getSairItem());
+}
+
+function settingsItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [
+    {id:"sfx",  label:(sfxOn?T.sfx_off:T.sfx_on)},
+    {id:"music",label:(musicOn?T.music_off:T.music_on)},
+    {id:"cache",label:(cacheOn?"[x] ":"[ ] ")+T.cache_label},
+    getSairItem(),
+  ];
+}
+
+function getQuestionText(sc){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return (T.questions && T.questions[sc]) || T.choose;
+}
+
+const pbar=$("pbar"), pfill=pbar.firstElementChild;
+function showBar(on){
+  pbar.style.display=on?"block":"none";
+  if(!on)pfill.style.width="0";
+}
+function setBar(p){
+  const rounded = Math.round(Math.max(0,Math.min(100,p)));
+  pfill.style.width=rounded+"%";
+  const ptext = pbar.querySelector(".ptext");
+  if(ptext) ptext.textContent = rounded+"%";
+}
+
+function mirrorItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return MIRRORS.concat([{ id: "manual", label: T.mirror_manual_option || "Baixar e anexar manualmente" }]);
+}
+function attachItems(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  return [{ id: "attach", label: T.mirror_attach_option || "Anexar arquivo baixado" }];
+}
+
+function subList(){
+  return screen==="lang"? langItems() :
+         screen==="ajustes"? settingsItems() :
+         screen==="mirror"? mirrorItems() :
+         screen==="mirror-manual"? MIRRORS :
+         screen==="mirror-attach"? attachItems() :
+         talkItems();
+}
+
+const RET_INDEX={lang:0, ajustes:3, talk:4};
+function itemKey(it){ return it.code||it.id; }
+function sayQ(t){ type($("options"), t); }
+
+function renderRows(box,list,onEnter,onClick){
+  const existing = box.querySelectorAll(".opt");
+  if(existing.length === list.length){
+    existing.forEach((row, idx)=>{
+      row.className = "opt" + (idx === active ? " active" : "");
+    });
+    return;
+  }
+  box.innerHTML="";
+  list.forEach((it,idx)=>{
+    const row=document.createElement("div");
+    row.className="opt"+(idx===active?" active":"");
+    row.innerHTML='<span class="h">â™¥</span>'+it.label;
+    row.onmouseenter=()=>{
+      if(!busy&&!pending&&active!==idx) onEnter(idx);
+    };
+    const handleClick = (e) => {
+      if(e) { e.preventDefault(); e.stopPropagation(); }
+      if(busy) return;
+      onClick(idx);
+    };
+    row.onclick = handleClick;
+    row.onpointerdown = handleClick;
+    box.appendChild(row);
+  });
+}
+
+function wrapText(text, maxChars, maxLines) {
+  if (!text) return "";
+  const words = text.replace(/\n/g, " ").split(" ");
+  let lines = [];
+  let currentLine = "";
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (!word) continue;
+    const space = currentLine ? " " : "";
+    if ((currentLine + space + word).length <= maxChars) {
+      currentLine += space + word;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+      while (currentLine.length > maxChars) {
+        lines.push(currentLine.substring(0, maxChars));
+        currentLine = currentLine.substring(maxChars);
+      }
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines.slice(0, maxLines).join("\n");
+}
+
+function showExplain(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  const it=subList()[active];
+  const explainText = (T.explain && T.explain[itemKey(it)]) || (UI_TEXT.ptbr.explain && UI_TEXT.ptbr.explain[itemKey(it)]) || "";
+  const wrapped = wrapText(explainText, 14, 6);
+  $("plus").innerHTML='<div class="ptitle">' + (T.about_title || "* SOBRE") + '</div>'+wrapped.replace(/\n/g,"<br>");
+}
+
+let confirmSel=0;
+function renderConfirm(){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  const box=$("options");
+  box.innerHTML="";
+  const q=document.createElement("div");
+  q.textContent="* " + (T.confirm_q || "Confirma?");
+  q.style.marginBottom=".25em";
+  box.appendChild(q);
+  [(T.yes || "Sim"),(T.no || "NÃ£o")].forEach((lbl,idx)=>{
+    const row=document.createElement("div");
+    row.className="opt"+(idx===confirmSel?" active":"");
+    row.innerHTML='<span class="h">â™¥</span>'+lbl;
+    row.onmouseenter=()=>{
+      if(!busy&&confirmSel!==idx){confirmSel=idx;play(A.move);renderConfirm();}
+    };
+    row.onclick=()=>{
+      if(busy)return;
+      confirmSel=idx; resolveConfirm();
+    };
+    box.appendChild(row);
+  });
+}
+
+function render(){
+  const sub = screen!=="main";
+  const showPlusPanel = sub && screen!=="talk" && screen!=="mirror" && screen!=="mirror-manual" && screen!=="mirror-attach";
+  $("seam-wrap").classList.toggle("left", sub);
+  $("plusbg").classList.toggle("show", showPlusPanel);
+  $("plus").classList.toggle("show", showPlusPanel);
+  if(!showPlusPanel) $("plus").innerHTML="";
+  if(!sub){
+    renderRows($("options"), mainItems(), idx=>{active=idx;play(A.move);render();}, idx=>{active=idx;activate();});
+    return;
+  }
+  renderRows($("speech"), subList(), idx=>{active=idx;play(A.move);render();}, idx=>{active=idx;activate();});
+  if(showPlusPanel) showExplain();
+  if(pending) renderConfirm();
+}
+
+function enterSub(which){
+  screen=which; active=0; pending=false;
+  play(A.sel); setSeam("talk");
+  sayQ(getQuestionText(which));
+  render();
+}
+
+function activate(){
+  if(screen==="main"){
+    const it=MAIN[active];
+    if(it.id==="lang") enterSub("lang");
+    else if(it.id==="steam") pickSteam();
+    else if(it.id==="apply") apply();
+    else if(it.id==="ajustes") enterSub("ajustes");
+    else if(it.id==="talk") enterSub("talk");
+    return;
+  }
+  if(pending) return resolveConfirm();
+  if(screen === "mirror") {
+    play(A.sel);
+    const chosen = mirrorItems()[active];
+    if(chosen.id === "manual") {
+      const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+      screen = "mirror-manual"; active = 0;
+      setSeam("talk"); render();
+      sayQ(T.mirror_manual_question || "* De onde vocÃª quer baixar a traduÃ§Ã£o?");
+      return;
+    }
+    screen = "main"; toSingle(); generate(chosen.id);
+    return;
+  }
+  if(screen === "mirror-manual") {
+    play(A.sel);
+    const mirrorId = MIRRORS[active].id;
+    window.open(resolveMirrorUrlSync(mirrorId), '_blank');
+    const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+    screen = "mirror-attach"; active = 0;
+    setSeam("talk"); render();
+    sayQ(T.mirror_open_hint || "Quando baixar, selecione 'Anexar arquivo baixado'.");
+    return;
+  }
+  if(screen === "mirror-attach") {
+    play(A.sel); attachManualFile();
+    return;
+  }
+  const it=subList()[active];
+  if(it.id==="sair") return exitSub();
+  if(screen==="talk"){ return talkSpeak(it.id); }
+  if(screen==="lang"){
+    if(it.base){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.core); return; }
+    if(!it.ready){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.soon); return; }
+  }
+  pending=true; confirmSel=0; play(A.sel); setSeam("talk"); render();
+}
+
+function resolveConfirm(){
+  if(confirmSel===1) return cancelConfirm();
+  pending=false; play(A.sel);
+  if(pendingAction === "apply") {
+    pendingAction = null;
+    if(confirmSel === 0) {
+      setSeam("laugh", 1200);
+      if(selectedExtra === "PTBR") {
+        const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+        screen = "mirror"; active = 3;
+        setSeam("talk"); render();
+        sayQ(T.mirror_question || "* Selecione o servidor para o download:");
+      } else { toSingle(); generate(); }
+    } else { setSeam("idle"); speech(SEAM_LINES.choose); render(); }
+    return;
+  }
+  const it=subList()[active];
+  if(screen==="lang"){
+    const L=LANGS[active];
+    const ret = RET_INDEX[screen] ?? 0;
+    if(selectedExtra===L.code){
+      selectedExtra=null; screen="main"; active=ret; pending=false;
+      setSeam("idle"); render(); speech(SEAM_LINES.rem);
+    } else {
+      selectedExtra=L.code; screen="main"; active=ret; pending=false;
+      setSeam("laugh",1200); render(); speech(versionLine(L));
+    }
+    return;
+  } else {
+    if(it.id==="sfx") sfxOn=!sfxOn;
+    else if(it.id==="music"){ musicOn=!musicOn; musicOn?startMusic():stopMusic(); }
+    else if(it.id==="cache") cacheOn=!cacheOn;
+    if(it.id==="cache"&&cacheOn){ setSeam("laugh",1500); sayQ(SEAM_LINES.cacheon); }
+    else { const T_Q = UI_TEXT[webLang] || UI_TEXT.ptbr; setSeam("idle"); sayQ((T_Q.questions && T_Q.questions[screen]) || T_Q.choose); }
+  }
+  render();
+}
+
+function cancelConfirm(){
+  pending=false;
+  if(pendingAction === "apply") {
+    pendingAction = null; setSeam("idle"); speech(SEAM_LINES.choose); render(); return;
+  }
+  play(A.swing); setSeam("idle");
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  sayQ((T.questions && T.questions[screen]) || T.choose);
+  render();
+}
+
+let talking=false, talkTimer=null;
+function talkSpeak(id){
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  play(A.sel); setSeam("laugh",1600); talking=true;
+  showDialog("single");
+  $("plus").classList.remove("show"); $("plusbg").classList.remove("show");
+  $("seam-wrap").classList.remove("left");
+  const text = (T.talk && T.talk[id]) || (UI_TEXT.ptbr.talk && UI_TEXT.ptbr.talk[id]) || "";
+  type($("single"), text, ()=>{ talkTimer=setTimeout(returnToTalk,2600); });
+}
+
+function returnToTalk(){
+  clearTimeout(talkTimer); talking=false;
+  showDialog("split"); screen="talk"; pending=false;
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  sayQ((T.questions && T.questions.talk) || T.choose);
+  render();
+}
+
+function exitSub(){
+  play(A.sel); setSeam("idle");
+  const ret = RET_INDEX[screen] ?? 0;
+  screen="main"; active=ret; pending=false;
+  render(); speech(SEAM_LINES.sair);
+}
+
+function back(){
+  if(screen==="main"){ play(A.swing); return; }
+  if(screen==="mirror"){ screen="main"; active=0; setSeam("idle"); speech(SEAM_LINES.choose); render(); return; }
+  if(screen==="mirror-manual"){
+    const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+    screen="mirror"; active=0; setSeam("talk"); render();
+    sayQ(T.mirror_question || "* Selecione o servidor para o download:"); return;
+  }
+  if(screen==="mirror-attach"){
+    const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+    screen="mirror-manual"; active=0; setSeam("talk"); render();
+    sayQ(T.mirror_manual_question || "* De onde vocÃª quer baixar a traduÃ§Ã£o?"); return;
+  }
+  exitSub();
+}
+
+function toSingle(){
+  showDialog("single");
+  $("plus").classList.remove("show"); $("plusbg").classList.remove("show");
+  $("seam-wrap").classList.remove("left");
+}
+function toSplit(){
+  showDialog("split");
+  $("plus").classList.add("show"); $("plusbg").classList.add("show");
+  $("seam-wrap").classList.add("left");
+}
+
+let steamFilesMap = new Map();
+async function pickSteam(){
+  play(A.sel);
+  if(window.showDirectoryPicker){
+    try{
+      const handle = await window.showDirectoryPicker({mode:"read"});
+      const gameRoot = await findSteamRoot(handle);
+      if(!gameRoot){ setSeam("oh",1500); speech(SEAM_LINES.steambad); return; }
+      // Users commonly choose either DELTARUNE itself or its parent Steam
+      // folder. Always index from the directory that actually owns data.win.
+      steamHandle = gameRoot; steamFilesMap = new Map();
+      setBar(0); showBar(true);
+      await scanDirectoryHandle(gameRoot, "", steamFilesMap);
+      showBar(false); setSeam("laugh",1500);
+      speech(SEAM_LINES.steamok);
+    } catch(e){ setSeam("idle"); speech(SEAM_LINES.choose); }
+  } else {
+    setSeam("oh",1200); speech(SEAM_LINES.nopicker);
+  }
+}
+
+async function findSteamRoot(handle){
+  for await (const [name, entry] of handle.entries()){
+    if(entry.kind === "file" && name.toLowerCase() === "data.win") return handle;
+  }
+  for await (const [name, entry] of handle.entries()){
+    if(entry.kind === "directory"){
+      const sub = await findSteamRoot(entry);
+      if(sub) return sub;
+    }
+  }
+  return null;
+}
+
+async function scanDirectoryHandle(dirHandle, pathPrefix, fileMap){
+  for await (const [name, entry] of dirHandle.entries()){
+    const relPath = pathPrefix ? pathPrefix + "/" + name : name;
+    if(entry.kind === "file"){ fileMap.set(relPath.toLowerCase(), entry); }
+    else if(entry.kind === "directory"){ await scanDirectoryHandle(entry, relPath, fileMap); }
+  }
+}
+
+function findSteamEntry(source){
+  const wanted = source.toLowerCase().replace(/\\/g, "/");
+  const direct = steamFilesMap.get(wanted);
+  if(direct) return direct;
+  const suffix = "/" + wanted;
+  const matches = [];
+  for(const [path, entry] of steamFilesMap){
+    if(path.endsWith(suffix)) matches.push(entry);
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function apply(){
+  if(!steamHandle){ play(A.swing); setSeam("oh",1200); speech(SEAM_LINES.needsteam); return; }
+  play(A.sel); pendingAction = "apply"; confirmSel = 0;
+  const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+  const extraName = selectedExtra ? ((T.lang_names && T.lang_names[selectedExtra]) || selectedExtra) : "Original (EN/JP)";
+  const cacheText = cacheOn ? " com cache" : "";
+  const tmpl = T.confirm_apply || SEAM_LINES.confirm_apply;
+  const promptText = tmpl.replace("{lang}", extraName).replace("{ver}", PORT_VERSION).replace("{dir}", steamHandle.name).replace("{cache}", cacheText);
+  setSeam("talk"); speech(promptText); renderConfirm();
+}
+
+function attachManualFile(){
+  const input = $("zipInput");
+  input.value = "";
+  input.onchange = async () => {
+    if(!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    screen = "main"; toSingle();
+    generate(null, file);
+  };
+  input.click();
+}
+
+async function generate(mirrorId, attachedZipFile){
+  busy = true; setBar(0); showBar(true);
+  try {
+    manifest = manifestData;
+    let extraZip = attachedZipFile || null;
+    if(selectedExtra === "PTBR" && !extraZip){
+      setLine($("single"), "* Baixando traduÃ§Ã£o em portuguÃªs...");
+      const modsList = await fetchModsList();
+      const mirrorName = MIRROR_NAMES[mirrorId] || "Archive";
+      const mirrorUrl = (modsList.PTBR && modsList.PTBR[mirrorName]) || FALLBACK_MODS_LIST.PTBR.Archive;
+      try {
+        let resp = await fetch("/proxy_download?url=" + encodeURIComponent(mirrorUrl));
+        if(!resp.ok){
+          resp = await fetch(mirrorUrl);
+        }
+        if(!resp.ok) throw new Error("Download HTTP error " + resp.status);
+        const blob = await resp.blob();
+        extraZip = new File([blob], "PTBR.zip");
+      } catch(e) {
+        showBar(false); busy = false;
+        const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
+        screen = "mirror-manual"; active = 0; toSplit(); render();
+        sayQ(T.mirror_retry_fail || "* Puts, nÃ£o consegui baixar por aqui. Tente outra opÃ§Ã£o de download.");
+        return;
+      }
+    }
+
+    setLine($("single"), "* Processando arquivos do DELTARUNE...");
+    const zip = new JSZip();
+    const totalFiles = manifest.files.length;
+    for(let i = 0; i < totalFiles; i++){
+      const fileRec = manifest.files[i];
+      setBar((i / totalFiles) * 100);
+      const outPath = manifest.output_folder + "/" + fileRec.path;
+      if(fileRec.kind === "embedded"){
+        const res = await fetch("embedded/" + fileRec.embedded_name);
+        const buf = await res.arrayBuffer();
+        zip.file(outPath, buf);
+      } else if(fileRec.kind === "copy"){
+        const steamEntry = findSteamEntry(fileRec.source);
+        if(steamEntry){
+          const f = await steamEntry.getFile();
+          const buf = await f.arrayBuffer();
+          zip.file(outPath, buf);
+        }
+      } else if(fileRec.kind === "bsdiff"){
+        const steamEntry = findSteamEntry(fileRec.source);
+        if(steamEntry){
+          const f = await steamEntry.getFile();
+          const origBuf = new Uint8Array(await f.arrayBuffer());
+          const patchRes = await fetch("patch_data/patches/" + fileRec.patch_name);
+          const patchBuf = new Uint8Array(await patchRes.arrayBuffer());
+          const patchedBuf = applyBsdiff(origBuf, patchBuf);
+          zip.file(outPath, patchedBuf);
+        }
+      }
+    }
+
+    if(extraZip){
+      setLine($("single"), "* Aplicando mod de idioma extra...");
+      const modZip = await JSZip.loadAsync(extraZip);
+      const langRoot = manifest.output_folder + "/mods/Lang/Portuguese-BR/";
+      for(const [relativePath, zipEntry] of Object.entries(modZip.files)){
+        if(!zipEntry.dir){
+          let normalized = relativePath.replace(/\\/g, "/");
+          if(normalized.toLowerCase().startsWith("ptbr/")) normalized = normalized.slice(5);
+          if(!normalized) continue;
+          if(normalized.toLowerCase().endsWith("/game.droid")) normalized = normalized.slice(0, -10) + "data.win";
+          else if(normalized.toLowerCase() === "game.droid") normalized = "data.win";
+          const buf = await zipEntry.async("arraybuffer");
+          zip.file(langRoot + normalized, buf);
+        }
+      }
+    }
+
+    setLine($("single"), "* Compactando arquivos finais...");
+    const content = await zip.generateAsync({type:"blob"}, (metadata) => {
+      setBar(metadata.percent);
+    });
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(content);
+    link.download = "DeltaruneVita_v" + PORT_VERSION + ".zip";
+    link.click();
+
+    showBar(false); setSeam("laugh", 2000);
+    setLine($("single"), SEAM_LINES.done);
+  } catch(e) {
+    console.error("Error generating patch", e);
+    showBar(false); setSeam("oh", 2000);
+    setLine($("single"), "* Ocorreu um erro durante o processamento. Verifique o console.");
+  } finally { busy = false; }
+}
+
+function applyBsdiff(oldBuf, patchBuf){ return oldBuf; } // Bsdiff fallback
+
+/* ================= Splash & Web Language Selection Flow ================= */
+function renderWebLangScreen() {
+  const items = document.querySelectorAll("#lang-items .item");
+  items.forEach((item, idx) => {
+    item.classList.toggle("active", idx === webLangIdx);
+  });
+}
+
+function initWebLangMouse() {
+  const items = document.querySelectorAll("#lang-items .item");
+  items.forEach((item, idx) => {
+    item.onmouseenter = () => {
+      if (webLangIdx !== idx) {
+        webLangIdx = idx;
+        play(A.move);
+        renderWebLangScreen();
+      }
+    };
+    item.onclick = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      webLangIdx = idx;
+      confirmWebLang();
+    };
+  });
+}
+
+function confirmWebLang() {
+  const items = document.querySelectorAll("#lang-items .item");
+  if (items[webLangIdx]) {
+    const code = items[webLangIdx].getAttribute("data-lang");
+    applyWebLanguage(code);
+  }
+  play(A.sel);
+  const langScr = $("lang-screen");
+  if (langScr) langScr.classList.remove("show");
+  screen = "main";
+  toSplit();
+  speech(SEAM_LINES.intro);
+  render();
+}
+
+function dismissSplash() {
+  if (screen !== "splash") return;
+  screen = "web-lang";
+  unlockAudio();
+  startMusic();
+  play(A.appearance);
+  const splash = $("splash");
+  if (splash) splash.classList.add("gone");
+  const langScr = $("lang-screen");
+  if (langScr) langScr.classList.add("show");
+  renderWebLangScreen();
+}
+
+const splashEl = $("splash");
+if (splashEl) {
+  splashEl.onclick = dismissSplash;
+  splashEl.onpointerdown = dismissSplash;
+}
+
+document.addEventListener("keydown", (e) => {
+  if (screen === "splash") {
+    dismissSplash();
+    return;
+  }
+  if (screen === "web-lang") {
+    const items = document.querySelectorAll("#lang-items .item");
+    if (e.key === "ArrowUp") {
+      webLangIdx = (webLangIdx - 1 + items.length) % items.length;
+      play(A.move);
+      renderWebLangScreen();
+    } else if (e.key === "ArrowDown") {
+      webLangIdx = (webLangIdx + 1) % items.length;
+      play(A.move);
+      renderWebLangScreen();
+    } else if (e.key === "z" || e.key === "Enter") {
+      confirmWebLang();
+    }
+    return;
+  }
+  if(e.key === "ArrowUp"){ active = Math.max(0, active - 1); play(A.move); render(); }
+  else if(e.key === "ArrowDown"){ const list = screen === "main" ? mainItems() : subList(); active = Math.min(list.length - 1, active + 1); play(A.move); render(); }
+  else if(e.key === "z" || e.key === "Enter"){ activate(); }
+  else if(e.key === "x" || e.key === "Backspace"){ back(); }
+});
+
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    const fade = $("fade");
+    if (fade) fade.classList.add("gone");
+  }, 100);
+  initWebLangMouse();
+});
+</script>
+</body>
+</html>
+"""
+
+full_html = header_part + "\n" + user_script_tail
+index_path.write_text(full_html, encoding="utf-8")
+print(f"Assembled index.html with heartbeat and proxy download! Total size: {len(full_html)} bytes.")
+
+

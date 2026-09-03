@@ -51,9 +51,9 @@ room_dw_castle_area_2_transformed=border_dw_castletown_0.png
 
 room_dw_ralsei_castle_front=border_dw_castletown_0.png
 
-room_dw_castle_dungeon=border_dw_garden_0.png
+room_dw_castle_dungeon=border_dw_castletown_0.png
 
-room_dw_couch_overworld_01=border_dw_garden_cliff_frame_0.png
+room_dw_couch_overworld_01=border_dw_garden_cliff_lattice_bottom_0.png
 
 room_dw_castle_west_cliff=border_dw_castletown_0.png
 
@@ -77,7 +77,7 @@ room_dw_couch_overworld_intro=border_dw_garden_cliff_lattice_bottom_0.png
 
 room_dw_couch_overworld_02=border_dw_garden_cliff_lattice_bottom_0.png
 
-room_dw_mansion_darkbulb_1=border_dw_cyber_0.png
+room_dw_mansion_darkbulb_1=border_dw_mansion_0.png
 
 room_dw_castle_rooms_kris=border_dw_castletown_0.png
 
@@ -137,8 +137,33 @@ room_dw_city_mice2=border_dw_city_0.png
 
 room_dw_city_mice3=border_dw_city_0.png
 
-room_gameover=border_dw_city_0.png
+room_gameover=border_lw_town_night_0.png
 
 PLACE_FAILURE=border_dw_garden_cliff_lattice_bottom_0.png
 
 room_dw_city_cheesemaze=border_dw_city_0.png
+
+room_dark3=border_lw_town_0.png
+
+room_cc_3f=border_dw_blue_0.png
+
+room_dw_castle_dojo=border_dw_castletown_0.png
+
+room_cc_lancer=border_dw_castletown_0.png
+
+room_dw_nondescript_classroom=border_line_1080_0.png
+
+PLACE_CHAPTER_SELECT_2x=border_dw_blue_0.png
+
+room_torielclass=border_lw_town_0.png
+
+room_town_school=border_lw_town_0.png
+
+room_library=border_dw_garden_cliff_lattice_bottom_0.png
+
+room_town_south=border_lw_town_0.png
+
+room_dw_cyber_intro_2=border_dw_cyber_0.png
+
+room_dw_couch_overworld_05=border_dw_garden_cliff_lattice_bottom_0.png
+room_dw_nondescript_hallway=border_line_1080_0.png

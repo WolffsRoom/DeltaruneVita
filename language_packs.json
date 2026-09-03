@@ -1,0 +1,63 @@
+{
+  "format": 1,
+  "repository": "WolffsRoom/DeltaruneVita",
+  "manifest_url": "https://wolffsroom.github.io/DeltaruneVita/language-packs/language_packs.json",
+  "languages": [
+    {
+      "id": "Portuguese-BR",
+      "display_name": "Português (BR)",
+      "native_name": "Português (BR)",
+      "interface_codes": [
+        "ptbr",
+        "pt"
+      ],
+      "ready": true
+    },
+    {
+      "id": "Spanish",
+      "display_name": "Español",
+      "native_name": "Español",
+      "interface_codes": [
+        "es"
+      ],
+      "ready": true
+    },
+    {
+      "id": "French",
+      "display_name": "Français",
+      "native_name": "Français",
+      "interface_codes": [
+        "fr"
+      ],
+      "ready": true
+    },
+    {
+      "id": "German",
+      "display_name": "Deutsch",
+      "native_name": "Deutsch",
+      "interface_codes": [
+        "de"
+      ],
+      "ready": true
+    },
+    {
+      "id": "Russkiy",
+      "display_name": "Русский",
+      "native_name": "Русский",
+      "interface_codes": [
+        "ru"
+      ],
+      "ready": true
+    },
+    {
+      "id": "Turkish",
+      "display_name": "Türkçe",
+      "native_name": "Türkçe",
+      "interface_codes": [
+        "tr"
+      ],
+      "ready": true
+    }
+  ],
+  "branch": "gh-pages"
+}

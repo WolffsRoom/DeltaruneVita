@@ -1,0 +1,4004 @@
+{
+  "tool_version": "0.3.6-r2",
+  "chapter": "chapter3",
+  "texture_pages": 397,
+  "r444_pages": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119,
+    120,
+    121,
+    122,
+    123,
+    124,
+    125,
+    126,
+    127,
+    128,
+    129,
+    130,
+    131,
+    132,
+    133,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    174,
+    175,
+    176,
+    177,
+    178,
+    179,
+    180,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    189,
+    190,
+    191,
+    192,
+    193,
+    194,
+    195,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201,
+    202,
+    203,
+    204,
+    205,
+    206,
+    207,
+    208,
+    209,
+    210,
+    211,
+    212,
+    213,
+    214,
+    215,
+    216,
+    217,
+    218,
+    219,
+    220,
+    221,
+    222,
+    223,
+    224,
+    225,
+    226,
+    227,
+    228,
+    229,
+    230,
+    231,
+    232,
+    233,
+    234,
+    235,
+    236,
+    237,
+    238,
+    239,
+    240,
+    241,
+    242,
+    243,
+    244,
+    245,
+    246,
+    247,
+    248,
+    249,
+    250,
+    251,
+    252,
+    253,
+    254,
+    255,
+    256,
+    257,
+    258,
+    259,
+    260,
+    261,
+    262,
+    263,
+    264,
+    265,
+    266,
+    267,
+    268,
+    269,
+    270,
+    271,
+    272,
+    273,
+    274,
+    275,
+    276,
+    277,
+    278,
+    279,
+    280,
+    281,
+    282,
+    283,
+    284,
+    285,
+    286,
+    287,
+    288,
+    289,
+    290,
+    291,
+    292,
+    293,
+    294,
+    295,
+    296,
+    297,
+    298,
+    299,
+    300,
+    301,
+    302,
+    303,
+    304,
+    305,
+    306,
+    307,
+    308,
+    309,
+    310,
+    311,
+    312,
+    313,
+    314,
+    315,
+    316,
+    317,
+    318,
+    319,
+    320,
+    321,
+    322,
+    323,
+    324,
+    325,
+    326,
+    327,
+    328,
+    329,
+    330,
+    331,
+    332,
+    333,
+    334,
+    335,
+    336,
+    337,
+    338,
+    339,
+    340,
+    341,
+    342,
+    343,
+    344,
+    345,
+    346,
+    347,
+    348,
+    349,
+    350,
+    351,
+    352,
+    353,
+    354,
+    355,
+    356,
+    357,
+    358,
+    359,
+    360,
+    361,
+    362,
+    363,
+    364,
+    365,
+    366,
+    367,
+    368,
+    369,
+    370,
+    371,
+    372,
+    373,
+    374,
+    375,
+    376,
+    377,
+    378,
+    379,
+    380,
+    381,
+    382,
+    383,
+    384,
+    385,
+    386,
+    387,
+    388,
+    389,
+    390,
+    391,
+    392,
+    393,
+    394,
+    395,
+    396
+  ],
+  "bc3_pages": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119,
+    120,
+    121,
+    122,
+    123,
+    124,
+    125,
+    126,
+    127,
+    128,
+    129,
+    130,
+    131,
+    132,
+    133,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    174,
+    175,
+    176,
+    177,
+    178,
+    179,
+    180,
+    181,
+    182,
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    189,
+    190,
+    191,
+    192,
+    193,
+    194,
+    195,
+    196,
+    197,
+    198,
+    199,
+    200,
+    201,
+    202,
+    203,
+    204,
+    205,
+    206,
+    207,
+    208,
+    209,
+    210,
+    211,
+    212,
+    213,
+    214,
+    215,
+    216,
+    217,
+    218,
+    219,
+    220,
+    221,
+    222,
+    223,
+    224,
+    225,
+    226,
+    227,
+    228,
+    229,
+    230,
+    231,
+    232,
+    233,
+    234,
+    235,
+    236,
+    237,
+    238,
+    239,
+    240,
+    241,
+    242,
+    243,
+    244,
+    245,
+    246,
+    247,
+    248,
+    249,
+    250,
+    251,
+    252,
+    253,
+    254,
+    255,
+    256,
+    257,
+    258,
+    259,
+    260,
+    261,
+    262,
+    263,
+    264,
+    265,
+    266,
+    267,
+    268,
+    269,
+    270,
+    271,
+    272,
+    273,
+    274,
+    275,
+    276,
+    277,
+    278,
+    279,
+    280,
+    281,
+    282,
+    283,
+    284,
+    285,
+    286,
+    287,
+    288,
+    289,
+    290,
+    291,
+    292,
+    293,
+    294,
+    295,
+    296,
+    297,
+    298,
+    299,
+    300,
+    301,
+    302,
+    303,
+    304,
+    305,
+    306,
+    307,
+    308,
+    309,
+    310,
+    311,
+    312,
+    313,
+    314,
+    315,
+    316,
+    317,
+    318,
+    319,
+    320,
+    321,
+    322,
+    323,
+    324,
+    325,
+    326,
+    327,
+    328,
+    329,
+    330,
+    331,
+    332,
+    333,
+    334,
+    335,
+    336,
+    337,
+    338,
+    339,
+    340,
+    341,
+    342,
+    343,
+    344,
+    345,
+    346,
+    347,
+    348,
+    349,
+    350,
+    351,
+    352,
+    353,
+    354,
+    355,
+    356,
+    357,
+    358,
+    359,
+    360,
+    361,
+    362,
+    363,
+    364,
+    365,
+    366,
+    367,
+    368,
+    369,
+    370,
+    371,
+    372,
+    373,
+    374,
+    375,
+    376,
+    377,
+    378,
+    379,
+    380,
+    381,
+    382,
+    383,
+    384,
+    385,
+    386,
+    387,
+    388,
+    389,
+    390,
+    391,
+    392,
+    393,
+    394,
+    395,
+    396
+  ],
+  "external_pages": [],
+  "txtr": {
+    "entry_stride": 28,
+    "chunk_start": 16732424,
+    "chunk_end": 132441808
+  },
+  "magic": {
+    "r444": "0x35435456",
+    "complete": "0x36435456"
+  },
+  "pages": {
+    "0": {
+      "width": 2048,
+      "height": 2048,
+      "blobOffset": 16745216,
+      "blobSize": 2247936,
+      "external": false,
+      "optimized_format": "BC3"
+    },
+    "1": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 18993152,
+      "blobSize": 36352,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "2": {
+      "width": 2048,
+      "height": 2048,
+      "blobOffset": 19029504,
+      "blobSize": 2464384,
+      "external": false,
+      "optimized_format": "BC3"
+    },
+    "3": {
+      "width": 2048,
+      "height": 2048,
+      "blobOffset": 21493888,
+      "blobSize": 2275200,
+      "external": false,
+      "optimized_format": "BC3"
+    },
+    "4": {
+      "width": 2048,
+      "height": 2048,
+      "blobOffset": 23769088,
+      "blobSize": 3332736,
+      "external": false,
+      "optimized_format": "BC3"
+    },
+    "5": {
+      "width": 2048,
+      "height": 2048,
+      "blobOffset": 27101824,
+      "blobSize": 2105984,
+      "external": false,
+      "optimized_format": "BC3"
+    },
+    "6": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 29207808,
+      "blobSize": 2560,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "7": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 29210368,
+      "blobSize": 606208,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "8": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 29816576,
+      "blobSize": 547072,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "9": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 30363648,
+      "blobSize": 539520,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "10": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 30903168,
+      "blobSize": 541696,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "11": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 31444864,
+      "blobSize": 551424,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "12": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 31996288,
+      "blobSize": 573952,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "13": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 32570240,
+      "blobSize": 140672,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "14": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 32710912,
+      "blobSize": 546944,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "15": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 33257856,
+      "blobSize": 533120,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "16": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 33790976,
+      "blobSize": 549120,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "17": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 34340096,
+      "blobSize": 532992,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "18": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 34873088,
+      "blobSize": 549760,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "19": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 35422848,
+      "blobSize": 533248,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "20": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 35956096,
+      "blobSize": 535168,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "21": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 36491264,
+      "blobSize": 533504,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "22": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 37024768,
+      "blobSize": 529024,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "23": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 37553792,
+      "blobSize": 539520,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "24": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 38093312,
+      "blobSize": 538496,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "25": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 38631808,
+      "blobSize": 532352,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "26": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 39164160,
+      "blobSize": 528512,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "27": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 39692672,
+      "blobSize": 531072,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "28": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 40223744,
+      "blobSize": 528256,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "29": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 40752000,
+      "blobSize": 536832,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "30": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 41288832,
+      "blobSize": 541440,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "31": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 41830272,
+      "blobSize": 704128,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "32": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 42534400,
+      "blobSize": 542592,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "33": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 43076992,
+      "blobSize": 547456,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "34": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 43624448,
+      "blobSize": 570112,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "35": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 44194560,
+      "blobSize": 539648,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "36": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 44734208,
+      "blobSize": 564352,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "37": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 45298560,
+      "blobSize": 541184,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "38": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 45839744,
+      "blobSize": 620544,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "39": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 46460288,
+      "blobSize": 1118080,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "40": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 47578368,
+      "blobSize": 675456,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "41": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 48253824,
+      "blobSize": 1206528,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "42": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 49460352,
+      "blobSize": 651136,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "43": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 50111488,
+      "blobSize": 783744,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "44": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 50895232,
+      "blobSize": 837632,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "45": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 51732864,
+      "blobSize": 560640,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "46": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 52293504,
+      "blobSize": 797568,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "47": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 53091072,
+      "blobSize": 875776,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "48": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 53966848,
+      "blobSize": 551680,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "49": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 54518528,
+      "blobSize": 535680,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "50": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 55054208,
+      "blobSize": 570240,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "51": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 55624448,
+      "blobSize": 800896,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "52": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 56425344,
+      "blobSize": 712448,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "53": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 57137792,
+      "blobSize": 673280,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "54": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 57811072,
+      "blobSize": 575232,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "55": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 58386304,
+      "blobSize": 647168,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "56": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 59033472,
+      "blobSize": 1321088,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "57": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 60354560,
+      "blobSize": 1233408,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "58": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 61587968,
+      "blobSize": 1131648,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "59": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 62719616,
+      "blobSize": 1588736,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "60": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 64308352,
+      "blobSize": 785536,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "61": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 65093888,
+      "blobSize": 1275264,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "62": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 66369152,
+      "blobSize": 1273728,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "63": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 67642880,
+      "blobSize": 1173888,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "64": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 68816768,
+      "blobSize": 1182080,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "65": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 69998848,
+      "blobSize": 1233664,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "66": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 71232512,
+      "blobSize": 541696,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "67": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 71774208,
+      "blobSize": 566144,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "68": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 72340352,
+      "blobSize": 541184,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "69": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 72881536,
+      "blobSize": 556672,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "70": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 73438208,
+      "blobSize": 550912,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "71": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 73989120,
+      "blobSize": 541696,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "72": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 74530816,
+      "blobSize": 716032,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "73": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 75246848,
+      "blobSize": 902272,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "74": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 76149120,
+      "blobSize": 588416,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "75": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 76737536,
+      "blobSize": 619392,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "76": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 77356928,
+      "blobSize": 563072,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "77": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 77920000,
+      "blobSize": 562432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "78": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 78482432,
+      "blobSize": 617728,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "79": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 79100160,
+      "blobSize": 664576,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "80": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 79764736,
+      "blobSize": 548224,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "81": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 80312960,
+      "blobSize": 564736,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "82": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 80877696,
+      "blobSize": 730752,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "83": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 81608448,
+      "blobSize": 657536,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "84": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 82265984,
+      "blobSize": 673280,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "85": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 82939264,
+      "blobSize": 717568,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "86": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 83656832,
+      "blobSize": 622592,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "87": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 84279424,
+      "blobSize": 614144,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "88": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 84893568,
+      "blobSize": 812416,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "89": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 85705984,
+      "blobSize": 999936,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "90": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 86705920,
+      "blobSize": 1166464,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "91": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 87872384,
+      "blobSize": 1067520,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "92": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 88939904,
+      "blobSize": 1418752,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "93": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 90358656,
+      "blobSize": 1008640,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "94": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 91367296,
+      "blobSize": 737536,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "95": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 92104832,
+      "blobSize": 1331456,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "96": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 93436288,
+      "blobSize": 776064,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "97": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 94212352,
+      "blobSize": 724864,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "98": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 94937216,
+      "blobSize": 1250304,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "99": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 96187520,
+      "blobSize": 842880,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "100": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 97030400,
+      "blobSize": 934016,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "101": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 97964416,
+      "blobSize": 803968,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "102": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 98768384,
+      "blobSize": 951040,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "103": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 99719424,
+      "blobSize": 898176,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "104": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 100617600,
+      "blobSize": 934144,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "105": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 101551744,
+      "blobSize": 650624,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "106": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 102202368,
+      "blobSize": 666624,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "107": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 102868992,
+      "blobSize": 684032,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "108": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 103553024,
+      "blobSize": 669568,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "109": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 104222592,
+      "blobSize": 672000,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "110": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 104894592,
+      "blobSize": 646144,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "111": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 105540736,
+      "blobSize": 607744,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "112": {
+      "width": 1024,
+      "height": 1024,
+      "blobOffset": 106148480,
+      "blobSize": 694784,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "113": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 106843264,
+      "blobSize": 133888,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "114": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 106977152,
+      "blobSize": 40448,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "115": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 107017600,
+      "blobSize": 146688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "116": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 107164288,
+      "blobSize": 139136,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "117": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 107303424,
+      "blobSize": 137856,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "118": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 107441280,
+      "blobSize": 136064,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "119": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 107577344,
+      "blobSize": 137216,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "120": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 107714560,
+      "blobSize": 144768,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "121": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 107859328,
+      "blobSize": 193920,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "122": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 108053248,
+      "blobSize": 137472,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "123": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 108190720,
+      "blobSize": 135552,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "124": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 108326272,
+      "blobSize": 151168,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "125": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 108477440,
+      "blobSize": 134912,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "126": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 108612352,
+      "blobSize": 148096,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "127": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 108760448,
+      "blobSize": 135296,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "128": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 108895744,
+      "blobSize": 140800,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "129": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 109036544,
+      "blobSize": 146304,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "130": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 109182848,
+      "blobSize": 9344,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "131": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 109192192,
+      "blobSize": 145152,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "132": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 109337344,
+      "blobSize": 134272,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "133": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 109471616,
+      "blobSize": 138240,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "134": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 109609856,
+      "blobSize": 146816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "135": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 109756672,
+      "blobSize": 137216,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "136": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 109893888,
+      "blobSize": 132096,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "137": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 110025984,
+      "blobSize": 138368,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "138": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 110164352,
+      "blobSize": 135936,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "139": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 110300288,
+      "blobSize": 3072,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "140": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 110303360,
+      "blobSize": 140032,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "141": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 110443392,
+      "blobSize": 142848,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "142": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 110586240,
+      "blobSize": 142208,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "143": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 110728448,
+      "blobSize": 140032,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "144": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 110868480,
+      "blobSize": 176896,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "145": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 111045376,
+      "blobSize": 132992,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "146": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 111178368,
+      "blobSize": 151040,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "147": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 111329408,
+      "blobSize": 141056,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "148": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 111470464,
+      "blobSize": 132096,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "149": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 111602560,
+      "blobSize": 133120,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "150": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 111735680,
+      "blobSize": 139904,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "151": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 111875584,
+      "blobSize": 174336,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "152": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 112049920,
+      "blobSize": 164224,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "153": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 112214144,
+      "blobSize": 162048,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "154": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 112376192,
+      "blobSize": 222976,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "155": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 112599168,
+      "blobSize": 158848,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "156": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 112758016,
+      "blobSize": 163328,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "157": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 112921344,
+      "blobSize": 168704,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "158": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 113090048,
+      "blobSize": 148992,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "159": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 113239040,
+      "blobSize": 160128,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "160": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 113399168,
+      "blobSize": 145408,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "161": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 113544576,
+      "blobSize": 172032,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "162": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 113716608,
+      "blobSize": 189952,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "163": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 113906560,
+      "blobSize": 176128,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "164": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 114082688,
+      "blobSize": 165376,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "165": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 114248064,
+      "blobSize": 178304,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "166": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 114426368,
+      "blobSize": 361216,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "167": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 114787584,
+      "blobSize": 215936,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "168": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 115003520,
+      "blobSize": 231296,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "169": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 115234816,
+      "blobSize": 195584,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "170": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 115430400,
+      "blobSize": 133120,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "171": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 115563520,
+      "blobSize": 138496,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "172": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 115702016,
+      "blobSize": 147840,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "173": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 115849856,
+      "blobSize": 217728,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "174": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 116067584,
+      "blobSize": 150656,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "175": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 116218240,
+      "blobSize": 143232,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "176": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 116361472,
+      "blobSize": 134272,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "177": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 116495744,
+      "blobSize": 271616,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "178": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 116767360,
+      "blobSize": 173696,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "179": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 116941056,
+      "blobSize": 194176,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "180": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 117135232,
+      "blobSize": 151808,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "181": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 117287040,
+      "blobSize": 203776,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "182": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 117490816,
+      "blobSize": 267776,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "183": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 117758592,
+      "blobSize": 277504,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "184": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 118036096,
+      "blobSize": 273536,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "185": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 118309632,
+      "blobSize": 160768,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "186": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 118470400,
+      "blobSize": 161920,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "187": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 118632320,
+      "blobSize": 194944,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "188": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 118827264,
+      "blobSize": 216448,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "189": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 119043712,
+      "blobSize": 170112,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "190": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 119213824,
+      "blobSize": 228608,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "191": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 119442432,
+      "blobSize": 222080,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "192": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 119664512,
+      "blobSize": 262528,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "193": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 119927040,
+      "blobSize": 181760,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "194": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 120108800,
+      "blobSize": 319616,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "195": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 120428416,
+      "blobSize": 242304,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "196": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 120670720,
+      "blobSize": 178816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "197": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 120849536,
+      "blobSize": 159360,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "198": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 121008896,
+      "blobSize": 162688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "199": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 121171584,
+      "blobSize": 197248,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "200": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 121368832,
+      "blobSize": 245504,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "201": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 121614336,
+      "blobSize": 230784,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "202": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 121845120,
+      "blobSize": 176768,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "203": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 122021888,
+      "blobSize": 197632,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "204": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 122219520,
+      "blobSize": 301312,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "205": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 122520832,
+      "blobSize": 301952,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "206": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 122822784,
+      "blobSize": 223616,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "207": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 123046400,
+      "blobSize": 186368,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "208": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 123232768,
+      "blobSize": 316672,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "209": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 123549440,
+      "blobSize": 341376,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "210": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 123890816,
+      "blobSize": 248320,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "211": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 124139136,
+      "blobSize": 185728,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "212": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 124324864,
+      "blobSize": 433792,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "213": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 124758656,
+      "blobSize": 253312,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "214": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 125011968,
+      "blobSize": 190976,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "215": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 125202944,
+      "blobSize": 363520,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "216": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 125566464,
+      "blobSize": 299264,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "217": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 125865728,
+      "blobSize": 193792,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "218": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 126059520,
+      "blobSize": 222464,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "219": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 126281984,
+      "blobSize": 185856,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "220": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 126467840,
+      "blobSize": 200832,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "221": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 126668672,
+      "blobSize": 230016,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "222": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 126898688,
+      "blobSize": 201344,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "223": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 127100032,
+      "blobSize": 158720,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "224": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 127258752,
+      "blobSize": 159360,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "225": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 127418112,
+      "blobSize": 188032,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "226": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 127606144,
+      "blobSize": 156928,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "227": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 127763072,
+      "blobSize": 180224,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "228": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 127943296,
+      "blobSize": 174208,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "229": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 128117504,
+      "blobSize": 206976,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "230": {
+      "width": 512,
+      "height": 512,
+      "blobOffset": 128324480,
+      "blobSize": 194816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "231": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128519296,
+      "blobSize": 50816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "232": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128570112,
+      "blobSize": 33536,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "233": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128603648,
+      "blobSize": 41088,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "234": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128644736,
+      "blobSize": 44672,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "235": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128689408,
+      "blobSize": 34688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "236": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128724096,
+      "blobSize": 36864,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "237": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128760960,
+      "blobSize": 36480,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "238": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128797440,
+      "blobSize": 37120,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "239": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128834560,
+      "blobSize": 36480,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "240": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128871040,
+      "blobSize": 40064,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "241": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128911104,
+      "blobSize": 33280,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "242": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128944384,
+      "blobSize": 34176,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "243": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 128978560,
+      "blobSize": 36864,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "244": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129015424,
+      "blobSize": 33536,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "245": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129048960,
+      "blobSize": 33536,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "246": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129082496,
+      "blobSize": 33536,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "247": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129116032,
+      "blobSize": 34816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "248": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129150848,
+      "blobSize": 40576,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "249": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129191424,
+      "blobSize": 67200,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "250": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129258624,
+      "blobSize": 54656,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "251": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129313280,
+      "blobSize": 36352,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "252": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129349632,
+      "blobSize": 49024,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "253": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129398656,
+      "blobSize": 39296,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "254": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129437952,
+      "blobSize": 43264,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "255": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129481216,
+      "blobSize": 45312,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "256": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129526528,
+      "blobSize": 38784,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "257": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129565312,
+      "blobSize": 75136,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "258": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129640448,
+      "blobSize": 78464,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "259": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129718912,
+      "blobSize": 59776,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "260": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129778688,
+      "blobSize": 34048,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "261": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129812736,
+      "blobSize": 35456,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "262": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129848192,
+      "blobSize": 34816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "263": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129883008,
+      "blobSize": 46592,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "264": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129929600,
+      "blobSize": 43264,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "265": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 129972864,
+      "blobSize": 44032,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "266": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130016896,
+      "blobSize": 40320,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "267": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130057216,
+      "blobSize": 40704,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "268": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130097920,
+      "blobSize": 39808,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "269": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130137728,
+      "blobSize": 40064,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "270": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130177792,
+      "blobSize": 40064,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "271": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130217856,
+      "blobSize": 41600,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "272": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130259456,
+      "blobSize": 44416,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "273": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130303872,
+      "blobSize": 40064,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "274": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130343936,
+      "blobSize": 41984,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "275": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130385920,
+      "blobSize": 43520,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "276": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130429440,
+      "blobSize": 47744,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "277": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130477184,
+      "blobSize": 88448,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "278": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130565632,
+      "blobSize": 51840,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "279": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130617472,
+      "blobSize": 95744,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "280": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130713216,
+      "blobSize": 50176,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "281": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130763392,
+      "blobSize": 52864,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "282": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130816256,
+      "blobSize": 57856,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "283": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130874112,
+      "blobSize": 48640,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "284": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130922752,
+      "blobSize": 40064,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "285": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 130962816,
+      "blobSize": 39936,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "286": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131002752,
+      "blobSize": 40320,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "287": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131043072,
+      "blobSize": 44928,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "288": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131088000,
+      "blobSize": 47488,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "289": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131135488,
+      "blobSize": 47744,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "290": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131183232,
+      "blobSize": 50944,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "291": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131234176,
+      "blobSize": 57728,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "292": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131291904,
+      "blobSize": 57344,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "293": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131349248,
+      "blobSize": 38784,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "294": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131388032,
+      "blobSize": 54400,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "295": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131442432,
+      "blobSize": 42624,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "296": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131485056,
+      "blobSize": 47744,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "297": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131532800,
+      "blobSize": 44544,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "298": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131577344,
+      "blobSize": 42368,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "299": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131619712,
+      "blobSize": 46848,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "300": {
+      "width": 256,
+      "height": 256,
+      "blobOffset": 131666560,
+      "blobSize": 45952,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "301": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131712512,
+      "blobSize": 12928,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "302": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131725440,
+      "blobSize": 12160,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "303": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131737600,
+      "blobSize": 11904,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "304": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131749504,
+      "blobSize": 12544,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "305": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 131762048,
+      "blobSize": 2560,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "306": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131764608,
+      "blobSize": 11008,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "307": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131775616,
+      "blobSize": 10240,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "308": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131785856,
+      "blobSize": 9472,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "309": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131795328,
+      "blobSize": 9472,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "310": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131804800,
+      "blobSize": 9216,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "311": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131814016,
+      "blobSize": 9088,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "312": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131823104,
+      "blobSize": 15232,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "313": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131838336,
+      "blobSize": 13824,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "314": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131852160,
+      "blobSize": 13312,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "315": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131865472,
+      "blobSize": 11648,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "316": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131877120,
+      "blobSize": 10880,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "317": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131888000,
+      "blobSize": 14720,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "318": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131902720,
+      "blobSize": 12416,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "319": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131915136,
+      "blobSize": 11776,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "320": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131926912,
+      "blobSize": 11136,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "321": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131938048,
+      "blobSize": 12544,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "322": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131950592,
+      "blobSize": 11776,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "323": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131962368,
+      "blobSize": 10240,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "324": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131972608,
+      "blobSize": 11904,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "325": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131984512,
+      "blobSize": 12160,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "326": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 131996672,
+      "blobSize": 13184,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "327": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132009856,
+      "blobSize": 12672,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "328": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132022528,
+      "blobSize": 14592,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "329": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132037120,
+      "blobSize": 14592,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "330": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132051712,
+      "blobSize": 13440,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "331": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132065152,
+      "blobSize": 14208,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "332": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132079360,
+      "blobSize": 11904,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "333": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132091264,
+      "blobSize": 15360,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "334": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132106624,
+      "blobSize": 14592,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "335": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132121216,
+      "blobSize": 12544,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "336": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132133760,
+      "blobSize": 10880,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "337": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132144640,
+      "blobSize": 11776,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "338": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132156416,
+      "blobSize": 11520,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "339": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132167936,
+      "blobSize": 13440,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "340": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132181376,
+      "blobSize": 14720,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "341": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132196096,
+      "blobSize": 16512,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "342": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132212608,
+      "blobSize": 12800,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "343": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132225408,
+      "blobSize": 14208,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "344": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132239616,
+      "blobSize": 12672,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "345": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132252288,
+      "blobSize": 10880,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "346": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132263168,
+      "blobSize": 12288,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "347": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132275456,
+      "blobSize": 10752,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "348": {
+      "width": 128,
+      "height": 128,
+      "blobOffset": 132286208,
+      "blobSize": 10752,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "349": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132296960,
+      "blobSize": 3072,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "350": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132300032,
+      "blobSize": 2688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "351": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132302720,
+      "blobSize": 3712,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "352": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132306432,
+      "blobSize": 2688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "353": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132309120,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "354": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132311552,
+      "blobSize": 3328,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "355": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132314880,
+      "blobSize": 3328,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "356": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132318208,
+      "blobSize": 3328,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "357": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132321536,
+      "blobSize": 3200,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "358": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132324736,
+      "blobSize": 4096,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "359": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132328832,
+      "blobSize": 3328,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "360": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132332160,
+      "blobSize": 3712,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "361": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132335872,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "362": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132338304,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "363": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132340736,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "364": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132343168,
+      "blobSize": 3200,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "365": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132346368,
+      "blobSize": 2688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "366": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132349056,
+      "blobSize": 2560,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "367": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132351616,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "368": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132354048,
+      "blobSize": 2816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "369": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132356864,
+      "blobSize": 2688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "370": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132359552,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "371": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132361984,
+      "blobSize": 2816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "372": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132364800,
+      "blobSize": 2688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "373": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132367488,
+      "blobSize": 2560,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "374": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132370048,
+      "blobSize": 3584,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "375": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132373632,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "376": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132376064,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "377": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132378496,
+      "blobSize": 2560,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "378": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132381056,
+      "blobSize": 3200,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "379": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132384256,
+      "blobSize": 3200,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "380": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132387456,
+      "blobSize": 2560,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "381": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132390016,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "382": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132392448,
+      "blobSize": 2432,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "383": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132394880,
+      "blobSize": 3712,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "384": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132398592,
+      "blobSize": 4096,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "385": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132402688,
+      "blobSize": 2688,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "386": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132405376,
+      "blobSize": 3328,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "387": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132408704,
+      "blobSize": 4224,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "388": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132412928,
+      "blobSize": 3712,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "389": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132416640,
+      "blobSize": 2944,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "390": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132419584,
+      "blobSize": 2944,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "391": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132422528,
+      "blobSize": 3584,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "392": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132426112,
+      "blobSize": 2816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "393": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132428928,
+      "blobSize": 2816,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "394": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132431744,
+      "blobSize": 3200,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "395": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132434944,
+      "blobSize": 3712,
+      "external": false,
+      "optimized_format": "R444"
+    },
+    "396": {
+      "width": 64,
+      "height": 64,
+      "blobOffset": 132438656,
+      "blobSize": 3152,
+      "external": false,
+      "optimized_format": "R444"
+    }
+  },
+  "validation": {
+    "r444": "OK",
+    "bc3": "PHYSICAL_OK_SRGB_PRESERVED",
+    "complete_vtc": "OK"
+  },
+  "bc3_encoding": {
+    "format": "BC3/DXT5",
+    "channel_type": "UBN",
+    "input_colorspace": "sRGB",
+    "output_colorspace": "sRGB",
+    "gamma_conversion": false,
+    "command": "-ics sRGB -f BC3,UBN,sRGB -m 1"
+  }
+}

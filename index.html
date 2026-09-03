@@ -377,7 +377,7 @@ function blip(){
   const p = A.text.play();
   if(p !== undefined) p.catch(()=>{});
 }
-let sfxOn=true, musicOn=true, cacheOn=false;   // som ligado por padrão
+let sfxOn=true, musicOn=true;   // som ligado por padrão
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 let musicRamp=null;
 function rampMusic(){
@@ -517,7 +517,7 @@ const SAIR={id:"sair", label:"Sair"};
 let webLang = "ptbr";
 const UI_TEXT = {
   ptbr: {
-    confirm_apply: "* Então vou aplicar o mod {lang} na versão v{ver} em {dir}{cache}.\n* Confirma?",
+    confirm_apply: "* Então vou aplicar o mod {lang} na versão v{ver} em {dir}.\n* Confirma?",
     portrait_tip: "* Se estiver no celular, use-o no modo retrato para evitar que os textos fiquem sobrepostos.",
     press_continue: "Clique ou pressione uma tecla para continuar",
     hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X voltar",
@@ -542,7 +542,6 @@ const UI_TEXT = {
     sfx_off: "Desligar som",
     music_on: "Ligar música",
     music_off: "Desligar música",
-    cache_label: "Incluir cache de texturas pré-gerado?",
     confirm_q: "Confirma?",
     yes: "Sim",
     no: "Não",
@@ -563,7 +562,6 @@ const UI_TEXT = {
     progress_compressing: "Compactando arquivos finais...",
     processing_error: "Ocorreu um erro durante o processamento. Verifique o console.",
     original_label: "Original (EN/JP)",
-    cache_suffix: " com cache",
     welcome:"* Bem-vindo!",
     intro:"* Hee Heee... Um viajante do outro mundo. O que deseja hoje?",
     choose:"* Escolha um idioma nas prateleiras, ou o que quiser. Você que sabe...",
@@ -575,8 +573,6 @@ const UI_TEXT = {
     steambad:"* Hmm... isso não me parece com DELTARUNE... Verifique o arquivo informado.",
     nopicker:"* Seu navegador não abre pastas. Use Chrome ou Edge, viajante.",
     ajustes:"* Deixe-me abrir a gaveta dos ajustes...",
-    cacheon:"* Bom, isso é bom. Poupará seu tempo durante o jogo.",
-    cacheoff:"* Sem cache, então.",
     sair:"* Tudo no seu tempo...",
     done:"* Pronto! \n* Agora é só extrair e colocar a pasta 'deltarune/deltarunevita' em 'ux0:/data'. \n* Bom jogo!",
     about_title: "* SOBRE",
@@ -596,7 +592,6 @@ const UI_TEXT = {
       TR: "* Tradução em turco disponível para inclusão.",
       sfx: "* Liga ou desliga os efeitos sonoros do menu.",
       music: "* Liga ou desliga a música ambiente da loja.",
-      cache: "* Opcional. Inclui PVR/BC3/RGBA4444 pré-gerados quando disponíveis; sem isso, o Vita gera o cache sozinho.",
       sair: "* Voltar ao menu anterior.",
       about: "* Deixe o velho Seam falar de si mesmo.",
       project: "* Sobre este porte para o PS Vita.",
@@ -605,7 +600,7 @@ const UI_TEXT = {
     }
   },
   es: {
-    confirm_apply: "* Voy a aplicar el mod {lang} a la versión v{ver} en {dir}{cache}.\n* ¿Confirmar?",
+    confirm_apply: "* Voy a aplicar el mod {lang} a la versión v{ver} en {dir}.\n* ¿Confirmar?",
     portrait_tip: "* Si usas un móvil, colócalo en vertical para evitar que los textos se superpongan.",
     press_continue: "Click or press a key to continue",
     hint: "↑↓ mover &nbsp; Z/Enter confirmar &nbsp; X volver",
@@ -630,7 +625,6 @@ const UI_TEXT = {
     sfx_off: "Apagar sonido",
     music_on: "Encender música",
     music_off: "Apagar música",
-    cache_label: "¿Incluir caché?",
     confirm_q: "¿Confirmar?",
     yes: "Sí",
     no: "No",
@@ -657,7 +651,6 @@ const UI_TEXT = {
     progress_compressing: "Comprimiendo archivos finales...",
     processing_error: "Ocurrió un error durante el procesamiento. Revisa la consola.",
     original_label: "Original (EN/JP)",
-    cache_suffix: " con caché",
     welcome:"* ¡Bienvenido!",
     intro:"* Jua Jua... Un viajero de otro mundo. ¿Qué deseas hoy?",
     choose:"* Elige un idioma de los estantes, o lo que quieras. Tú decides...",
@@ -669,8 +662,6 @@ const UI_TEXT = {
     steambad:"* Hmm... esto no me parece DELTARUNE... Comprueba el archivo.",
     nopicker:"* Tu navegador no abre carpetas. Usa Chrome o Edge, viajero.",
     ajustes:"* Déjame abrir el cajón de ajustes...",
-    cacheon:"* Bueno, eso es bueno. Te ahorrará tiempo durante el juego.",
-    cacheoff:"* Sin caché, entonces.",
     sair:"* Todo a su tiempo...",
     done:"* ¡Listo! \n* Ahora extrae y coloca la carpeta 'deltarune/deltarunevita' en 'ux0:/data'. \n* ¡Buen juego!",
     about_title: "* ACERCA DE",
@@ -690,7 +681,6 @@ const UI_TEXT = {
       TR: "* Traducción al turco disponible para incluir.",
       sfx: "* Activa o desactiva los efectos de sonido del menú.",
       music: "* Activa o desactiva la música ambiental de la tienda.",
-      cache: "* Archivo de caché opcional para reducir los tiempos de carga en el juego.",
       sair: "* Volver al menú anterior.",
       about: "* Deja que el viejo Seam hable de sí mismo.",
       project: "* Acerca de este port para el PS Vita.",
@@ -699,7 +689,7 @@ const UI_TEXT = {
     }
   },
   en: {
-    confirm_apply: "* So I will apply the {lang} mod on version v{ver} in {dir}{cache}.\n* Confirm?",
+    confirm_apply: "* So I will apply the {lang} mod on version v{ver} in {dir}.\n* Confirm?",
     portrait_tip: "* If on mobile, please use portrait mode to prevent text overlap.",
     press_continue: "Click or press a key to continue",
     hint: "↑↓ move &nbsp; Z/Enter confirm &nbsp; X back",
@@ -724,7 +714,6 @@ const UI_TEXT = {
     sfx_off: "Turn off sound",
     music_on: "Turn on music",
     music_off: "Turn off music",
-    cache_label: "Include cache?",
     confirm_q: "Confirm?",
     yes: "Yes",
     no: "No",
@@ -751,7 +740,6 @@ const UI_TEXT = {
     progress_compressing: "Compressing final files...",
     processing_error: "An error occurred during processing. Check the console.",
     original_label: "Original (EN/JP)",
-    cache_suffix: " with cache",
     welcome:"* Welcome!",
     intro:"* Hee Heee... A traveler from another world. What do you wish for today?",
     choose:"* Choose a language on the shelves, or whatever you want. It's up to you...",
@@ -763,8 +751,6 @@ const UI_TEXT = {
     steambad:"* Hmm... that doesn't look like DELTARUNE to me... Check the specified file.",
     nopicker:"* Your browser cannot open folders. Use Chrome or Edge, traveler.",
     ajustes:"* Let me open the settings drawer...",
-    cacheon:"* Well, that's good. It will save you time during the game.",
-    cacheoff:"* No cache then.",
     sair:"* Everything in due time...",
     done:"* All set! \n* Now just extract and place the 'deltarune/deltarunevita' folder in 'ux0:/data'. \n* Have fun!",
     about_title: "* ABOUT",
@@ -784,7 +770,6 @@ const UI_TEXT = {
       TR: "* Turkish translation available to include.",
       sfx: "* Turn on or off the menu sound effects.",
       music: "* Turn on or off the shop's ambient music.",
-      cache: "* Optional cache file to reduce loading times in the game.",
       sair: "* Return to the previous menu.",
       about: "* Let the old Seam talk about himself.",
       project: "* About this port to the PS Vita.",
@@ -793,7 +778,7 @@ const UI_TEXT = {
     }
   },
   fr: {
-    confirm_apply: "* Je vais donc appliquer le mod {lang} sur la version v{ver} dans {dir}{cache}.\n* Confirmer ?",
+    confirm_apply: "* Je vais donc appliquer le mod {lang} sur la version v{ver} dans {dir}.\n* Confirmer ?",
     portrait_tip: "* Sur mobile, veuillez utiliser le mode portrait pour éviter la superposition de texte.",
     press_continue: "Cliquez ou appuyez sur une touche pour continuer",
     hint: "↑↓ déplacer &nbsp; Z/Entrée confirmer &nbsp; X retour",
@@ -818,7 +803,6 @@ const UI_TEXT = {
     sfx_off: "Désactiver le som",
     music_on: "Activer la musique",
     music_off: "Désactiver la musique",
-    cache_label: "Inclure le cache ?",
     confirm_q: "Confirmer ?",
     yes: "Oui",
     no: "Non",
@@ -845,7 +829,6 @@ const UI_TEXT = {
     progress_compressing: "Compression des fichiers finaux...",
     processing_error: "Une erreur est survenue pendant le traitement. Consultez la console.",
     original_label: "Original (EN/JP)",
-    cache_suffix: " avec cache",
     welcome:"* Bienvenue !",
     intro:"* Hee Heee... Un voyageur d'un autre monde. Que désires-tu aujourd'hui ?",
     choose:"* Choisissez une langue sur les étagères. Comme vous voulez...",
@@ -857,8 +840,6 @@ const UI_TEXT = {
     steambad:"* Hmm... cela ne ressemble pas à DELTARUNE... Vérifiez le fichier.",
     nopicker:"* Votre navigateur ne peut pas ouvrir de dossiers. Utilisez Chrome ou Edge.",
     ajustes:"* Laissez-moi ouvrir le tiroir des paramètres...",
-    cacheon:"* C'est une bonne chose. Cela vous fera gagner du temps pendant le jeu.",
-    cacheoff:"* Pas de cache alors.",
     sair:"* Chaque chose en son temps...",
     done:"* Terminé ! \n* Extrayez et placez le dossier 'deltarune/deltarunevita' dans 'ux0:/data'. \n* Bon jeu !",
     about_title: "* À PROPOS",
@@ -878,7 +859,6 @@ const UI_TEXT = {
       TR: "* Traduction turque disponible.",
       sfx: "* Active ou désactive les effets sonores du menu.",
       music: "* Active ou désactive la musique d'ambiance de la boutique.",
-      cache: "* Fichier de cache optionnel pour réduire les temps de chargement dans le jeu.",
       sair: "* Retour au menu précédent.",
       about: "* Laissez le vieux Seam parler de lui-même.",
       project: "* À propos de ce portage sur PS Vita.",
@@ -887,7 +867,7 @@ const UI_TEXT = {
     }
   },
   de: {
-    confirm_apply: "* Ich werde also den {lang}-Mod auf Version v{ver} in {dir}{cache} anwenden.\n* Bestätigen?",
+    confirm_apply: "* Ich werde also den {lang}-Mod auf Version v{ver} in {dir} anwenden.\n* Bestätigen?",
     portrait_tip: "* Auf dem Handy nutzen Sie bitte das Hochformat, um Textüberlagerungen zu vermeiden.",
     press_continue: "Klicken oder drücken Sie eine Taste, um fortzufahren",
     hint: "↑↓ bewegen &nbsp; Z/Enter bestätigen &nbsp; X zurück",
@@ -912,7 +892,6 @@ const UI_TEXT = {
     sfx_off: "Ton ausschalten",
     music_on: "Musik einschalten",
     music_off: "Musik ausschalten",
-    cache_label: "Cache einschließen?",
     confirm_q: "Bestätigen?",
     yes: "Ja",
     no: "Nein",
@@ -939,7 +918,6 @@ const UI_TEXT = {
     progress_compressing: "Enddateien werden komprimiert...",
     processing_error: "Bei der Verarbeitung ist ein Fehler aufgetreten. Prüfe die Konsole.",
     original_label: "Original (EN/JP)",
-    cache_suffix: " mit Cache",
     welcome:"* Willkommen!",
     intro:"* Hee Heee... Ein Reisender aus einer anderen Welt. Was wünschst du dir heute?",
     choose:"* Wähle eine Sprache aus den Regalen, ganz wie du willst...",
@@ -951,8 +929,6 @@ const UI_TEXT = {
     steambad:"* Hmm... das sieht mir nicht nach DELTARUNE aus... Überprüfe die Datei.",
     nopicker:"* Dein Browser kann keine Ordner öffnen. Nutze Chrome oder Edge.",
     ajustes:"* Lass mich die Einstellungsschublade öffnen...",
-    cacheon:"* Nun, das ist gut. Es spart dir Zeit beim Spielen.",
-    cacheoff:"* Dann ohne Cache.",
     sair:"* Alles zu seiner Zeit...",
     done:"* Fertig! \n* Entpacke und platziere den Ordner 'deltarune/deltarunevita' in 'ux0:/data'. \n* Viel Spaß!",
     about_title: "* DETAILS",
@@ -972,7 +948,6 @@ const UI_TEXT = {
       TR: "* Türkische Übersetzung verfügbar.",
       sfx: "* Schaltet die Soundeffekte des Menüs ein oder aus.",
       music: "* Schaltet die Hintergrundmusik des Ladens ein oder aus.",
-      cache: "* Optionale Cache-Datei zur Reduzierung der Ladezeiten im Spiel.",
       sair: "* Zum vorherigen Menü zurückkehren.",
       about: "* Lass den alten Seam von sich selbst erzählen.",
       project: "* Über diesen Port für die PS Vita.",
@@ -981,7 +956,7 @@ const UI_TEXT = {
     }
   },
   ru: {
-    confirm_apply: "* Итак, я применю мод {lang} на версию v{ver} в {dir}{cache}.\n* Подтвердить?",
+    confirm_apply: "* Итак, я применю мод {lang} на версию v{ver} в {dir}.\n* Подтвердить?",
     portrait_tip: "* На мобильном телефоне используйте портретный режим, чтобы избежать наложения текста.",
     press_continue: "Нажмите или коснитесь клавиши для продолжения",
     hint: "↑↓ перемыкать &nbsp; Z/Enter подтв &nbsp; X назад",
@@ -1006,7 +981,6 @@ const UI_TEXT = {
     sfx_off: "Выключить звук",
     music_on: "Включить музыку",
     music_off: "Выключить музыку",
-    cache_label: "Включить кэш?",
     confirm_q: "Подтвердить?",
     yes: "Да",
     no: "Нет",
@@ -1033,7 +1007,6 @@ const UI_TEXT = {
     progress_compressing: "Сжатие итоговых файлов...",
     processing_error: "Во время обработки произошла ошибка. Проверь консоль.",
     original_label: "Оригинал (EN/JP)",
-    cache_suffix: " с кэшем",
     welcome:"* Добро пожаловать!",
     intro:"* Хе-хе... Путешественник из другого мира. Чего ты желаешь сегодня?",
     choose:"* Выбери язык на полках, или что угодно. Решать тебе...",
@@ -1045,8 +1018,6 @@ const UI_TEXT = {
     steambad:"* Хмм... это не похоже на DELTARUNE... Проверь файл.",
     nopicker:"* Ваш браузер не может открывать папки. Используйте Chrome или Edge.",
     ajustes:"* Открою-ка я ящик настроек...",
-    cacheon:"* Что ж, это хорошо. Сэкономит время в игре.",
-    cacheoff:"* Тогда без кэша.",
     sair:"* Всему свое время...",
     done:"* Готово! \n* Распакуй и помести папку 'deltarune/deltarunevita' в 'ux0:/data'. \n* Приятной игры!",
     about_title: "* ОПИСАНИЕ",
@@ -1066,7 +1037,6 @@ const UI_TEXT = {
       TR: "* Турецкий перевод доступен.",
       sfx: "* Включает или выключает звуковые эффекты меню.",
       music: "* Включает или выключает фоновую музыку магазина.",
-      cache: "* Дополнительный файл кэша для сокращения времени загрузки в игре.",
       sair: "* Вернуться в предыдущее меню.",
       about: "* Пусть старый Сим расскажет о себе.",
       project: "* Об этом порте на PS Vita.",
@@ -1075,7 +1045,7 @@ const UI_TEXT = {
     }
   },
   ja: {
-    confirm_apply: "* それでは、バージョン v{ver} の {dir}{cache} に {lang} モッドを適用します。\n* 決定しますか？",
+    confirm_apply: "* それでは、バージョン v{ver} の {dir} に {lang} モッドを適用します。\n* 決定しますか？",
     portrait_tip: "* モバイル端末の場合は、テキストの重なりを防ぐために縦向き（ポートレート）モードでご利用ください。",
     press_continue: "クリックまたはキーを押して続行します",
     hint: "↑↓ 移動 &nbsp; Z/Enter 決定 &nbsp; X 戻る",
@@ -1100,7 +1070,6 @@ const UI_TEXT = {
     sfx_off: "効果音オフ",
     music_on: "BGMオン",
     music_off: "BGMオフ",
-    cache_label: "キャッシュを含める？",
     confirm_q: "決定しますか？",
     yes: "はい",
     no: "いいえ",
@@ -1127,7 +1096,6 @@ const UI_TEXT = {
     progress_compressing: "最終ファイルを圧縮中...",
     processing_error: "処理中にエラーが発生しました。コンソールを確認してください。",
     original_label: "オリジナル (EN/JP)",
-    cache_suffix: "（キャッシュあり）",
     welcome:"* ようこそ！",
     intro:"* ヒッヒッヒ… 異世界からの旅人よ。今日は何を望むのかな？",
     choose:"* 棚から言語を選びなさい。君の自由だよ…",
@@ -1139,8 +1107,6 @@ const UI_TEXT = {
     steambad:"* ふーむ… これはDELTARUNEではないようだね… ファイルを確認しておくれ。",
     nopicker:"* お使いのブラウザではフォルダを開けません。ChromeかEdgeをご利用ください。",
     ajustes:"* 設定の引き出しを開けよう…",
-    cacheon:"* それは良いね。プレイ中の時間を節約できるよ。",
-    cacheoff:"* キャッシュなしだね。",
     sair:"* 全ては然るべき時に…",
     done:"* 完了だよ！ \n* 'deltarune/deltarunevita' フォルダを 'ux0:/data' に配置してね。 \n* 楽しんで！",
     about_title: "* 説明",
@@ -1160,7 +1126,6 @@ const UI_TEXT = {
       TR: "* トルコ語翻訳を追加できるよ。",
       sfx: "* メニューの効果音のオン/オフを切り替えるよ。",
       music: "* お店のBGMのオン/オフを切り替えるよ。",
-      cache: "* ゲーム中のロード時間を短縮するためのオプションのキャッシュファイルだよ。",
       sair: "* 前のメニューに戻るよ。",
       about: "* 年老いたヌイに自分について語らせるよ。",
       project: "* このPS Vitaへの移植版についてだよ。",
@@ -1231,7 +1196,6 @@ function settingsItems(){
   return [
     {id:"sfx",  label:(sfxOn?T.sfx_off:T.sfx_on)},
     {id:"music",label:(musicOn?T.music_off:T.music_on)},
-    {id:"cache",label:(cacheOn?"[x] ":"[ ] ")+T.cache_label},
     getSairItem(),
   ];
 }
@@ -1492,9 +1456,7 @@ function resolveConfirm(){
   {
     if(it.id==="sfx") sfxOn=!sfxOn;
     else if(it.id==="music"){ musicOn=!musicOn; musicOn?startMusic():stopMusic(); }
-    else if(it.id==="cache") cacheOn=!cacheOn;
-    if(it.id==="cache"&&cacheOn){ setSeam("laugh",1500); sayQ(SEAM_LINES.cacheon); }
-    else { const T_Q = UI_TEXT[webLang] || UI_TEXT.ptbr; setSeam("idle"); sayQ((T_Q.questions && T_Q.questions[screen]) || T_Q.choose); }
+    { const T_Q = UI_TEXT[webLang] || UI_TEXT.ptbr; setSeam("idle"); sayQ((T_Q.questions && T_Q.questions[screen]) || T_Q.choose); }
   }
   render();
 }
@@ -1672,9 +1634,8 @@ function showApplyConfirmation(){
   pendingAction = "apply"; confirmSel = 0; pending=true;
   const T = UI_TEXT[webLang] || UI_TEXT.en;
   const extraName = selectedExtras.size ? Array.from(selectedExtras).map(c => (T.lang_names && T.lang_names[c]) || (LANGS.find(x=>x.code===c)?.label || c)).join(", ") : (T.original_label || "Original (EN/JP)");
-  const cacheText = cacheOn ? (T.cache_suffix || " with cache") : "";
   const tmpl = T.confirm_apply || SEAM_LINES.confirm_apply;
-  const promptText = tmpl.replace("{lang}", extraName).replace("{ver}", PORT_VERSION).replace("{dir}", steamHandle.name).replace("{cache}", cacheText);
+  const promptText = tmpl.replace("{lang}", extraName).replace("{ver}", PORT_VERSION).replace("{dir}", steamHandle.name).replace("", "");
   setSeam("talk"); speech(promptText); renderConfirm();
 }
 

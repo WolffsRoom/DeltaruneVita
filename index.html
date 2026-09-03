@@ -1413,7 +1413,10 @@ function activate(){
   if(screen==="talk"){ return talkSpeak(it.id); }
   if(screen==="lang"){
     if(it.id==="lang-confirm"){
-      play(A.sel); screen="main"; active=RET_INDEX.lang; pending=false; setSeam("idle"); render();
+      play(A.sel); screen="main"; active=RET_INDEX.lang; pending=false; pendingAction=null; setSeam("idle");
+      $("speech").classList.remove("lang-options");
+      $("speech").innerHTML=""; $("options").innerHTML="";
+      render(); speech(SEAM_LINES.choose);
       return;
     }
     if(it.id==="lang-back"){ return exitSub(); }
@@ -1506,6 +1509,7 @@ function exitSub(){
   play(A.sel); setSeam("idle");
   const ret = RET_INDEX[screen] ?? 0;
   screen="main"; active=ret; pending=false; pendingAction=null;
+  $("speech").classList.remove("lang-options");
   $("speech").innerHTML="";
   $("options").innerHTML="";
   render(); speech(SEAM_LINES.sair);

@@ -1192,18 +1192,16 @@ function talkItems(){
 
 function langItems(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
-  return LANGS.map(L=>{
+  return LANGS.filter(L=>!L.base).map(L=>{
     let label = (T.lang_names && T.lang_names[L.code]) || L.label;
-    if(L.base) label += (T.base_tag || " (base)");
-    else if(!L.ready) label += (T.soon_tag || " (em breve)");
+    if(!L.ready) label += (T.soon_tag || " (em breve)");
     else label = (selectedExtras.has(L.code) ? "[x] " : "[ ] ") + label;
-    return {...L, label, selected: !L.base && selectedExtras.has(L.code)};
+    return {...L, label, selected: selectedExtras.has(L.code)};
   }).concat([
     {id:"lang-confirm", label:T.btn_confirm || "Confirmar"},
     {id:"lang-back", label:T.btn_back || "Voltar"}
   ]);
 }
-
 function settingsItems(){
   const T = UI_TEXT[webLang] || UI_TEXT.ptbr;
   return [
@@ -1277,7 +1275,7 @@ function renderRows(box,list,onEnter,onClick){
       onClick(idx);
     };
     row.onclick = handleClick;
-    row.onpointerdown = handleClick;
+    row.onpointerdown = (e) => { if(e) e.preventDefault(); };
     box.appendChild(row);
   });
 }
@@ -1347,6 +1345,8 @@ function render(){
   $("plus").classList.toggle("show", showPlusPanel);
   if(!showPlusPanel) $("plus").innerHTML="";
   if(!sub){
+    $("speech").classList.remove("lang-options");
+    if($("speech").querySelector(".opt")) $("speech").innerHTML="";
     renderRows($("options"), mainItems(), idx=>{active=idx;play(A.move);render();}, idx=>{active=idx;activate();});
     return;
   }
@@ -1497,10 +1497,11 @@ function returnToTalk(){
 function exitSub(){
   play(A.sel); setSeam("idle");
   const ret = RET_INDEX[screen] ?? 0;
-  screen="main"; active=ret; pending=false;
+  screen="main"; active=ret; pending=false; pendingAction=null;
+  $("speech").innerHTML="";
+  $("options").innerHTML="";
   render(); speech(SEAM_LINES.sair);
 }
-
 function back(){
   if(screen==="main"){ play(A.swing); return; }
   if(screen==="mirror"){ screen="main"; active=0; setSeam("idle"); speech(SEAM_LINES.choose); render(); return; }

@@ -95,6 +95,7 @@
     color:var(--heart);text-shadow:none;opacity:0;image-rendering:pixelated}
   .opt.active .h{opacity:1}
   .opt.active{color:var(--yellow)}
+  .opt.selected{color:var(--yellow)}
   .opt .pr{color:var(--white);font-size:.78em;margin-left:.4em}
   #speech.lang-options{font-size:.82em;line-height:1.12}
   #speech.lang-options .opt{padding-left:1.35em;margin:.01em 0}
@@ -523,6 +524,10 @@ const UI_TEXT = {
     btn_ajustes: "Ajustes",
     btn_talk: "Conversar",
     btn_sair: "Sair",
+    btn_confirm: "Confirmar",
+    btn_back: "Voltar",
+    lang_single_comment: "* Boa escolha. {lang} vai junto na viagem.",
+    lang_polyglot_comment: "* Hee hee... Mais de um idioma? Temos um poliglota por aqui.",
     talk_about: "Sobre você",
     talk_project: "Sobre o DeltaruneVita",
     talk_wolff: "Quem é Wolff?",
@@ -604,6 +609,10 @@ const UI_TEXT = {
     btn_ajustes: "Ajustes",
     btn_talk: "Hablar",
     btn_sair: "Salir",
+    btn_confirm: "Confirmar",
+    btn_back: "Volver",
+    lang_single_comment: "* Buena elección. {lang} irá contigo en el viaje.",
+    lang_polyglot_comment: "* Je, je... ¿Más de un idioma? Parece que tenemos un políglota por aquí.",
     talk_about: "Sobre ti",
     talk_project: "Sobre DeltaruneVita",
     talk_wolff: "¿Quién es Wolff?",
@@ -691,6 +700,10 @@ const UI_TEXT = {
     btn_ajustes: "Settings",
     btn_talk: "Talk",
     btn_sair: "Exit",
+    btn_confirm: "Confirm",
+    btn_back: "Back",
+    lang_single_comment: "* Good choice. {lang} is coming along for the journey.",
+    lang_polyglot_comment: "* Hee hee... More than one language? Looks like we have a polyglot here.",
     talk_about: "About you",
     talk_project: "About DeltaruneVita",
     talk_wolff: "Who is Wolff?",
@@ -778,6 +791,10 @@ const UI_TEXT = {
     btn_ajustes: "Paramètres",
     btn_talk: "Parler",
     btn_sair: "Quitter",
+    btn_confirm: "Confirmer",
+    btn_back: "Retour",
+    lang_single_comment: "* Bon choix. {lang} fera partie du voyage.",
+    lang_polyglot_comment: "* Hé hé... Plus d’une langue ? Voilà donc un polyglotte.",
     talk_about: "À propos de vous",
     talk_project: "À propos de DeltaruneVita",
     talk_wolff: "Qui est Wolff ?",
@@ -865,6 +882,10 @@ const UI_TEXT = {
     btn_ajustes: "Einstellungen",
     btn_talk: "Sprechen",
     btn_sair: "Beenden",
+    btn_confirm: "Bestätigen",
+    btn_back: "Zurück",
+    lang_single_comment: "* Gute Wahl. {lang} kommt mit auf die Reise.",
+    lang_polyglot_comment: "* Hee hee... Mehr als eine Sprache? Wir haben wohl einen Polyglotten hier.",
     talk_about: "Über dich",
     talk_project: "Über DeltaruneVita",
     talk_wolff: "Wer ist Wolff?",
@@ -952,6 +973,10 @@ const UI_TEXT = {
     btn_ajustes: "Настройки",
     btn_talk: "Разговор",
     btn_sair: "Выход",
+    btn_confirm: "Подтвердить",
+    btn_back: "Назад",
+    lang_single_comment: "* Хороший выбор. {lang} отправится с нами в путь.",
+    lang_polyglot_comment: "* Хе-хе... Больше одного языка? Похоже, у нас тут полиглот.",
     talk_about: "О тебе",
     talk_project: "О DeltaruneVita",
     talk_wolff: "Кто такой Wolff?",
@@ -1039,6 +1064,10 @@ const UI_TEXT = {
     btn_ajustes: "設定",
     btn_talk: "会話",
     btn_sair: "終了",
+    btn_confirm: "決定",
+    btn_back: "戻る",
+    lang_single_comment: "* いい選択だね。{lang}も旅に連れていこう。",
+    lang_polyglot_comment: "* ヒッヒッヒ… 複数の言語かい？ どうやら多言語使いのようだね。",
     talk_about: "あなたについて",
     talk_project: "DeltaruneVitaについて",
     talk_wolff: "Wolffとは誰？",
@@ -1168,8 +1197,11 @@ function langItems(){
     if(L.base) label += (T.base_tag || " (base)");
     else if(!L.ready) label += (T.soon_tag || " (em breve)");
     else label = (selectedExtras.has(L.code) ? "[x] " : "[ ] ") + label;
-    return {...L, label};
-  }).concat(getSairItem());
+    return {...L, label, selected: !L.base && selectedExtras.has(L.code)};
+  }).concat([
+    {id:"lang-confirm", label:T.btn_confirm || "Confirmar"},
+    {id:"lang-back", label:T.btn_back || "Voltar"}
+  ]);
 }
 
 function settingsItems(){
@@ -1226,7 +1258,7 @@ function renderRows(box,list,onEnter,onClick){
   if(existing.length === list.length){
     existing.forEach((row, idx)=>{
       const it=list[idx];
-      row.className = "opt" + (idx === active ? " active" : "");
+      row.className = "opt" + (idx === active ? " active" : "") + (it.selected ? " selected" : "");
       row.innerHTML='<span class="h">♥</span>'+(it.flag ? '<img class="lang-flag" src="'+it.flag+'" alt=""> ' : '')+it.label;
     });
     return;
@@ -1234,7 +1266,7 @@ function renderRows(box,list,onEnter,onClick){
   box.innerHTML="";
   list.forEach((it,idx)=>{
     const row=document.createElement("div");
-    row.className="opt"+(idx===active?" active":"");
+    row.className="opt"+(idx===active?" active":"")+(it.selected?" selected":"");
     row.innerHTML='<span class="h">♥</span>'+(it.flag ? '<img class="lang-flag" src="'+it.flag+'" alt=""> ' : '')+it.label;
     row.onmouseenter=()=>{
       if(!busy&&!pending&&active!==idx) onEnter(idx);
@@ -1372,25 +1404,44 @@ function activate(){
   if(it.id==="sair") return exitSub();
   if(screen==="talk"){ return talkSpeak(it.id); }
   if(screen==="lang"){
+    if(it.id==="lang-confirm"){
+      play(A.sel); screen="main"; active=RET_INDEX.lang; pending=false; setSeam("idle"); render();
+      return;
+    }
+    if(it.id==="lang-back"){ return exitSub(); }
     if(it.base){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.core); return; }
     if(!it.ready){ play(A.swing); setSeam("oh",800); sayQ(SEAM_LINES.soon); return; }
     languageSelectionTouched=true;
     if(selectedExtras.has(it.code)) selectedExtras.delete(it.code);
     else selectedExtras.add(it.code);
     play(A.sel); setSeam(selectedExtras.has(it.code)?"laugh":"idle",700); render();
+    const T=UI_TEXT[webLang] || UI_TEXT.en;
+    if(selectedExtras.size===1){
+      const only=Array.from(selectedExtras)[0];
+      const L=LANGS.find(x=>x.code===only);
+      const name=(T.lang_names && T.lang_names[only]) || (L&&L.label) || only;
+      sayQ((T.lang_single_comment || UI_TEXT.en.lang_single_comment).replace("{lang}", name));
+    } else if(selectedExtras.size>1){
+      sayQ(T.lang_polyglot_comment || UI_TEXT.en.lang_polyglot_comment);
+    } else {
+      sayQ(SEAM_LINES.rem);
+    }
     return;
   }
   pending=true; confirmSel=0; play(A.sel); setSeam("talk"); render();
 }
 
 function resolveConfirm(){
+  if(typeof pendingAction === "string" && pendingAction.startsWith("apply-suggest:")) {
+    const code=pendingAction.slice("apply-suggest:".length);
+    if(confirmSel===0) selectedExtras.add(code);
+    pendingAction=null; pending=false; play(confirmSel===0?A.sel:A.swing);
+    setSeam(confirmSel===0?"laugh":"idle",900);
+    showApplyConfirmation();
+    return;
+  }
   if(confirmSel===1) return cancelConfirm();
   pending=false; play(A.sel);
-  if(typeof pendingAction === "string" && pendingAction.startsWith("suggest:")) {
-    const code=pendingAction.slice(8); pendingAction=null;
-    if(confirmSel===0) selectedExtras.add(code);
-    setSeam(confirmSel===0?"laugh":"idle",1000); screen="main"; render(); speech(SEAM_LINES.intro); return;
-  }
   if(pendingAction === "apply") {
     pendingAction = null;
     if(confirmSel === 0) {
@@ -1733,18 +1784,8 @@ function confirmWebLang() {
   screen = "main";
   toSplit();
   render();
-  const suggested=LANGS.find(L=>!L.base && L.ready && (L.interface_codes||[]).includes(webLang));
-  const afterIntro=()=>{
-    if(suggested && !selectedExtras.has(suggested.code)){
-      pendingAction="suggest:"+suggested.code; pending=true; confirmSel=0; setSeam("talk");
-      const T=UI_TEXT[webLang] || UI_TEXT.en || UI_TEXT.ptbr;
-      const tmpl=T.suggest_translation || UI_TEXT.en.suggest_translation;
-      speech(tmpl.replace("{lang}", suggested.label));
-      renderConfirm();
-    }
-  };
   type($("speech"), SEAM_LINES.welcome || "* Welcome!", ()=>{
-    type($("speech"), SEAM_LINES.intro, afterIntro);
+    type($("speech"), SEAM_LINES.intro);
   });
 }
 

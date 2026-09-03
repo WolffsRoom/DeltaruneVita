@@ -1826,11 +1826,7 @@ function confirmWebLang() {
   screen = "main";
   toSplit();
   render();
-  type($("speech"), SEAM_LINES.welcome || "* Welcome!", ()=>{
-    setTimeout(()=>{
-      type($("speech"), SEAM_LINES.intro, ()=>{ webLangTransition=false; });
-    }, 850);
-  });
+  type($("speech"), SEAM_LINES.intro, ()=>{ webLangTransition=false; });
 }
 
 function dismissSplash() {

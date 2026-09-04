@@ -1745,7 +1745,7 @@ async function applySelectedLanguagePacks(zip){
     if(entry.sha256 && (await sha256Hex(packBuf)).toLowerCase()!==entry.sha256.toLowerCase()) throw new Error("SHA-256 inválido: "+L.label);
     const pack=await JSZip.loadAsync(packBuf);
     const mf=JSON.parse(await pack.file("manifest.json").async("string"));
-    const root=manifest.output_folder+"/mods/Lang/"+L.packId+"/";
+    const root=manifest.output_folder+"/deltarunevita/mods/Lang/"+L.packId+"/";
     const records=mf.records||[];
     for(let i=0;i<records.length;i++){
       const rec=records[i]; setBar((i/Math.max(1,records.length))*100);

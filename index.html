@@ -1667,11 +1667,16 @@ function attachManualFile(){
 
 async function loadLanguageCatalog(){
   if(languageCatalog) return languageCatalog;
-  try{
-    const res = await fetch("https://wolffsroom.github.io/DeltaruneVita/language-packs/language_packs.json", {cache:"no-store"});
-    if(!res.ok) throw new Error("catalog HTTP "+res.status);
-    languageCatalog = await res.json();
-  }catch(e){ languageCatalog={languages:[]}; }
+  const candidates=["language-packs/language_packs.json","language_packs.json"];
+  for(const url of candidates){
+    try{
+      const res=await fetch(url,{cache:"no-store"});
+      if(!res.ok) continue;
+      languageCatalog=await res.json();
+      if(languageCatalog && Array.isArray(languageCatalog.languages)) return languageCatalog;
+    }catch(e){}
+  }
+  languageCatalog={languages:[]};
   return languageCatalog;
 }
 function u32le(a,o){ return (a[o] | (a[o+1]<<8) | (a[o+2]<<16) | (a[o+3]<<24)) >>> 0; }
@@ -1710,7 +1715,11 @@ async function applySelectedLanguagePacks(zip){
     const entry=(catalog.languages||[]).find(x=>x.id===L.packId && x.ready);
     if(!entry || !entry.url) throw new Error("Language Pack indisponível: "+L.label);
     setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).progress_download || "Downloading language pack: {lang}...").replace("{lang}",L.label));
-    let res=await fetch(entry.url, {cache:"no-store"});
+    const packFetchOptions={cache:"no-store"};
+    if(entry.api_asset || entry.url.includes("api.github.com/repos/")){
+      packFetchOptions.headers={"Accept":"application/octet-stream","X-GitHub-Api-Version":"2022-11-28"};
+    }
+    let res=await fetch(entry.url, packFetchOptions);
     if(!res.ok && location.hostname==="127.0.0.1") res=await fetch("/proxy_download?url="+encodeURIComponent(entry.url));
     if(!res.ok) throw new Error("Falha ao baixar "+L.label+" (HTTP "+res.status+")");
     const packBuf=await res.arrayBuffer();

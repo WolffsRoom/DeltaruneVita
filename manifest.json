@@ -1,4 +1,4 @@
-﻿{
+{
     "format":  4,
     "game":  "DELTARUNE",
     "port_version":  "0.72",
@@ -6134,13 +6134,6 @@
                       "size":  4482399,
                       "sha256":  "7b7bc761a65685ea379cfc8389b396487351c6052d6396a461a504dde60b6a67",
                       "mode":  "copy"
-                  },
-                  {
-                      "output":  "deltarunevita/vid/first_load.mp4",
-                      "source":  null,
-                      "size":  646282,
-                      "sha256":  "641a9beb87ea67844dffa6b635c1ebcc0ddf9b0c6d8fa916f56318b4bcf477d5",
-                      "mode":  "embed"
                   },
                   {
                       "output":  "deltarunevita/vid/tennaIntroF1_compressed_28.mp4",

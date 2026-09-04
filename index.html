@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -264,7 +264,7 @@
 <audio id="a-drone" src="assets/AUDIO_DRONE.wav" loop preload="auto"></audio>
 <audio id="a-doorclose" src="assets/snd_doorclose.wav" preload="auto"></audio>
 
-<script src="manifest.js?v=0.71"></script>
+<script src="manifest.js?v=0.72.4"></script>
 <script src="assets/jszip.min.js"></script>
 <script>
 "use strict";
@@ -1775,26 +1775,35 @@ async function generate(mirrorId, attachedZipFile){
     for(let i = 0; i < totalFiles; i++){
       const fileRec = manifest.files[i];
       setBar((i / totalFiles) * 100);
-      const outPath = manifest.output_folder + "/" + fileRec.path;
+      const fileOutput = fileRec.output || fileRec.path;
+      if(!fileOutput) throw new Error("Manifest inválido: arquivo base sem caminho na posição " + i);
+      const outPath = manifest.output_folder + "/" + fileOutput;
       if(fileRec.mode === "embed"){
-        const res = await fetch("embedded/" + fileRec.output);
+        const res = await fetch("embedded/" + fileOutput, {cache:"no-store"});
+        if(!res.ok) throw new Error("Arquivo base ausente: " + fileOutput + " (HTTP " + res.status + ")");
         const buf = await res.arrayBuffer();
+        if(fileRec.size && buf.byteLength !== fileRec.size) throw new Error("Tamanho inválido no arquivo base: " + fileOutput);
+        if(fileRec.sha256 && (await sha256Hex(buf)).toLowerCase() !== fileRec.sha256.toLowerCase()) throw new Error("SHA-256 inválido no arquivo base: " + fileOutput);
         zip.file(outPath, buf);
-      } else if(fileRec.mode === "copy"){
+      } else if(fileRec.mode === "copy" || fileRec.mode === "browser_patch"){
         const steamEntry = findSteamEntry(fileRec.source);
-        if(steamEntry){
-          const buf = await steamEntryArrayBuffer(steamEntry);
-          zip.file(outPath, buf);
-        }
-      } else if(fileRec.mode === "browser_patch"){
-        const steamEntry = findSteamEntry(fileRec.source);
-        if(steamEntry){
-          const origBuf = new Uint8Array(await steamEntryArrayBuffer(steamEntry));
-          const patchRes = await fetch("patch_data/patches/" + fileRec.patch);
+        if(!steamEntry) throw new Error("Arquivo Steam ausente: " + fileRec.source);
+        const srcBuf = new Uint8Array(await steamEntryArrayBuffer(steamEntry));
+        const req = (manifest.required_sources || {})[fileRec.source];
+        if(req && req.size && srcBuf.length !== req.size) throw new Error("Arquivo Steam incompatível: " + fileRec.source);
+        if(req && req.sha256 && (await sha256Hex(srcBuf)).toLowerCase() !== req.sha256.toLowerCase()) throw new Error("Arquivo Steam incompatível: " + fileRec.source);
+        if(fileRec.mode === "copy"){
+          zip.file(outPath, srcBuf);
+        }else{
+          const patchRes = await fetch("patch_data/patches/" + fileRec.patch, {cache:"no-store"});
+          if(!patchRes.ok) throw new Error("Patch ausente: " + fileRec.patch);
           const patchBuf = new Uint8Array(await patchRes.arrayBuffer());
-          const patchedBuf = await applyBrowserPatch(origBuf, patchBuf);
+          const patchedBuf = await applyBrowserPatch(srcBuf, patchBuf);
+          if(fileRec.sha256 && (await sha256Hex(patchedBuf)).toLowerCase() !== fileRec.sha256.toLowerCase()) throw new Error("Falha ao validar arquivo gerado: " + fileOutput);
           zip.file(outPath, patchedBuf);
         }
+      }else{
+        throw new Error("Modo de manifesto desconhecido: " + fileRec.mode);
       }
     }
     await applySelectedLanguagePacks(zip);

@@ -1713,16 +1713,35 @@ async function applySelectedLanguagePacks(zip){
   for(const code of selectedExtras){
     const L=LANGS.find(x=>x.code===code); if(!L || !L.packId) continue;
     const entry=(catalog.languages||[]).find(x=>x.id===L.packId && x.ready);
-    if(!entry || !entry.url) throw new Error("Language Pack indisponível: "+L.label);
+    if(!entry || (!entry.url && !(Array.isArray(entry.parts) && entry.parts.length))) throw new Error("Language Pack indisponível: "+L.label);
     setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).progress_download || "Downloading language pack: {lang}...").replace("{lang}",L.label));
-    const packFetchOptions={cache:"no-store"};
-    if(entry.api_asset || entry.url.includes("api.github.com/repos/")){
-      packFetchOptions.headers={"Accept":"application/octet-stream","X-GitHub-Api-Version":"2022-11-28"};
+    let packBuf;
+    if(Array.isArray(entry.parts) && entry.parts.length){
+      const chunks=[];
+      let total=0;
+      for(let pi=0; pi<entry.parts.length; pi++){
+        const part=entry.parts[pi];
+        const partUrl=new URL(part.url, location.href).href;
+        const partRes=await fetch(partUrl, {cache:"no-store"});
+        if(!partRes.ok) throw new Error("Falha ao baixar "+L.label+" parte "+(pi+1)+" (HTTP "+partRes.status+")");
+        const partBuf=await partRes.arrayBuffer();
+        if(part.size && partBuf.byteLength!==part.size) throw new Error("Tamanho inválido: "+L.label+" parte "+(pi+1));
+        if(part.sha256 && (await sha256Hex(partBuf)).toLowerCase()!==part.sha256.toLowerCase()) throw new Error("SHA-256 inválido: "+L.label+" parte "+(pi+1));
+        chunks.push(new Uint8Array(partBuf)); total+=partBuf.byteLength;
+      }
+      const merged=new Uint8Array(total); let off=0;
+      for(const chunk of chunks){ merged.set(chunk,off); off+=chunk.length; }
+      packBuf=merged.buffer;
+    }else{
+      const packFetchOptions={cache:"no-store"};
+      if(entry.api_asset || entry.url.includes("api.github.com/repos/")){
+        packFetchOptions.headers={"Accept":"application/octet-stream","X-GitHub-Api-Version":"2022-11-28"};
+      }
+      let res=await fetch(entry.url, packFetchOptions);
+      if(!res.ok && location.hostname==="127.0.0.1") res=await fetch("/proxy_download?url="+encodeURIComponent(entry.url));
+      if(!res.ok) throw new Error("Falha ao baixar "+L.label+" (HTTP "+res.status+")");
+      packBuf=await res.arrayBuffer();
     }
-    let res=await fetch(entry.url, packFetchOptions);
-    if(!res.ok && location.hostname==="127.0.0.1") res=await fetch("/proxy_download?url="+encodeURIComponent(entry.url));
-    if(!res.ok) throw new Error("Falha ao baixar "+L.label+" (HTTP "+res.status+")");
-    const packBuf=await res.arrayBuffer();
     if(entry.sha256 && (await sha256Hex(packBuf)).toLowerCase()!==entry.sha256.toLowerCase()) throw new Error("SHA-256 inválido: "+L.label);
     const pack=await JSZip.loadAsync(packBuf);
     const mf=JSON.parse(await pack.file("manifest.json").async("string"));

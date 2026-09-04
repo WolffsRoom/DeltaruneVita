@@ -14,10 +14,25 @@
       ],
       "ready": true,
       "file": "Portuguese-BR-v0.72.langpack",
-      "url": "https://api.github.com/repos/WolffsRoom/DeltaruneVita/releases/assets/543622404",
-      "api_asset": true,
       "sha256": "c607edfcb3b8cf432f78abcdb981cf8ff07f5d1bb2acb76b848c9d3243e6715f",
-      "size": 226548226
+      "size": 226548226,
+      "parts": [
+        {
+          "url": "language-packs/Portuguese-BR-v0.72/part_00.bin",
+          "size": 78643200,
+          "sha256": "c41164f2dc6ee827f7d9c507d57c09719d012b07a989131194d1062cc6d1a415"
+        },
+        {
+          "url": "language-packs/Portuguese-BR-v0.72/part_01.bin",
+          "size": 78643200,
+          "sha256": "e9576a7756b2867fc5198ff274422b3fdb1c1fa3bcdd59155787f5baa09049f3"
+        },
+        {
+          "url": "language-packs/Portuguese-BR-v0.72/part_02.bin",
+          "size": 69261826,
+          "sha256": "bea37473a9e6aab8593857115a464bdcfb8f4e513b3a987ee3d8d877e175addf"
+        }
+      ]
     },
     {
       "id": "Spanish",

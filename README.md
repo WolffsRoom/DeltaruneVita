@@ -682,7 +682,7 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 
 ## AI Notice
 
-GPT-5.6 Sol (Codex IDE) was integrated into the workflow to assist with core development (specifically the loader's programming logic), diagnostics, project organization, and technical documentation. Additionally, Claude Code (Opus 4.8) was utilized to re-document the project for the current release, while Gemini (3.6 Flash) was used to develop Seam's Patcher.
+GPT-5.6 Sol (Codex IDE) was integrated into the workflow to assist with core development (specifically the loader's programming logic), diagnostics, project organization, and technical documentation. Gemini (3.6 Flash) was used to develop Seam's Patcher.
 
 ## License and Game Data
 

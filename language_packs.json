@@ -1,8 +1,9 @@
 {
   "format": 2,
-  "port_version": "0.72",
+  "port_version": "0.73",
   "repository": "WolffsRoom/DeltaruneVita",
   "branch": "gh-pages",
+  "storage": "gh-pages-raw-parts",
   "languages": [
     {
       "id": "Portuguese-BR",
@@ -13,24 +14,24 @@
         "pt"
       ],
       "ready": true,
-      "file": "Portuguese-BR-v0.72.langpack",
-      "sha256": "c607edfcb3b8cf432f78abcdb981cf8ff07f5d1bb2acb76b848c9d3243e6715f",
-      "size": 226548226,
+      "file": "Portuguese-BR-v0.73.langpack",
+      "sha256": "16382e68c5c70a94527b43c90f41ce18a9524f3290841493f1a68b6e11e6cb08",
+      "size": 226548238,
       "parts": [
         {
-          "url": "language-packs/Portuguese-BR-v0.72/part_00.bin",
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Portuguese-BR/part_00.bin",
           "size": 78643200,
-          "sha256": "c41164f2dc6ee827f7d9c507d57c09719d012b07a989131194d1062cc6d1a415"
+          "sha256": "fc3a88885b091afd0c64fe1c1e42adfb67a725bd0ceb040daedd78e4acfdfc10"
         },
         {
-          "url": "language-packs/Portuguese-BR-v0.72/part_01.bin",
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Portuguese-BR/part_01.bin",
           "size": 78643200,
-          "sha256": "e9576a7756b2867fc5198ff274422b3fdb1c1fa3bcdd59155787f5baa09049f3"
+          "sha256": "0419a491a253c1845fa7cd24c4a33e7f4d992041b8c438a1de0a68c56714aefd"
         },
         {
-          "url": "language-packs/Portuguese-BR-v0.72/part_02.bin",
-          "size": 69261826,
-          "sha256": "bea37473a9e6aab8593857115a464bdcfb8f4e513b3a987ee3d8d877e175addf"
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Portuguese-BR/part_02.bin",
+          "size": 69261838,
+          "sha256": "c3c487f85da9a6e24eb92a3ab5a6a9176655318bec5dff615d4a0e6910fc09ac"
         }
       ]
     },
@@ -42,11 +43,46 @@
         "es"
       ],
       "ready": true,
-      "file": "Spanish-v0.72.langpack",
-      "url": "https://api.github.com/repos/WolffsRoom/DeltaruneVita/releases/assets/543634287",
-      "api_asset": true,
-      "sha256": "918be2cbd7b731ee9acb131eef10b081c6863dab16beea3ab0b196155a508d06",
-      "size": 434786624
+      "file": "Spanish-v0.73.langpack",
+      "sha256": "c8ea19ad7054ab79f970e624c92a214fb33ed66c3d4c23534aa9b1fbbd39e13a",
+      "size": 479854347,
+      "parts": [
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Spanish/part_00.bin",
+          "size": 78643200,
+          "sha256": "452a3549d9638148ca8f4ab77ccf705dfb03eec194c8e83179c5aba26b4e8f42"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Spanish/part_01.bin",
+          "size": 78643200,
+          "sha256": "dd5ab82b1a908a7d2a836c84e3751b20850e255d79183fc3637d13c44dca7bac"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Spanish/part_02.bin",
+          "size": 78643200,
+          "sha256": "69650b83a28b6da70ae0bbcbc9f0c4b13de27af5bcb9a6839d42734990735b93"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Spanish/part_03.bin",
+          "size": 78643200,
+          "sha256": "e95597147f51df007de971de4d58b51ee7ca90f6b4fedeb6b3204d5ec3c443f5"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Spanish/part_04.bin",
+          "size": 78643200,
+          "sha256": "fb8fc8cd6d03a953dd0d32de3a6c522df41a382f6a149f36bee1df5e31b0b603"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Spanish/part_05.bin",
+          "size": 78643200,
+          "sha256": "ea6d0ffb8dabd58c734f10ce09e9d41f387e5a0a1fa07f974bf7bb5e1dc3cd4d"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Spanish/part_06.bin",
+          "size": 7995147,
+          "sha256": "850e6546d484f5cb291cbb0e93a5d2227b34fc15307847c96cf67b28e308f3c5"
+        }
+      ]
     },
     {
       "id": "French",
@@ -56,11 +92,51 @@
         "fr"
       ],
       "ready": true,
-      "file": "French-v0.72.langpack",
-      "url": "https://api.github.com/repos/WolffsRoom/DeltaruneVita/releases/assets/543623333",
-      "api_asset": true,
-      "sha256": "f6522b2cc560a04179f59fb78944f5de1597b7bdd6c1216ff5d05edb76178087",
-      "size": 595902875
+      "file": "French-v0.73.langpack",
+      "sha256": "cc4a1454a01ecd2d17fd04f84eda370630f3f5d6951015e67e3fc03b3d937421",
+      "size": 595898923,
+      "parts": [
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/French/part_00.bin",
+          "size": 78643200,
+          "sha256": "1a7bbc0a1e450072a441331763944499e031e28b9eefd373abd5b9b678d5efa1"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/French/part_01.bin",
+          "size": 78643200,
+          "sha256": "a53a0cb0810450173113c7653d389439c0a7a7cf1ab8b97597b2e50edd8b2b73"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/French/part_02.bin",
+          "size": 78643200,
+          "sha256": "31718ba5c246407fbec81e1512bafaf316db03e349cae085533759f6f3a027dc"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/French/part_03.bin",
+          "size": 78643200,
+          "sha256": "92bbf9b8880bdf443612376e44c38bc86751f5c656f9449a44c10a3b2b21d08f"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/French/part_04.bin",
+          "size": 78643200,
+          "sha256": "d867573605e9139a3b166fe3c25d8fee53ad40bdc0a6ed122579c738bb8c45db"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/French/part_05.bin",
+          "size": 78643200,
+          "sha256": "beca58d59af735ff681c8ce8df91da77d4bb47a4c4fa099077fddc1799069bbd"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/French/part_06.bin",
+          "size": 78643200,
+          "sha256": "e5ef7863b0b663b80d03322f497bbd6d5862a27b686efaa9754480814812ff76"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/French/part_07.bin",
+          "size": 45396523,
+          "sha256": "67855c287394382978fc8ed3f8d6d1b40b63a8055eb89a90fa140364e2634ef3"
+        }
+      ]
     },
     {
       "id": "German",
@@ -70,11 +146,51 @@
         "de"
       ],
       "ready": true,
-      "file": "German-v0.72.langpack",
-      "url": "https://api.github.com/repos/WolffsRoom/DeltaruneVita/releases/assets/543624530",
-      "api_asset": true,
-      "sha256": "b9aa6ba5c04d1f5c62a294e100515e64a37596d249edf4c3440838aa17a31885",
-      "size": 623872518
+      "file": "German-v0.73.langpack",
+      "sha256": "7482efe2ec444d71b6dc2f2e46451ae890fab72e31d7dc575f48451e8add008a",
+      "size": 623919122,
+      "parts": [
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/German/part_00.bin",
+          "size": 78643200,
+          "sha256": "4f1a4b28cdf331c6da54dc971b9ee0c6e240ca23699c1180230cc29ff4b81e13"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/German/part_01.bin",
+          "size": 78643200,
+          "sha256": "eb7c4956dfc1215f20fd02ea1168bd0a75106e76e8d40f86ed59a5a9c63332ea"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/German/part_02.bin",
+          "size": 78643200,
+          "sha256": "0afc6c8b469f930b0d3b79e6592c79019d79549ab28ef0ba13f90ef7e235532e"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/German/part_03.bin",
+          "size": 78643200,
+          "sha256": "47e8782a891acb3d5d178926dcc1d5b5a1a3c33892945d44a7e54242d3cf39e2"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/German/part_04.bin",
+          "size": 78643200,
+          "sha256": "b8fd46496b5cba476a369240d0594a67af5822a45801b07bea2d8fce0a5f73b5"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/German/part_05.bin",
+          "size": 78643200,
+          "sha256": "0048899ba665ab56d10fec7e8638ab6e4f35fa428d7056e85fea6156002a0213"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/German/part_06.bin",
+          "size": 78643200,
+          "sha256": "520c2e3460ba37939eb9dc9fc9340a2b35d2e99bdc2f44cdc9a2c11f23f2b6f5"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/German/part_07.bin",
+          "size": 73416722,
+          "sha256": "603f4dab2576c9a48447056264cce2489ace40dc7ff279771683742fa2f53de9"
+        }
+      ]
     },
     {
       "id": "Russkiy",
@@ -84,11 +200,36 @@
         "ru"
       ],
       "ready": true,
-      "file": "Russkiy-v0.72.langpack",
-      "url": "https://api.github.com/repos/WolffsRoom/DeltaruneVita/releases/assets/543622749",
-      "api_asset": true,
-      "sha256": "543fe48a0fd08b1977e767882efafd9988251afb3e86e710ffb2ff46f424ab7c",
-      "size": 340920946
+      "file": "Russkiy-v0.73.langpack",
+      "sha256": "84648a4a298d57b748ec563dacf8f730af841c6f0e43a353f17a46a842b7686e",
+      "size": 340976235,
+      "parts": [
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Russkiy/part_00.bin",
+          "size": 78643200,
+          "sha256": "1a7276e9344b972d136c79a0568d2cd1d0e62d80c461ea364426667dfb0984da"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Russkiy/part_01.bin",
+          "size": 78643200,
+          "sha256": "e19a0460075b7272fd4e0947f4906b3c6a59a3ab9f285b05dea559ea4cee9318"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Russkiy/part_02.bin",
+          "size": 78643200,
+          "sha256": "02226b3bef7b55330cc38f75ae24e45bfed31761f36bc1f9e92a0321a241b8e7"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Russkiy/part_03.bin",
+          "size": 78643200,
+          "sha256": "948c7ba6d49a3b4e5850a4e9085442e29bb1e2728c0d04a80222dac5dd662fad"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Russkiy/part_04.bin",
+          "size": 26403435,
+          "sha256": "70a596973779744b8024ca59c0f708468f787bab858671ad3f3ce4c46def6986"
+        }
+      ]
     },
     {
       "id": "Turkish",
@@ -98,11 +239,51 @@
         "tr"
       ],
       "ready": true,
-      "file": "Turkish-v0.72.langpack",
-      "url": "https://api.github.com/repos/WolffsRoom/DeltaruneVita/releases/assets/543625695",
-      "api_asset": true,
-      "sha256": "afa7b596c421499bc41abfb261e45f957c32fba64974c29f5bc2c6fc87961cf7",
-      "size": 546828195
+      "file": "Turkish-v0.73.langpack",
+      "sha256": "d07b8c7837e1614034f0e2c99bfc8b9e11b6979398d6cc03ec439c874cda25f1",
+      "size": 564424551,
+      "parts": [
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Turkish/part_00.bin",
+          "size": 78643200,
+          "sha256": "71f2ac563e0be843d072f9db432dabf5e1ec08cc7f1d980bad2754d1111fbecc"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Turkish/part_01.bin",
+          "size": 78643200,
+          "sha256": "1e5243b94c230a5c3a8386a3500ba0f43ee328b916f5b06a748a4afaec956ce2"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Turkish/part_02.bin",
+          "size": 78643200,
+          "sha256": "e182ee8b2b950f95f4bccd53553b8119df8579419a92330a6be07dc98db9a357"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Turkish/part_03.bin",
+          "size": 78643200,
+          "sha256": "83c053aa231fb703c21442cd017c71c6bed1c1b6c675760f9406474008d3de54"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Turkish/part_04.bin",
+          "size": 78643200,
+          "sha256": "acfc48a19c3273a39439d800dc1ed8bc157830cf805b6a899cf90403a51288d9"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Turkish/part_05.bin",
+          "size": 78643200,
+          "sha256": "76066a5719e7ebd44be945d31b2c51c704f1a0a24dfe18e155000475f72d676a"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Turkish/part_06.bin",
+          "size": 78643200,
+          "sha256": "ad3da826b1cd938754d052b600a96abbee3f2a5340fe259c7f5b417c9d3159db"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/language-packs/v0.73/Turkish/part_07.bin",
+          "size": 13922151,
+          "sha256": "f3eac0dbda63a10b6afc5993749f819a17a7b7c3b11f2340096a5d0d1b209d2b"
+        }
+      ]
     }
   ]
 }

@@ -39,7 +39,7 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
 | **4** | Playable with rebuilt Texture Pages, runtime/interface compatibility fixes and language-specific caches. Additional full-run testing remains useful. |
 | **5** | Playable with improved room-aware texture residency, transition cleanup and reduced memory pressure. Its heaviest rooms and battles remain the main performance stress test. |
 
-For release-specific changes, screenshots and the complete changelog, see the [v0.73 Release](https://github.com/WolffsRoom/DeltaruneVita/releases/tag/v0.73).
+For release-specific changes, screenshots and the complete changelog, see the latest [Release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
 
 <div align="center">
 
@@ -48,7 +48,8 @@ For release-specific changes, screenshots and the complete changelog, see the [v
 <a href="#support-this-and-other-projects">
   <img src="docs/readme-headings/support-this-and-other-projects-undertale-theme.svg" alt="SUPPORT THIS AND OTHER PROJECTS" height="40">
 </a>
-If you enjoy my work, consider supporting the development!
+
+_If you enjoy my work, consider supporting the development!_
 
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="48">](https://www.buymeacoffee.com/5rsrt7j4z8f)
 

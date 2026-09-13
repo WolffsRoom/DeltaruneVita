@@ -17,11 +17,7 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
 <a id="project-status"></a>
 
 <a href="#project-status">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-headings/project-status-undertale-white.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/readme-headings/project-status-undertale-black.svg">
-    <img src="docs/readme-headings/project-status-undertale-black.svg" alt="PROJECT STATUS" height="42">
-  </picture>
+  <img src="docs/readme-headings/project-status-undertale-theme.svg" alt="PROJECT STATUS" height="50">
 </a>
 
 <div align="center">
@@ -47,16 +43,28 @@ For release-specific changes, screenshots and the complete changelog, see the [v
 
 <div align="center">
 
-### Support this and other projects
+<a id="support-this-and-other-projects"></a>
+
+<a href="#support-this-and-other-projects">
+  <img src="docs/readme-headings/support-this-and-other-projects-undertale-theme.svg" alt="SUPPORT THIS AND OTHER PROJECTS" height="40">
+</a>
 If you enjoy my work, consider supporting the development!
 
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="48">](https://www.buymeacoffee.com/5rsrt7j4z8f)
 
 </div>
 
-## Installation Guide
+<a id="installation-guide"></a>
 
-### Requirements
+<a href="#installation-guide">
+  <img src="docs/readme-headings/installation-guide-undertale-theme.svg" alt="INSTALLATION GUIDE" height="50">
+</a>
+
+<a id="requirements"></a>
+
+<a href="#requirements">
+  <img src="docs/readme-headings/requirements-undertale-theme.svg" alt="REQUIREMENTS" height="40">
+</a>
 
 - A homebrew-enabled PlayStation Vita;
 - [kubridge](https://github.com/TheOfficialFloW/kubridge/releases/);
@@ -77,7 +85,11 @@ ux0:tai/fd_fix.skprx
 > [!NOTE]
 > Do not load `fd_fix.skprx` together with a setup where rePatch already provides the same functionality.
 
-### How to install the game
+<a id="how-to-install-the-game"></a>
+
+<a href="#how-to-install-the-game">
+  <img src="docs/readme-headings/how-to-install-the-game-undertale-theme.svg" alt="HOW TO INSTALL THE GAME" height="40">
+</a>
 
 1. Purchase and install [DELTARUNE for PC](https://store.steampowered.com/app/1671210/) through Steam.
 2. Confirm that the installation is **v0.0.253** and unmodified.
@@ -92,7 +104,11 @@ The final path must be:
 ux0:data/deltarune/deltarunevita/
 ```
 
-### DeltaruneVita Patcher
+<a id="deltarunevita-patcher"></a>
+
+<a href="#deltarunevita-patcher">
+  <img src="docs/readme-headings/deltarunevita-patcher-undertale-theme.svg" alt="DELTARUNEVITA PATCHER" height="40">
+</a>
 
 1. Extract either `Deltarune.Vita.Patcher.v0.73.64bits.zip` or `Deltarune.Vita.Patcher.v0.73.32bits.zip`.
 2. Copy the complete Steam `DELTARUNE` folder into `SteamFiles/DELTARUNE`.
@@ -100,7 +116,11 @@ ux0:data/deltarune/deltarunevita/
 4. Select optional language packages when offered.
 5. The finished data is written to `VitaFiles/deltarune`.
 
-### Seam's Patcher
+<a id="seams-patcher"></a>
+
+<a href="#seams-patcher">
+  <img src="docs/readme-headings/seams-patcher-undertale-theme.svg" alt="SEAM'S PATCHER" height="40">
+</a>
 
 [Seam's Patcher](https://wolffsroom.github.io/DeltaruneVita/) uses the Seam-shop interface and can run either in a browser or as a standalone Windows application.
 
@@ -112,7 +132,11 @@ ux0:data/deltarune/deltarunevita/
 
 On iOS/iPadOS, provide the DELTARUNE folder as a ZIP when the browser cannot select a directory directly.
 
-## Control Layout
+<a id="control-layout"></a>
+
+<a href="#control-layout">
+  <img src="docs/readme-headings/control-layout-undertale-theme.svg" alt="CONTROL LAYOUT" height="50">
+</a>
 
 The layout is based on the official PlayStation-style controls with Vita-specific shortcuts for Game Settings and touch features.
 
@@ -120,7 +144,11 @@ The layout is based on the official PlayStation-style controls with Vita-specifi
   <img src="docs/media/v0.64/control-layout.png" alt="DELTARUNE Vita control layout" width="100%">
 </p>
 
-## Screenshots (PS Vita)
+<a id="screenshots-ps-vita"></a>
+
+<a href="#screenshots-ps-vita">
+  <img src="docs/readme-headings/screenshots-ps-vita-undertale-theme.svg" alt="SCREENSHOTS (PS VITA)" height="50">
+</a>
 <p align="center">
   <img src="docs/media/v0.64/screenshots/0.png" alt="DELTARUNE Vita" width="49%">
   <img src="docs/media/v0.64/screenshots/1.png" alt="DELTARUNE Vita chapter selection" width="49%">
@@ -136,7 +164,11 @@ The layout is based on the official PlayStation-style controls with Vita-specifi
   <img src="docs/media/v0.64/screenshots/7.png" alt="DELTARUNE Vita gameplay" width="32%">
 </p>
 
-### Game Settings
+<a id="game-settings"></a>
+
+<a href="#game-settings">
+  <img src="docs/readme-headings/game-settings-undertale-theme.svg" alt="GAME SETTINGS" height="40">
+</a>
 
 <p align="center">
   <img src="docs/media/v0.64/settings/Screen.png" alt="Screen settings" width="31%">
@@ -151,7 +183,11 @@ The layout is based on the official PlayStation-style controls with Vita-specifi
 
 <div align="center">
 
-### DELTARUNE for PS Vita (v0.73 Update Trailer)
+<a id="deltarune-for-ps-vita-v073-update-trailer"></a>
+
+<a href="#deltarune-for-ps-vita-v073-update-trailer">
+  <img src="docs/readme-headings/deltarune-for-ps-vita-v073-update-trailer-undertale-theme.svg" alt="DELTARUNE FOR PS VITA (V0.73 UPDATE TRAILER)" height="40">
+</a>
 
   <a href="https://youtu.be/-ryE5zShYhU">
     <img src="https://img.youtube.com/vi/-ryE5zShYhU/maxresdefault.jpg" width="85%" style="border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" alt="DELTARUNE Vita v0.73 Update Trailer">
@@ -165,7 +201,11 @@ The layout is based on the official PlayStation-style controls with Vita-specifi
 
 </div>
 
-## Trophies
+<a id="trophies"></a>
+
+<a href="#trophies">
+  <img src="docs/readme-headings/trophies-undertale-theme.svg" alt="TROPHIES" height="50">
+</a>
 
 DeltaruneVita includes a **30-entry trophy system**. Trophy progress is mirrored to the port's local trophy database and can be viewed at **Game Settings → System → Trophies**.
 
@@ -185,7 +225,11 @@ sce_sys/trophy/DLTVITA01_00/TROPHY.TRP
 
 The matching NP Communication ID is included in `param.sfo` as `DLTVITA01_00`.
 
-### Native PS Vita trophies with NoTrpDrm
+<a id="native-ps-vita-trophies-with-notrpdrm"></a>
+
+<a href="#native-ps-vita-trophies-with-notrpdrm">
+  <img src="docs/readme-headings/native-ps-vita-trophies-with-notrpdrm-undertale-theme.svg" alt="NATIVE PS VITA TROPHIES WITH NOTRPDRM" height="40">
+</a>
 
 > [!NOTE]
 > DeltaruneVita does not require NoTrpDrm to run. If the plugin, trophy pack or supported native environment is unavailable, the game falls back to the local in-game trophy system.
@@ -214,7 +258,11 @@ ux0:tai/NoTrpDrm.suprx
 > [!IMPORTANT]
 > The NoTrpDrm implementation used by this project targets retail firmware **3.60 through 3.68**. Firmware spoofing does not change the console's underlying firmware. Treat this custom trophy set as homebrew/local data and do not attempt to synchronize it with PSN.
 
-## What already works
+<a id="what-already-works"></a>
+
+<a href="#what-already-works">
+  <img src="docs/readme-headings/what-already-works-undertale-theme.svg" alt="WHAT ALREADY WORKS" height="50">
+</a>
 
 <table>
   <thead>
@@ -232,7 +280,11 @@ ux0:tai/NoTrpDrm.suprx
   </tbody>
 </table>
 
-## Texture Compression and External Assets
+<a id="texture-compression-and-external-assets"></a>
+
+<a href="#texture-compression-and-external-assets">
+  <img src="docs/readme-headings/texture-compression-and-external-assets-undertale-theme.svg" alt="TEXTURE COMPRESSION AND EXTERNAL ASSETS" height="50">
+</a>
 
 A 2048×2048 GameMaker atlas stored as RGBA8888 occupies 16 MiB of raw texture memory. DeltaruneVita reduces pressure by using rebuilt Texture Pages and prepared GPU-friendly caches:
 
@@ -248,7 +300,11 @@ BC3 → RGBA4444 → generated/embedded compatibility path
 
 Language packages keep their own matching caches whenever their `data.win` changes Texture Page contents or indices.
 
-### Rebuilt Texture Page reference totals
+<a id="rebuilt-texture-page-reference-totals"></a>
+
+<a href="#rebuilt-texture-page-reference-totals">
+  <img src="docs/readme-headings/rebuilt-texture-page-reference-totals-undertale-theme.svg" alt="REBUILT TEXTURE PAGE REFERENCE TOTALS" height="40">
+</a>
 
 | Chapter | Rebuilt pages |
 | --- | ---: |
@@ -260,9 +316,17 @@ Language packages keep their own matching caches whenever their `data.win` chang
 
 The higher page count is intentional: smaller, more targeted pages can produce a lower per-room working set than a few oversized atlases.
 
-## Folder Structure
+<a id="folder-structure"></a>
 
-### Game data
+<a href="#folder-structure">
+  <img src="docs/readme-headings/folder-structure-undertale-theme.svg" alt="FOLDER STRUCTURE" height="50">
+</a>
+
+<a id="game-data"></a>
+
+<a href="#game-data">
+  <img src="docs/readme-headings/game-data-undertale-theme.svg" alt="GAME DATA" height="40">
+</a>
 
 A v0.73 patcher generates the following base layout:
 
@@ -303,7 +367,11 @@ chapter3/
 
 Language/mod packages mirror only the paths they replace under `mods/Lang/<Language>/`. See [Mods and Language Packs](#mods-and-language-packs) for a complete example.
 
-### Save and trophy data
+<a id="save-and-trophy-data"></a>
+
+<a href="#save-and-trophy-data">
+  <img src="docs/readme-headings/save-and-trophy-data-undertale-theme.svg" alt="SAVE AND TROPHY DATA" height="40">
+</a>
 
 Save data is kept separately so replacing/regenerating `ux0:data/deltarune/` does not require deleting normal progress:
 
@@ -318,7 +386,11 @@ ux0:data/deltarune_saves/
 
 Actual save files vary according to the chapters/slots that have been used.
 
-### Logs and diagnostics
+<a id="logs-and-diagnostics"></a>
+
+<a href="#logs-and-diagnostics">
+  <img src="docs/readme-headings/logs-and-diagnostics-undertale-theme.svg" alt="LOGS AND DIAGNOSTICS" height="40">
+</a>
 
 When Dev Mode logging is enabled, the primary diagnostic log is:
 
@@ -328,7 +400,11 @@ ux0:data/deltarune/deltarunevita/butterscotch-probe.log
 
 When reporting a reproducible issue, include the relevant log together with the Chapter/Room, selected language, renderer, texture-compression mode, FPS limit and a screenshot/video when applicable.
 
-## Known Issues
+<a id="known-issues"></a>
+
+<a href="#known-issues">
+  <img src="docs/readme-headings/known-issues-undertale-theme.svg" alt="KNOWN ISSUES" height="50">
+</a>
 
 - **Modern GL is experimental.** Use Legacy GL for normal gameplay.
 - Chapter 3's heaviest TV/video/battle transitions can still expose first-use frame drops or memory pressure.
@@ -336,9 +412,17 @@ When reporting a reproducible issue, include the relevant log together with the 
 - Some Chapter 5 city-shadow effects are not fully reproduced by the Legacy GL path.
 - A translated `data.win` whose Texture Page layout changes requires its matching regenerated cache; do not reuse the original-language cache blindly.
 
-## Building from Source
+<a id="building-from-source"></a>
 
-### Requirements
+<a href="#building-from-source">
+  <img src="docs/readme-headings/building-from-source-undertale-theme.svg" alt="BUILDING FROM SOURCE" height="50">
+</a>
+
+<a id="requirements-1"></a>
+
+<a href="#requirements-1">
+  <img src="docs/readme-headings/requirements-1-undertale-theme.svg" alt="REQUIREMENTS" height="40">
+</a>
 
 - Windows 10 or 11;
 - PowerShell 5.1 or newer;
@@ -367,7 +451,11 @@ artifacts/Patcher/Build_Patch/Build_Patcher.bat
 > [!IMPORTANT]
 > Commercial DELTARUNE files must never be committed or redistributed. Releases should contain only the VPK, legal patch data/tools and user-generated output instructions.
 
-## Butterscotch + VitaGL: How It Works
+<a id="butterscotch--vitagl-how-it-works"></a>
+
+<a href="#butterscotch--vitagl-how-it-works">
+  <img src="docs/readme-headings/butterscotch--vitagl-how-it-works-undertale-theme.svg" alt="BUTTERSCOTCH + VITAGL: HOW IT WORKS" height="50">
+</a>
 
 DELTARUNE Vita does not emulate Windows and does not execute the original PC executable. It reads the official GameMaker data and runs it through a customized native runner:
 
@@ -387,7 +475,11 @@ PS Vita display, audio, controls and storage
 
 The Vita-specific layer provides Game Settings, physical/touch input, console borders, native video, trophies, loading/cache screens and diagnostics without replacing the game's normal GameMaker logic.
 
-## Mods and Language Packs
+<a id="mods-and-language-packs"></a>
+
+<a href="#mods-and-language-packs">
+  <img src="docs/readme-headings/mods-and-language-packs-undertale-theme.svg" alt="MODS AND LANGUAGE PACKS" height="50">
+</a>
 
 DeltaruneVita supports alternate game data and external assets through the `deltarunevita/mods` tree. In v0.73, the most developed use of this system is the **language-pack pipeline**.
 
@@ -405,7 +497,11 @@ Both DeltaruneVita Patcher and Seam's Patcher use the same language catalog and 
 > [!IMPORTANT]
 > A translated `data.win` can have a different Texture Page layout from the original game. Keep each translation together with its matching v0.73 texture cache. Do not copy an original-language cache over a translated chapter unless its TXTR layout is known to match.
 
-### Language/mod folder layout
+<a id="languagemod-folder-layout"></a>
+
+<a href="#languagemod-folder-layout">
+  <img src="docs/readme-headings/languagemod-folder-layout-undertale-theme.svg" alt="LANGUAGE/MOD FOLDER LAYOUT" height="40">
+</a>
 
 Language packages are installed under:
 
@@ -446,7 +542,11 @@ The exact contents differ between translations. Some packages replace a full `da
 
 For development/preparation work, source translations can be staged under `data/prepared/deltarune/deltarunevita/mods/Lang/<Language>` and processed with the project's preparation scripts. End users should normally let a v0.73 patcher install the matching language package automatically.
 
-## Recent Changelog
+<a id="recent-changelog"></a>
+
+<a href="#recent-changelog">
+  <img src="docs/readme-headings/recent-changelog-undertale-theme.svg" alt="RECENT CHANGELOG" height="50">
+</a>
 
 | Version | Key changes |
 | --- | --- |
@@ -458,7 +558,11 @@ For development/preparation work, source translations can be staged under `data/
 
 For the development history and individual internal builds, see `docs/` and the repository's [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases).
 
-## Development Tools and References
+<a id="development-tools-and-references"></a>
+
+<a href="#development-tools-and-references">
+  <img src="docs/readme-headings/development-tools-and-references-undertale-theme.svg" alt="DEVELOPMENT TOOLS AND REFERENCES" height="50">
+</a>
 
 - [Butterscotch](https://github.com/ButterscotchRunner/Butterscotch) — open-source GameMaker runner used as the foundation of the port.
 - [VitaGL](https://github.com/Rinnegatamante/vitaGL) — hardware-accelerated rendering on PS Vita.
@@ -469,7 +573,11 @@ For the development history and individual internal builds, see `docs/` and the 
 - [PVRTexTool](https://developer.imaginationtech.com/downloads/) — texture-format preparation and validation.
 - [PSDevWiki](https://www.psdevwiki.com/vita/) — Vita platform documentation.
 
-## Credits
+<a id="credits"></a>
+
+<a href="#credits">
+  <img src="docs/readme-headings/credits-undertale-theme.svg" alt="CREDITS" height="50">
+</a>
 
 - **DELTARUNE** by Toby Fox and the DELTARUNE team — [official website](https://deltarune.com/).
 - [Butterscotch](https://github.com/ButterscotchRunner/Butterscotch) and its contributors.
@@ -480,11 +588,19 @@ For the development history and individual internal builds, see `docs/` and the 
 - Niccbilac for additional controller artwork used by Game Settings.
 - MrPowerGamerBR for technical references shared with the GameMaker porting community.
 
-## AI Notice
+<a id="ai-notice"></a>
+
+<a href="#ai-notice">
+  <img src="docs/readme-headings/ai-notice-undertale-theme.svg" alt="AI NOTICE" height="50">
+</a>
 
 GPT-5.6 Sol through Codex was used as a development assistant for diagnostics, implementation support, project organization and technical documentation. Gemini was used during development of Seam's Patcher. All changes remain subject to project review and real-hardware testing.
 
-## License and Game Data
+<a id="license-and-game-data"></a>
+
+<a href="#license-and-game-data">
+  <img src="docs/readme-headings/license-and-game-data-undertale-theme.svg" alt="LICENSE AND GAME DATA" height="50">
+</a>
 
 Butterscotch is distributed under the Mozilla Public License 2.0. Modified MPL-covered source files in this project remain available under the same license, with their copyright and license notices preserved. See [LICENSE](LICENSE) and the corresponding source files for details.
 

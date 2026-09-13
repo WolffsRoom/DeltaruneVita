@@ -14,7 +14,9 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
 > [!IMPORTANT]
 > This repository and its releases do **not** include DELTARUNE's commercial game data. A legitimate Steam copy is required. You can purchase the game at [deltarune.com](https://deltarune.com/).
 
-## Project Status
+<a id="project-status"></a>
+
+<img src="docs/readme-headings/project-status-black.svg" alt="PROJECT STATUS" height="42">
 
 <div align="center">
   <a href="https://github.com/WolffsRoom/DeltaruneVita/releases"><img src="https://img.shields.io/github/downloads/WolffsRoom/DeltaruneVita/total?style=for-the-badge&color=blue&logo=github" alt="Downloads"></a>
@@ -177,7 +179,6 @@ sce_sys/trophy/DLTVITA01_00/TROPHY.TRP
 ```
 
 The matching NP Communication ID is included in `param.sfo` as `DLTVITA01_00`.
-
 
 ### Native PS Vita trophies with NoTrpDrm
 

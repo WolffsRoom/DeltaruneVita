@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="72" viewBox="0 0 620 72" role="img" aria-label="PROJECT STATUS">
+  <style>
+    @font-face {
+      font-family: 'DTRune';
+      src: url('https://raw.githubusercontent.com/WolffsRoom/DeltaruneVita/gh-pages/assets/undertale-deltarune-extended-fixed.otf') format('opentype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    text {
+      font-family: 'DTRune', monospace;
+      font-size: 56px;
+      letter-spacing: 2px;
+    }
+  </style>
+  <text x="0" y="56" fill="#000000">PROJECT STATUS</text>
+</svg>

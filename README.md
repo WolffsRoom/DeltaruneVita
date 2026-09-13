@@ -16,7 +16,9 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
 
 <a id="project-status"></a>
 
-<img src="docs/readme-headings/project-status-black.svg" alt="PROJECT STATUS" height="42">
+<a href="#project-status">
+  <img src="docs/readme-headings/project-status-black.svg" alt="PROJECT STATUS" height="42">
+</a>
 
 <div align="center">
   <a href="https://github.com/WolffsRoom/DeltaruneVita/releases"><img src="https://img.shields.io/github/downloads/WolffsRoom/DeltaruneVita/total?style=for-the-badge&color=blue&logo=github" alt="Downloads"></a>

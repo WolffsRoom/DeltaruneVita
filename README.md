@@ -17,7 +17,11 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
 <a id="project-status"></a>
 
 <a href="#project-status">
-  <img src="docs/readme-headings/project-status-black.svg" alt="PROJECT STATUS" height="42">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-headings/project-status-undertale-white.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/readme-headings/project-status-undertale-black.svg">
+    <img src="docs/readme-headings/project-status-undertale-black.svg" alt="PROJECT STATUS" height="42">
+  </picture>
 </a>
 
 <div align="center">
@@ -117,7 +121,6 @@ The layout is based on the official PlayStation-style controls with Vita-specifi
 </p>
 
 ## Screenshots (PS Vita)
-
 <p align="center">
   <img src="docs/media/v0.64/screenshots/0.png" alt="DELTARUNE Vita" width="49%">
   <img src="docs/media/v0.64/screenshots/1.png" alt="DELTARUNE Vita chapter selection" width="49%">

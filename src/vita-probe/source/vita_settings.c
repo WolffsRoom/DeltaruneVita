@@ -596,7 +596,8 @@ void VitaSettings_loadLanguage(VitaSettings* s) {
 
 bool VitaSettings_forceLegacyRenderer(VitaSettings* s) {
     if (s == NULL) return false;
-    if (s->rendererMode == VITA_RENDERER_LEGACY) {
+    if (s->rendererMode == VITA_RENDERER_LEGACY ||
+        s->rendererMode == VITA_RENDERER_EXPERIMENTAL) {
         s->modernGlEnabled = false;
     } else if (s->rendererMode == VITA_RENDERER_MODERN) {
         s->modernGlEnabled = true;

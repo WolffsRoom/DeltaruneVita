@@ -3,9 +3,76 @@
 #include "instance.h"
 #include "renderer.h"
 #include "vm.h"
+#include "vm_builtins.h"
 #include "utils.h"
 #include "json_writer.h"
 #include "collision.h"
+#ifdef PLATFORM_VITA
+#include <vitaGL.h>
+#include "vita_gpu_rules.h"
+#include "gl_legacy/gl_legacy_renderer.h"
+#include "gl/gl_renderer.h"
+#include "audio/openal/al_audio_system.h"
+extern int g_vitaActiveChapter;
+extern bool g_vitaModernGlActive;
+extern bool g_vitaExperimentalGlActive;
+extern void VitaProbe_logLine(const char* text);
+// Chapter 1 frequently sends the player straight back to the previous room.
+// Keep exactly that one lazy ROOM payload parsed; it is small compared with
+// texture pages and avoids reparsing it on every field/forest boundary.
+static int32_t vitaCh1PreviousRoomPayload = -1;
+
+// World actors that remain alive underneath DELTARUNE's full-screen battle
+// overlay. Drawing them on Vita is invisible work and, more importantly,
+// requests the exploration atlases again while battle atlases are resident.
+static bool vitaIsCh2ExplorationDrawObject(const char* name) {
+    if (name == nullptr) return false;
+    static const char* const hiddenDuringBattle[] = {
+        "obj_mainchara",
+        "obj_actor",
+        "obj_caterpillarchara",
+        "obj_darkcontroller",
+        "obj_cyber_wall_lights",
+        "obj_ch2_capsule",
+        "obj_parallaxer_layer_cyber"
+    };
+    for (uint32_t i = 0;
+         i < sizeof(hiddenDuringBattle) / sizeof(hiddenDuringBattle[0]); ++i) {
+        if (strcmp(name, hiddenDuringBattle[i]) == 0) return true;
+    }
+    return false;
+}
+
+// The music-bullet room keeps many projectile instances alive outside the
+// active camera. Their Step events must continue so patterns remain correct,
+// but executing their GML Draw bytecode before the renderer rejects the final
+// quad wastes measurable CPU time. Cull only fully off-camera projectile
+// instances, with a generous margin; partially visible sprites are untouched.
+static bool vitaCullCh2MusicBulletDraw(Runner* runner, Instance* inst,
+                                       const char* objectName) {
+    if (runner == nullptr || inst == nullptr || objectName == nullptr ||
+        runner->currentRoom == nullptr || runner->currentRoom->name == nullptr ||
+        strcmp(runner->currentRoom->name, "room_dw_cyber_music_bullet") != 0)
+        return false;
+    if (strcmp(objectName, "obj_beatbullet_2") != 0 &&
+        strcmp(objectName, "obj_teacup_bullet") != 0 &&
+        strcmp(objectName, "obj_teacup") != 0)
+        return false;
+    GMLCamera* camera = Runner_getCameraForView(runner, 0);
+    if (camera == nullptr || !camera->allocated || camera->viewWidth <= 0 ||
+        camera->viewHeight <= 0) return false;
+    const float margin = 96.0f;
+    float left = (float)camera->viewX - margin;
+    float top = (float)camera->viewY - margin;
+    float right = (float)(camera->viewX + camera->viewWidth) + margin;
+    float bottom = (float)(camera->viewY + camera->viewHeight) + margin;
+    InstanceBBox bbox = Collision_computeBBox(runner, inst);
+    if (bbox.valid)
+        return bbox.right < left || bbox.left > right ||
+               bbox.bottom < top || bbox.top > bottom;
+    return inst->x < left || inst->x > right || inst->y < top || inst->y > bottom;
+}
+#endif
 
 #include <stdint.h>
 #include <stdio.h>
@@ -16,6 +83,30 @@
 #include "debug_overlay.h"
 #include "gettime.h"
 #include "stb_ds.h"
+
+void Runner_dispatchVideoAsync(Runner* runner, const char* type) {
+    if (runner == nullptr || type == nullptr) return;
+
+    DsMapEntry* map = nullptr;
+    arrput(runner->dsMapPool, map);
+    int32_t mapId = arrlen(runner->dsMapPool) - 1;
+    DsMapEntry** mapPtr = &runner->dsMapPool[mapId];
+    shput(*mapPtr, safeStrdup("type"), RValue_makeOwnedString(safeStrdup(type)));
+
+    runner->asyncLoadMapId = mapId;
+    Runner_executeEventForAll(runner, EVENT_OTHER, OTHER_ASYNC_VIDEO);
+
+    mapPtr = &runner->dsMapPool[mapId];
+    if (*mapPtr != nullptr) {
+        repeat(shlen(*mapPtr), i) {
+            free((*mapPtr)[i].key);
+            RValue_free(&(*mapPtr)[i].value);
+        }
+        shfree(*mapPtr);
+        *mapPtr = nullptr;
+    }
+    runner->asyncLoadMapId = -1;
+}
 
 // ===[ Runtime Layer Teardown Helpers ]===
 void Runner_freeRuntimeLayer(RuntimeLayer* runtimeLayer) {
@@ -369,10 +460,161 @@ static bool isEventBlockedByPendingRoom(Runner* runner, Instance* instance, int3
     return true;
 }
 
+#ifdef PLATFORM_VITA
+static void vitaEnableChapter5CliffSimpleMode(Runner* runner, Instance* instance,
+                                               int32_t eventType) {
+    if (g_vitaActiveChapter != 5 || eventType != EVENT_CREATE ||
+        runner == nullptr || instance == nullptr || runner->vmContext == nullptr ||
+        instance->objectIndex < 0 ||
+        (uint32_t)instance->objectIndex >= runner->dataWin->objt.count)
+        return;
+    const char* roomName = runner->currentRoom != nullptr ?
+                           runner->currentRoom->name : nullptr;
+    if (!VitaGpuRules_ch5CliffSimpleMode(roomName)) return;
+    const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+    if (objectName == nullptr ||
+        strcmp(objectName, "obj_parallax_cliffs_moving_layers") != 0)
+        return;
+
+    VMContext* vm = runner->vmContext;
+    int32_t simpleId = VM_getOrAllocateVarID(vm, "simple");
+    int32_t alphaId = VM_getOrAllocateVarID(vm, "layer_alpha");
+    Instance_setSelfVar(instance, simpleId, RValue_makeBool(true));
+    RValue alphas = Instance_getSelfVar(instance, alphaId);
+    if (alphas.type == RVALUE_ARRAY && alphas.array != nullptr) {
+        // This is the object's own Simple profile: retain the principal far
+        // and near layers, omit the gradient/cave duplicates, and skip its
+        // expensive palette-mapper pass. Gameplay geometry is unaffected.
+        GMLArray_set(alphas.array, 1, RValue_makeReal(0.0));
+        GMLArray_set(alphas.array, 3, RValue_makeReal(0.0));
+    }
+    VitaProbe_logLine("CH5_CLIFF_SIMPLE=enabled object=obj_parallax_cliffs_moving_layers");
+}
+#endif
+
 // Executes an already-resolved event handler (see findEventCodeIdAndOwner) and verified codeId >= 0.
 static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int32_t eventType, int32_t eventSubtype, int32_t codeId, int32_t ownerObjectIndex) {
     if (isEventBlockedByPendingRoom(runner, instance, eventType))
         return;
+
+#ifdef PLATFORM_VITA
+    // The legacy renderer cannot apply Chapter 5's shader_replace_simple LUT.
+    // Executing obj_lutshader nevertheless copied the full 640x480
+    // application surface to another FBO and back every frame. Skip that
+    // visually neutral pass on Vita; shadows and all gameplay draws remain.
+    extern int g_vitaActiveChapter;
+    extern int g_vitaSpanishModActive;
+    extern int g_vitaShadersEnabled;
+    // The Spanish translation replaces obj_time's Post Draw with a PC
+    // fullscreen compositor that stretches application_surface a second
+    // time. Vita already composites and centers that surface natively, so
+    // executing the replacement squeezes the game and lets GUI elements
+    // escape the 4:3 viewport. Keep the Spanish data and skip only this PC
+    // presentation pass in Chapters 1-5.
+    if (g_vitaSpanishModActive && eventType == EVENT_DRAW && eventSubtype == DRAW_POST &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count) {
+        const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+        if (objectName != nullptr && strcmp(objectName, "obj_time") == 0)
+            return;
+    }
+    if (g_vitaActiveChapter == 3 &&
+        (eventType == EVENT_STEP || eventType == EVENT_DRAW) &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count) {
+        const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+        // GameMaker's LUT object performs a full application-surface copy.
+        // The Vita legacy backend cannot apply that shader, so executing the
+        // pass only saturates the GPU and drops the couch rooms to 15-20 FPS.
+        if (!g_vitaModernGlActive &&
+            !(g_vitaExperimentalGlActive && g_vitaShadersEnabled) &&
+            objectName != nullptr && strcmp(objectName, "obj_lutshader") == 0)
+            return;
+        // The congratulations effect creates a very dense set of identical
+        // confetti instances. Half of them consume ~18 ms on Vita while being
+        // visually indistinguishable at 960x544; keep a stable half-set.
+        if (objectName != nullptr && strcmp(objectName, "obj_confetti_overworld") == 0 &&
+            (instance->instanceId & 1U) != 0)
+            return;
+        // room_board_1_sword creates many overlapping decorative trees. Its
+        // GPU-safe one-quad submission profile makes their Draws expensive,
+        // so keep a stable half-set and omit both work and rendering for the
+        // other half. Interactive board actors are unaffected.
+        if (objectName != nullptr && strcmp(objectName, "obj_board_tree") == 0 &&
+            runner->currentRoom != nullptr &&
+            strcmp(runner->currentRoom->name, "room_board_1_sword") == 0 &&
+            (eventType == EVENT_STEP || eventType == EVENT_DRAW) &&
+            (instance->instanceId & 1U) != 0)
+            return;
+    }
+    if (g_vitaActiveChapter == 5 &&
+        eventType == EVENT_STEP && eventSubtype == STEP_NORMAL &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
+        runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
+        strcmp(runner->currentRoom->name, "room_dw_garden_floradinnencounter") == 0) {
+        const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+        if (objectName != nullptr && strcmp(objectName, "obj_grassanim_new") == 0 &&
+            (runner->frameCount & 1) != 0) {
+            // Keep animation time advancing while avoiding the expensive
+            // tilemap_get/tilemap_set scan on the skipped frame. The next
+            // 15-Hz update catches the tiles up to the current animation.
+            int32_t animId = shget(runner->vmContext->varNameMap, "anim");
+            int32_t speedId = shget(runner->vmContext->varNameMap, "anim_speed");
+            int32_t lengthId = shget(runner->vmContext->varNameMap, "anim_length");
+            if (animId >= 0 && speedId >= 0 && lengthId >= 0) {
+                GMLReal anim = RValue_toReal(Instance_getSelfVar(instance, animId));
+                GMLReal speed = RValue_toReal(Instance_getSelfVar(instance, speedId));
+                GMLReal length = RValue_toReal(Instance_getSelfVar(instance, lengthId));
+                anim += speed;
+                if (length > 0.0 && anim > length) anim -= length;
+                Instance_setSelfVar(instance, animId, RValue_makeReal(anim));
+            }
+            return;
+        }
+    }
+
+    if (g_vitaActiveChapter == 5 && g_vitaModernGlActive &&
+        eventType == EVENT_DRAW && eventSubtype == DRAW_BEGIN &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
+        runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
+        strcmp(runner->currentRoom->name, "room_dw_fcastle_flowery") == 0) {
+        const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+        if (objectName != nullptr && strcmp(objectName, "obj_castlereflect_manager") == 0 &&
+            runner->renderer != nullptr && (runner->frameCount % 3U) != 0U) {
+            int32_t surfId = shget(runner->vmContext->varNameMap, "surf");
+            if (surfId >= 0) {
+                RValue surf = Instance_getSelfVar(instance, surfId);
+                if (Renderer_surfaceExists(runner->renderer, (int32_t)RValue_toReal(surf))) {
+                    static unsigned int lastReflectionReuseLog = 0;
+                    if (runner->frameCount - lastReflectionReuseLog >= 120U) {
+                        VitaProbe_logLine("CH5_CASTLEREFLECT_REUSE=10hz");
+                        lastReflectionReuseLog = runner->frameCount;
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    if (g_vitaActiveChapter == 5 && eventType == EVENT_DRAW && eventSubtype == 0 &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count) {
+        const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+        if (objectName != nullptr) {
+            if (!g_vitaModernGlActive && strcmp(objectName, "obj_lutshader") == 0)
+                return;
+            // The original pass is expensive and was previously suppressed in
+            // every Legacy-GL run.  The compact shd_shadowblend programs now
+            // make it valid when the user explicitly enables shaders; keeping
+            // it suppressed while OFF preserves the low-cost fixed pipeline.
+            if (!g_vitaModernGlActive && !g_vitaShadersEnabled &&
+                strcmp(objectName, "obj_sunshadows") == 0)
+                return;
+        }
+    }
+#endif
 
     VMContext* vm = runner->vmContext;
     int32_t savedEventType = vm->currentEventType;
@@ -403,13 +645,39 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
 #endif
 
     uint64_t ev_start = nowNanos();
+#if IS_WAD17_OR_HIGHER_ENABLED
+    bool nativeDraw = eventType == EVENT_DRAW && eventSubtype == DRAW_NORMAL &&
+                      VMBuiltins_tryGardenLightDraw(vm, instance, codeId);
+#ifdef PLATFORM_VITA
+    if (!nativeDraw && g_vitaActiveChapter == 5 && eventType == EVENT_DRAW &&
+        eventSubtype == DRAW_NORMAL)
+        nativeDraw = VMBuiltins_tryManeDraw(vm, instance, codeId);
+#endif
+    if (!nativeDraw) executeCode(runner, instance, codeId);
+#else
     executeCode(runner, instance, codeId);
+#endif
+#ifdef PLATFORM_VITA
+    vitaEnableChapter5CliffSimpleMode(runner, instance, eventType);
+#endif
     uint64_t ev_end = nowNanos();
     uint64_t dur = (ev_end - ev_start) / 1000;
-    if (dur >= 2500) {
+    if (eventType == EVENT_DRAW && dur > runner->profDrawMaxUs) {
+        runner->profDrawMaxUs = dur;
+        runner->profDrawMaxObject = instance->objectIndex;
+    }
+    if (dur >= 2500 && (runner->profSlowEventLastLogNs == 0 ||
+                       ev_end - runner->profSlowEventLastLogNs >= 1000000000ULL)) {
         const char* eventName = Runner_getEventName(eventType, eventSubtype);
         const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
-        printf("PERF_EVENT_SLOW obj=%s inst=%d evt=%s sub=%d dur_us=%llu\n", objectName, instance->instanceId, eventName, (int)eventSubtype, (unsigned long long)dur);
+        // Rhythm-game Draw exceeds 2.5 ms every frame. Logging every event
+        // adds synchronous I/O to the hot path. Keep per-frame maxima above,
+        // but emit at most one detailed event per second, with a skip count.
+        printf("PERF_EVENT_SLOW obj=%s inst=%d evt=%s sub=%d dur_us=%llu suppressed=%u\n", objectName, instance->instanceId, eventName, (int)eventSubtype, (unsigned long long)dur, runner->profSlowEventsSuppressed);
+        runner->profSlowEventLastLogNs = ev_end;
+        runner->profSlowEventsSuppressed = 0;
+    } else if (dur >= 2500) {
+        runner->profSlowEventsSuppressed++;
     }
     vm->currentEventType = savedEventType;
     vm->currentEventSubtype = savedEventSubtype;
@@ -427,7 +695,55 @@ void Runner_executeEventFromObject(Runner* runner, Instance* instance, int32_t s
     Runner_executeResolvedEvent(runner, instance, eventType, eventSubtype, codeId, ownerObjectIndex);
 }
 
+#ifdef PLATFORM_VITA
+static void vitaAdjustChapter2FixedBattleBubble(Runner* runner, Instance* instance,
+                                                 int32_t eventType, int32_t eventSubtype) {
+    if (runner == nullptr || instance == nullptr || runner->vmContext == nullptr ||
+        runner->vitaBattleBubbleObjectIndex < 0 ||
+        instance->objectIndex != runner->vitaBattleBubbleObjectIndex ||
+        eventType != EVENT_DRAW || eventSubtype != DRAW_NORMAL)
+        return;
+
+    VMContext* vm = runner->vmContext;
+    if (vm->globalScopeInstance == nullptr) return;
+
+    int32_t chapterVar = VM_getOrAllocateVarID(vm, "chapter");
+    RValue chapterValue = Instance_getSelfVar(vm->globalScopeInstance, chapterVar);
+    if (chapterValue.type == RVALUE_UNDEFINED || RValue_toInt32(chapterValue) != 2) return;
+
+    int32_t autoLengthVar = VM_getOrAllocateVarID(vm, "auto_length");
+    int32_t initVar = VM_getOrAllocateVarID(vm, "init");
+    RValue autoLength = Instance_getSelfVar(instance, autoLengthVar);
+    RValue init = Instance_getSelfVar(instance, initVar);
+    if (autoLength.type == RVALUE_UNDEFINED || init.type == RVALUE_UNDEFINED ||
+        RValue_toInt32(autoLength) != 0 || RValue_toInt32(init) != 0)
+        return;
+
+    int32_t myWriterVar = VM_getOrAllocateVarID(vm, "mywriter");
+    RValue writerRef = Instance_getSelfVar(instance, myWriterVar);
+    if (writerRef.type == RVALUE_UNDEFINED) return;
+    int32_t writerId = RValue_toInt32(writerRef);
+    Instance* writer = hmget(runner->instancesById, writerId);
+    if (writer == nullptr || writer->destroyed) return;
+
+    // Auto-length battle balloons already receive a 4 px upward text offset in
+    // the Chapter 2 GML patch. Fixed enemy balloons skip that branch entirely;
+    // mirror the same offset once, immediately before their first Draw event.
+    const GMLReal offset = 4.0;
+    int32_t writingYVar = VM_getOrAllocateVarID(vm, "writingy");
+    RValue writingY = Instance_getSelfVar(writer, writingYVar);
+    GMLReal adjustedWritingY = (writingY.type == RVALUE_UNDEFINED)
+        ? (GMLReal)writer->y - offset
+        : RValue_toReal(writingY) - offset;
+    writer->y -= (float)offset;
+    Instance_setSelfVar(writer, writingYVar, RValue_makeReal(adjustedWritingY));
+}
+#endif
+
 void Runner_executeEvent(Runner* runner, Instance* instance, int32_t eventType, int32_t eventSubtype) {
+#ifdef PLATFORM_VITA
+    vitaAdjustChapter2FixedBattleBubble(runner, instance, eventType, eventSubtype);
+#endif
     Runner_executeEventFromObject(runner, instance, instance->objectIndex, eventType, eventSubtype);
 }
 
@@ -657,7 +973,24 @@ static void fireDrawSubtype(Runner* runner, Drawable* drawables, int32_t drawabl
 #define GMS2_TILE_FLIP_MASK   0x20000000 // bit 29 (vertical flip)
 #define GMS2_TILE_ROTATE_MASK 0x40000000 // bit 30 (90 CW)
 
-void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerOffsetX, float layerOffsetY) {
+uint32_t Runner_tileAnimationFrame(const Background* tileset, uint64_t timeUs, uint32_t previousFrame) {
+    uint32_t frames = tileset->gms2ItemsPerTileCount;
+    if (frames <= 1) return 0;
+    if (tileset->gms2FrameLength > 0)
+        return (uint32_t)((timeUs / (uint64_t)tileset->gms2FrameLength) % frames);
+    return (previousFrame + 1) % frames;
+}
+
+uint32_t Runner_tileFrameIndex(const Background* tileset, uint32_t tileIndex, int32_t frame) {
+    if (tileIndex == 0 || tileIndex >= tileset->gms2TileCount) return 0;
+    uint32_t frames = tileset->gms2ItemsPerTileCount;
+    if (!frames || tileset->gms2TileIds == nullptr) return tileIndex;
+    int64_t wrapped = (int64_t)frame % frames;
+    if (wrapped < 0) wrapped += frames;
+    return tileset->gms2TileIds[(size_t)tileIndex * frames + wrapped];
+}
+
+void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerOffsetX, float layerOffsetY, uint32_t frame) {
     if (data == nullptr || data->tileData == nullptr) return;
     if (0 > data->backgroundIndex) return;
 
@@ -703,7 +1036,7 @@ void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerO
     for (int32_t ty = firstTy; ty < lastTy; ty++) {
         for (int32_t tx = firstTx; tx < lastTx; tx++) {
             uint32_t cell = data->tileData[ty * data->tilesX + tx];
-            uint32_t tileIndex = cell & GMS2_TILE_INDEX_MASK;
+            uint32_t tileIndex = Runner_tileFrameIndex(tileset, cell & GMS2_TILE_INDEX_MASK, (int32_t)frame);
             if (tileIndex == 0) continue; // 0 = empty
 
             uint32_t col = tileIndex % columns;
@@ -826,6 +1159,28 @@ static void rebuildDrawableCacheIfDirty(Runner* runner) {
 void Runner_draw(Runner* runner) {
     Room* room = runner->currentRoom;
 
+#ifdef PLATFORM_VITA
+    // DELTARUNE battles are overlays and leave the Cyber room parallax active
+    // underneath. On Vita that visually covered work costs about 4.6 ms per
+    // frame. Detect the real battle controller, then omit only the deepest
+    // decorative parallax layer; gameplay, bullets and the battle background
+    // continue drawing normally.
+    bool vitaCh2BattleOverlay = false;
+    extern int g_vitaActiveChapter;
+    if (g_vitaActiveChapter == 2) {
+        for (int32_t bi = 0; bi < (int32_t)arrlen(runner->instances); ++bi) {
+            Instance* candidate = runner->instances[bi];
+            if (!candidate->active || candidate->objectIndex < 0 ||
+                (uint32_t)candidate->objectIndex >= runner->dataWin->objt.count) continue;
+            const char* candidateName = runner->dataWin->objt.objects[candidate->objectIndex].name;
+            if (candidateName != nullptr && strcmp(candidateName, "obj_battlecontroller") == 0) {
+                vitaCh2BattleOverlay = true;
+                break;
+            }
+        }
+    }
+#endif
+
     rebuildDrawableCacheIfDirty(runner);
     int32_t drawableCount = (int32_t) arrlen(runner->cachedDrawables);
 
@@ -886,6 +1241,13 @@ void Runner_draw(Runner* runner) {
         lastProcessedDrawKey = drawableKey(d);
 
         if (d->type == DRAWABLE_TILE) {
+#ifdef PLATFORM_VITA
+            // A DELTARUNE battle draws its own full-screen presentation. Keeping
+            // the room tilemap alive underneath it needlessly pulls the Cyber
+            // room atlases back into CDRAM and evicts the battle pages. The
+            // resulting upload/eviction loop produced multi-second frames.
+            if (vitaCh2BattleOverlay) continue;
+#endif
             if (runner->renderer != nullptr) {
                 RoomTile* tile = &room->tiles[d->tileIndex];
                 // Skip tiles whose layer was hidden via tile_layer_hide(). Filtered here (not in the cache) so toggling layer visibility doesn't invalidate.
@@ -929,6 +1291,30 @@ void Runner_draw(Runner* runner) {
             Instance* inst = d->instance;
             // Filter inactive/invisible instances at draw time so the cache doesn't need invalidation when those flags toggle.
             if (!inst->active || !inst->visible) continue;
+#ifdef PLATFORM_VITA
+            if (g_vitaActiveChapter == 3 && inst->objectIndex >= 0 &&
+                (uint32_t)inst->objectIndex < runner->dataWin->objt.count) {
+                extern void VitaBorders_noteVisibleAsset(const char* assetName);
+                VitaBorders_noteVisibleAsset(
+                    runner->dataWin->objt.objects[inst->objectIndex].name);
+                if (inst->spriteIndex >= 0 &&
+                    (uint32_t)inst->spriteIndex < runner->dataWin->sprt.count)
+                    VitaBorders_noteVisibleAsset(
+                        runner->dataWin->sprt.sprites[inst->spriteIndex].name);
+            }
+            if (vitaCh2BattleOverlay && inst->objectIndex >= 0 &&
+                (uint32_t)inst->objectIndex < runner->dataWin->objt.count) {
+                const char* drawObjectName = runner->dataWin->objt.objects[inst->objectIndex].name;
+                if (vitaIsCh2ExplorationDrawObject(drawObjectName))
+                    continue;
+            }
+            if (g_vitaActiveChapter == 2 && inst->objectIndex >= 0 &&
+                (uint32_t)inst->objectIndex < runner->dataWin->objt.count) {
+                const char* drawObjectName = runner->dataWin->objt.objects[inst->objectIndex].name;
+                if (vitaCullCh2MusicBulletDraw(runner, inst, drawObjectName))
+                    continue;
+            }
+#endif
             int32_t ownerObjectIndex = -1;
             int32_t codeId = findEventCodeIdAndOwner(runner, inst->objectIndex, EVENT_DRAW, DRAW_NORMAL, &ownerObjectIndex);
             if (codeId >= 0) {
@@ -940,6 +1326,14 @@ void Runner_draw(Runner* runner) {
             // Re-resolve every iteration: a previous instance's Draw event may have called layer_create/layer_destroy and reallocated runner->runtimeLayers.
             RuntimeLayer* runtimeLayer = Runner_findRuntimeLayerById(runner, d->runtimeLayerId);
             if (runtimeLayer == nullptr || !runtimeLayer->visible) continue;
+#ifdef PLATFORM_VITA
+            // Static Room layers are fully covered by the battle overlay. Do
+            // not render their backgrounds, tiles or placed sprites while the
+            // controller is active. Instance draw events remain untouched, so
+            // the battle controller, fighters, bullets, HUD and effects keep
+            // their original order and behavior.
+            if (vitaCh2BattleOverlay) continue;
+#endif
             VMContext* ctx = runner->vmContext;
             Instance* savedInstance = ctx->currentInstance;
             int32_t savedEventType = ctx->currentEventType;
@@ -1047,7 +1441,11 @@ void Runner_draw(Runner* runner) {
                 }
             } else if (parsedLayer->type == RoomLayerType_Tiles) {
                 if (runner->renderer == nullptr) continue;
-                Runner_drawTileLayer(runner, parsedLayer->tilesData, layerOffsetX, layerOffsetY);
+                for (size_t j = 0; j < arrlenu(runtimeLayer->elements); ++j) {
+                    RuntimeLayerElement* el = &runtimeLayer->elements[j];
+                    if (el->type == RuntimeLayerElementType_Tilemap && el->visible)
+                        Runner_drawTileLayer(runner, el->tilemapData, layerOffsetX, layerOffsetY, el->tilemapFrame);
+                }
             } else if (parsedLayer->type == RoomLayerType_Background) {
                 // Nothing to render here: handled above
             } else if (parsedLayer->type == RoomLayerType_Instances) {
@@ -1107,6 +1505,8 @@ void Runner_drawGUI(Runner* runner, int32_t windowW, int32_t windowH, int32_t ta
 }
 
 void Runner_drawPre(Runner* runner, int32_t windowW, int32_t windowH) {
+    runner->profDrawMaxUs = 0;
+    runner->profDrawMaxObject = -1;
     rebuildDrawableCacheIfDirty(runner);
     Drawable* drawables = runner->cachedDrawables;
     int32_t drawableCount = (int32_t) arrlen(drawables);
@@ -1138,6 +1538,9 @@ void Runner_computeViewDisplayScale(Runner* runner, int32_t gameW, int32_t gameH
         repeat(MAX_VIEWS, vi) {
             RuntimeView* view = &runner->views[vi];
             if (!view->enabled) continue;
+            // Surface-backed views are off-screen cameras. Their small ports
+            // must not change the scale or position of the main viewport.
+            if (view->surfaceId != -1) continue;
             if (minLeft > view->portX) minLeft = view->portX;
             if (minTop > view->portY) minTop = view->portY;
             int32_t right = view->portX + view->portWidth;
@@ -1208,6 +1611,23 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, bool debugSh
                 // The surface is GONE, skip it!
                 if (!renderer->vtable->surfaceExists(renderer, view->surfaceId))
                     continue;
+
+#ifdef PLATFORM_VITA
+                // The Garden sakura transition renders a complete second
+                // 640x480 world view into surf_view1. On Vita this roughly
+                // doubles room cost (16-20 render-target switches/frame).
+                // Reuse the previous surface every other frame: the primary
+                // view, battle, input and GUI remain full-rate, while this
+                // decorative transition background updates at 15 Hz.
+                extern int g_vitaActiveChapter;
+                if (g_vitaActiveChapter == 5 && vi == 1 &&
+                    runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
+                    strcmp(runner->currentRoom->name, "room_dw_garden_floradinnencounter") == 0 &&
+                    (runner->frameCount & 1) != 0) {
+                    anyViewRendered = true;
+                    continue;
+                }
+#endif
 
                 Runner_surfaceSetTarget(runner, view->surfaceId);
 
@@ -2016,6 +2436,35 @@ void Runner_reset(Runner* runner) {
     runner->mpPotAhead = 3.0;
     runner->mpPotOnSpot = true;
     runner->lastMusicInstance = -1;
+#ifdef PLATFORM_VITA
+    runner->vitaWeaponFingerprint = 0;
+    runner->vitaArmorFingerprint = 0;
+    runner->vitaEquipmentFingerprintStablePolls = 0;
+    runner->vitaEquipmentFingerprintInitialized = false;
+    runner->vitaLegacyTrophyMode = true;
+    runner->vitaLegacyCreditsObjectIndex = -1;
+    runner->vitaLegacyTrophyMask = 0;
+    runner->vitaLegacyHpRoomIndex = -1;
+    memset(runner->vitaLegacyHp, 0, sizeof(runner->vitaLegacyHp));
+    runner->vitaLegacyHpStableFrames = 0;
+    runner->vitaLegacyHpInitialized = false;
+    runner->vitaLegacyStrengthFlag65 = 0;
+    runner->vitaLegacyStrengthStableFrames = 0;
+    runner->vitaLegacyStrengthInitialized = false;
+    runner->vitaBattleBubbleObjectIndex = -1;
+    repeat(runner->dataWin->objt.count, trophyObj) {
+        const char* trophyObjName = runner->dataWin->objt.objects[trophyObj].name;
+        if (trophyObjName == nullptr) continue;
+        if (strcmp(trophyObjName, "obj_event_manager") == 0)
+            runner->vitaLegacyTrophyMode = false;
+        else if (strcmp(trophyObjName, "obj_credits") == 0)
+            runner->vitaLegacyCreditsObjectIndex = (int32_t)trophyObj;
+        else if (strcmp(trophyObjName, "obj_battleblcon") == 0)
+            runner->vitaBattleBubbleObjectIndex = (int32_t)trophyObj;
+    }
+    if (runner->vitaLegacyTrophyMode)
+        VitaProbe_logLine("TROPHY_BRIDGE=legacy_mode enabled=no_obj_event_manager");
+#endif
 
     arrsetlen(runner->cachedDrawables, 0);
     runner->drawableListStructureDirty = true;
@@ -2296,15 +2745,31 @@ Runner* Runner_create(DataWin* dataWin, VMContext* vm, Renderer* renderer, FileS
     // Link runner to VM context
     vm->runner = (struct Runner*) runner;
 
+#ifdef PLATFORM_VITA
+    // OpenAL's Vita backend creates its device/context and converts the initial
+    // hardware buffers. Doing this after the chapter renderer has committed its
+    // allocations can expose an SceGxm data abort on larger translated data.win
+    // files. Audio has no dependency on renderer initialization, so reserve its
+    // resources first and then initialize the renderer.
+    fprintf(stderr, "RUNNER_INIT=audio_begin\n");
+    audioSystem->vtable->init(audioSystem, dataWin, fileSystem);
+    fprintf(stderr, "RUNNER_INIT=audio_complete\n");
+    fprintf(stderr, "RUNNER_INIT=renderer_begin\n");
+    renderer->vtable->init(renderer, dataWin);
+    fprintf(stderr, "RUNNER_INIT=renderer_complete\n");
+#else
     renderer->vtable->init(renderer, dataWin);
     audioSystem->vtable->init(audioSystem, dataWin, fileSystem);
+#endif
 
     return runner;
 }
 
-static inline void dispatchInstanceCreationEvents(Runner* runner, Instance* inst) {
+static inline void dispatchInstanceCreationEvents(Runner* runner, Instance* inst, Instance* variables) {
     inst->createEventFired = true;
     Runner_executeEvent(runner, inst, EVENT_PRECREATE, 0);
+    if (inst->destroyed) return;
+    VMBuiltins_applyCreationVariables(runner->vmContext, inst, variables);
     Runner_executeEvent(runner, inst, EVENT_CREATE, 0);
 }
 
@@ -2320,20 +2785,28 @@ Instance* Runner_createStruct(Runner* runner) {
 Instance* Runner_createInstance(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex) {
     if (isObjectDisabled(runner, objectIndex)) return nullptr;
     Instance* inst = createAndInitInstance(runner, runner->nextInstanceId++, objectIndex, x, y);
-    dispatchInstanceCreationEvents(runner, inst);
+    dispatchInstanceCreationEvents(runner, inst, nullptr);
     return inst;
 }
 
 // Same as Runner_createInstance, but sets depth BEFORE firing Create events so scripts like scr_depth can override.
 Instance* Runner_createInstanceWithDepth(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex, int32_t depth) {
+    return Runner_createInstanceWithDepthVars(runner, x, y, objectIndex, depth, nullptr);
+}
+
+Instance* Runner_createInstanceWithDepthVars(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex, int32_t depth, Instance* variables) {
     if (isObjectDisabled(runner, objectIndex)) return nullptr;
     Instance* inst = createAndInitInstance(runner, runner->nextInstanceId++, objectIndex, x, y);
     inst->depth = depth;
-    dispatchInstanceCreationEvents(runner, inst);
+    dispatchInstanceCreationEvents(runner, inst, variables);
     return inst;
 }
 
 Instance* Runner_createInstanceWithLayer(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex, int32_t layerId) {
+    return Runner_createInstanceWithLayerVars(runner, x, y, objectIndex, layerId, nullptr);
+}
+
+Instance* Runner_createInstanceWithLayerVars(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex, int32_t layerId, Instance* variables) {
     if (isObjectDisabled(runner, objectIndex)) return nullptr;
     RuntimeLayer* rl = Runner_findRuntimeLayerById(runner, layerId);
     if (rl == nullptr) {
@@ -2344,7 +2817,7 @@ Instance* Runner_createInstanceWithLayer(Runner* runner, GMLReal x, GMLReal y, i
     inst->layer = layerId;
     inst->depth = rl->depth;
     Runner_addInstanceLayerElement(runner, layerId, inst->instanceId);
-    dispatchInstanceCreationEvents(runner, inst);
+    dispatchInstanceCreationEvents(runner, inst, variables);
     return inst;
 }
 
@@ -2380,6 +2853,23 @@ void Runner_destroyInstance(MAYBE_UNUSED Runner* runner, Instance* inst, bool ru
     // A destroyed instance must ALWAYS be not active
     // If a destroyed instance is active, then well, something went VERY wrong
     inst->active = false;
+    Runner_removeInstanceFromObjectLists(runner, inst);
+
+#ifdef PLATFORM_VITA
+    if (runner != nullptr && runner->dataWin != nullptr &&
+        inst->objectIndex >= 0 &&
+        inst->objectIndex < (int32_t) runner->dataWin->objt.count) {
+        const char* objectName = runner->dataWin->objt.objects[inst->objectIndex].name;
+        if (objectName != nullptr && strstr(objectName, "mouse") != nullptr) {
+            char line[192];
+            snprintf(line, sizeof(line),
+                     "MICE destroy object=%s instance=%d removed=1 active=%d",
+                     objectName, inst->instanceId, inst->active ? 1 : 0);
+            extern void VitaProbe_logLine(const char* text);
+            VitaProbe_logLine(line);
+        }
+    }
+#endif
 
 #ifdef ENABLE_VM_TRACING
     GameObject* gameObject = &runner->dataWin->objt.objects[inst->objectIndex];
@@ -3498,6 +3988,15 @@ void Runner_handlePendingRoomChange(Runner* runner) {
         if (runner->dataWin->lazyLoadRooms && runner->currentRoom != nullptr && !runner->currentRoom->eagerlyLoaded) {
             DataWin_freeRoomPayload(runner->currentRoom);
         }
+#ifdef PLATFORM_VITA
+        if (vitaCh1PreviousRoomPayload >= 0 &&
+            (uint32_t)vitaCh1PreviousRoomPayload < runner->dataWin->room.count) {
+            Room* cachedRoom = &runner->dataWin->room.rooms[vitaCh1PreviousRoomPayload];
+            if (cachedRoom != runner->currentRoom && !cachedRoom->eagerlyLoaded && cachedRoom->payloadLoaded)
+                DataWin_freeRoomPayload(cachedRoom);
+        }
+        vitaCh1PreviousRoomPayload = -1;
+#endif
         Runner_reset(runner);
         Runner_initFirstRoom(runner);
         return;
@@ -3514,10 +4013,53 @@ void Runner_handlePendingRoomChange(Runner* runner) {
         int32_t newRoomIndex = runner->pendingRoom;
         runner->pendingRoom = -1;
 
+#ifdef PLATFORM_VITA
+        extern void VitaBorders_prepareRoomChange(const char* nextRoomName);
+        extern void VitaProbe_logLine(const char* text);
+        // Collision-driven room changes are completed inside Runner_step(),
+        // before playable_main can observe pendingRoom. Hold only streams
+        // created by this transition at the actual transition boundary. A
+        // save/menu transition may already own a longer hold that lasts until
+        // its first presented frame; do not release that one here.
+        AlAudioSystem* vitaAudio = (AlAudioSystem*)runner->audioSystem;
+        bool vitaRoomAudioHoldOwned = oldRoomIndex > 1 && vitaAudio != nullptr;
+        if (vitaRoomAudioHoldOwned) {
+            // Match the stable v0.71-70 transition behaviour: mark the hold
+            // without pausing the outgoing stream. New music created while
+            // the destination is constructed inherits pausedByTransition,
+            // while a BGM shared by both rooms keeps its playback position.
+            vitaAudio->transitionHold = true;
+            runner->vitaAudioTransitionWaitFrames = 2;
+            VitaProbe_logLine("ROOM_AUDIO=runner_new_streams_held_during_construction");
+        }
+        char vitaRoomPhase[192];
+        snprintf(vitaRoomPhase, sizeof(vitaRoomPhase),
+                 "VITA_ROOM_PHASE=begin from=%d to=%d resident=%llu",
+                 oldRoomIndex, newRoomIndex,
+                 (unsigned long long)(g_vitaModernGlActive ? 0ULL :
+                     ((GLLegacyRenderer*)runner->renderer)->residentTextureBytes));
+        VitaProbe_logLine(vitaRoomPhase);
+        const char* vitaNextRoomName =
+            (uint32_t)newRoomIndex < runner->dataWin->room.count ?
+            runner->dataWin->room.rooms[newRoomIndex].name : NULL;
+        VitaBorders_prepareRoomChange(vitaNextRoomName);
+        snprintf(vitaRoomPhase, sizeof(vitaRoomPhase),
+                 "VITA_ROOM_PHASE=border_release_complete from=%d to=%d",
+                 oldRoomIndex, newRoomIndex);
+        VitaProbe_logLine(vitaRoomPhase);
+#endif
+
         // Fire Room End for all instances
         uint64_t phaseBegin = nowNanos();
         Runner_executeEventForAll(runner, EVENT_OTHER, OTHER_ROOM_END);
         runner->profRoomEndEventsUs = (nowNanos() - phaseBegin) / 1000ULL;
+#ifdef PLATFORM_VITA
+        snprintf(vitaRoomPhase, sizeof(vitaRoomPhase),
+                 "VITA_ROOM_PHASE=room_end_complete from=%d to=%d us=%llu",
+                 oldRoomIndex, newRoomIndex,
+                 (unsigned long long)runner->profRoomEndEventsUs);
+        VitaProbe_logLine(vitaRoomPhase);
+#endif
         require(runner->dataWin->room.count > (uint32_t) newRoomIndex);
         const char* newRoomName = runner->dataWin->room.rooms[newRoomIndex].name;
 
@@ -3530,19 +4072,318 @@ void Runner_handlePendingRoomChange(Runner* runner) {
 
         // Free the outgoing room's payload under lazyLoadRooms, unless it's eagerly pinned or we're restarting the same room (initRoom would just re-load it).
         if (runner->dataWin->lazyLoadRooms && !oldRoom->eagerlyLoaded && newRoomIndex != oldRoomIndex) {
+#ifdef PLATFORM_VITA
+            if (g_vitaActiveChapter == 1) {
+                // Retain only the immediately previous Chapter 1 room. When
+                // backtracking, the destination is already parsed and the
+                // room we just left becomes the new single cached payload.
+                if (vitaCh1PreviousRoomPayload >= 0 &&
+                    vitaCh1PreviousRoomPayload != oldRoomIndex &&
+                    vitaCh1PreviousRoomPayload != newRoomIndex &&
+                    (uint32_t)vitaCh1PreviousRoomPayload < runner->dataWin->room.count) {
+                    Room* staleRoom = &runner->dataWin->room.rooms[vitaCh1PreviousRoomPayload];
+                    if (!staleRoom->eagerlyLoaded && staleRoom->payloadLoaded)
+                        DataWin_freeRoomPayload(staleRoom);
+                }
+                vitaCh1PreviousRoomPayload = oldRoomIndex;
+            } else {
+                DataWin_freeRoomPayload(oldRoom);
+                vitaCh1PreviousRoomPayload = -1;
+            }
+#else
             DataWin_freeRoomPayload(oldRoom);
+#endif
         }
 
-        // Keep lazy payload parsing separate from runtime room construction.
+        // Parse the destination before the Vita texture trim so its ROOM data
+        // can act as a conservative atlas manifest. Parsing is still measured
+        // separately from runtime instance/surface construction.
         Room* newRoom = &runner->dataWin->room.rooms[newRoomIndex];
         if (!newRoom->payloadLoaded) {
             phaseBegin = nowNanos();
             DataWin_loadRoomPayload(runner->dataWin, newRoomIndex);
             runner->profRoomParseUs = (nowNanos() - phaseBegin) / 1000ULL;
         }
+
+#ifdef PLATFORM_VITA
+        if (!g_vitaModernGlActive) {
+        // The Vita build currently uses the legacy renderer. Drop only stale
+        // scenery from the outgoing room before the next room allocates its
+        // atlases; UI/font pages remain pinned and Original quality stays full.
+        // Chapter 5's town rooms share nearly their entire atlas set. Trimming
+        // them to 56 MiB forced 50+ MiB to be decoded/uploaded again on every
+        // doorway, producing 9-10 second transitions. Keep that shared set and
+        // reserve the aggressive trim for genuinely different areas such as
+        // the Light World -> Dark World transition.
+        bool vitaSharedTownTransition =
+            strncmp(oldRoomName, "room_town_", 10) == 0 &&
+            strncmp(newRoomName, "room_town_", 10) == 0;
+        bool oldDarkCastle = strncmp(oldRoomName, "room_dw_castle_", 15) == 0 ||
+                             strncmp(oldRoomName, "room_dw_ralsei_castle_", 22) == 0;
+        bool newDarkCastle = strncmp(newRoomName, "room_dw_castle_", 15) == 0 ||
+                             strncmp(newRoomName, "room_dw_ralsei_castle_", 22) == 0;
+        bool vitaSharedDarkCastleTransition = oldDarkCastle && newDarkCastle;
+        // Chapter 5's Flower Castle uses a separate room prefix from the
+        // ordinary Ralsei castle but shares its character, battle and scenery
+        // atlases across every doorway. Treating each room_dw_fcastle_* change
+        // as unrelated discarded pages 45/46/47/51/54/56 and recreated them
+        // while the encounter room was already instantiating its actors.
+        bool oldFlowerCastle = strncmp(oldRoomName, "room_dw_fcastle_", 16) == 0;
+        bool newFlowerCastle = strncmp(newRoomName, "room_dw_fcastle_", 16) == 0;
+        bool vitaSharedFlowerCastleTransition = oldFlowerCastle && newFlowerCastle;
+        bool vitaFloweryBattleDestination = g_vitaActiveChapter == 5 &&
+            strcmp(newRoomName, "room_dw_fcastle_flowery") == 0;
+        bool vitaSharedCouchTransition =
+            strncmp(oldRoomName, "room_dw_couch_", 14) == 0 &&
+            strncmp(newRoomName, "room_dw_couch_", 14) == 0;
+        // Chapter 3's nondescript/backstage sequence flows directly into the
+        // couch-overworld slides and reuses character/effect atlases. Treating
+        // every doorway as unrelated discarded the working set, producing
+        // measured 0.9-3.6 second first-frame uploads in field/classroom/
+        // hallway/couch_05. The video room remains excluded below.
+        bool oldCh3Backstage = g_vitaActiveChapter == 3 &&
+            (strncmp(oldRoomName, "room_dw_nondescript_", 22) == 0 ||
+             strncmp(oldRoomName, "room_dw_couch_overworld", 23) == 0);
+        bool newCh3Backstage = g_vitaActiveChapter == 3 &&
+            (strncmp(newRoomName, "room_dw_nondescript_", 22) == 0 ||
+             strncmp(newRoomName, "room_dw_couch_overworld", 23) == 0);
+        bool vitaSharedCh3BackstageTransition = oldCh3Backstage && newCh3Backstage;
+        // The native decoder requires contiguous memory. Do not carry the
+        // previous couch-room atlas set into the otherwise black video room.
+        bool vitaChapter3VideoDestination = g_vitaActiveChapter == 3 &&
+            strcmp(newRoomName, "room_dw_couch_video") == 0;
+        bool oldCh3TvBoard = strncmp(oldRoomName, "room_ch3_", 9) == 0 ||
+                              strncmp(oldRoomName, "room_dw_teevie_", 15) == 0 ||
+                              strncmp(oldRoomName, "room_dw_tv_", 11) == 0 ||
+                              strncmp(oldRoomName, "room_board_", 11) == 0;
+        bool newCh3TvBoard = strncmp(newRoomName, "room_ch3_", 9) == 0 ||
+                              strncmp(newRoomName, "room_dw_teevie_", 15) == 0 ||
+                              strncmp(newRoomName, "room_dw_tv_", 11) == 0 ||
+                              strncmp(newRoomName, "room_board_", 11) == 0;
+        // Gameshow, Teevie and board rooms share the 17/19/24/26-29 atlas
+        // core. Treating gameshow -> board as unrelated discarded 13 pages
+        // and spent about three seconds recreating the same TV/character set.
+        bool vitaSharedCh3TvBoardTransition = oldCh3TvBoard && newCh3TvBoard;
+        // Green Room, its Teevie preview and the B3BS interstitial are a tight
+        // Chapter 3 loop and reuse most of the same character/UI/TV atlases.
+        // Treating each doorway as unrelated evicted 30-40 MiB only to reload
+        // it seconds later, producing measured 3.9-6.0 second transitions.
+        bool oldCh3GreenCluster = g_vitaActiveChapter == 3 &&
+            (strcmp(oldRoomName, "room_dw_green_room") == 0 ||
+             strcmp(oldRoomName, "room_dw_teevie_preview") == 0 ||
+             strcmp(oldRoomName, "room_dw_b3bs_interstitial") == 0);
+        bool newCh3GreenCluster = g_vitaActiveChapter == 3 &&
+            (strcmp(newRoomName, "room_dw_green_room") == 0 ||
+             strcmp(newRoomName, "room_dw_teevie_preview") == 0 ||
+             strcmp(newRoomName, "room_dw_b3bs_interstitial") == 0);
+        bool vitaSharedCh3GreenTransition = oldCh3GreenCluster && newCh3GreenCluster;
+        bool oldCh1CastleArea = strncmp(oldRoomName, "room_cc", 7) == 0 ||
+                                strncmp(oldRoomName, "room_forest", 11) == 0 ||
+                                strncmp(oldRoomName, "room_field", 10) == 0 ||
+                                strncmp(oldRoomName, "room_castle", 11) == 0 ||
+                                strncmp(oldRoomName, "room_shop", 9) == 0 ||
+                                strncmp(oldRoomName, "room_legend", 11) == 0;
+        bool newCh1CastleArea = strncmp(newRoomName, "room_cc", 7) == 0 ||
+                                strncmp(newRoomName, "room_forest", 11) == 0 ||
+                                strncmp(newRoomName, "room_field", 10) == 0 ||
+                                strncmp(newRoomName, "room_castle", 11) == 0 ||
+                                strncmp(newRoomName, "room_shop", 9) == 0 ||
+                                strncmp(newRoomName, "room_legend", 11) == 0;
+        bool oldCh1TownArea = strncmp(oldRoomName, "room_town", 9) == 0 ||
+                              strncmp(oldRoomName, "room_beach", 10) == 0;
+        bool newCh1TownArea = strncmp(newRoomName, "room_town", 9) == 0 ||
+                              strncmp(newRoomName, "room_beach", 10) == 0;
+        bool vitaSharedCh1AreaTransition = g_vitaActiveChapter == 1 &&
+            ((oldCh1CastleArea && newCh1CastleArea) ||
+             (oldCh1TownArea && newCh1TownArea) ||
+             (strncmp(oldRoomName, "room_dark", 9) == 0 &&
+              strncmp(newRoomName, "room_dark", 9) == 0));
+        // Chapter 2 is split into large atlas families. Preserve pages while
+        // moving inside one family, but leave 16 MiB of headroom when crossing
+        // Castle/Cyber/Mansion boundaries so the destination does not defer
+        // its first visible atlas until after gameplay has resumed.
+        int oldCh2Region =
+            (strstr(oldRoomName, "dw_cyber") || strstr(oldRoomName, "dw_city")) ? 1 :
+            (strstr(oldRoomName, "dw_mansion")) ? 2 :
+            (strstr(oldRoomName, "dw_castle") || strstr(oldRoomName, "dw_ralsei")) ? 3 : 0;
+        int newCh2Region =
+            (strstr(newRoomName, "dw_cyber") || strstr(newRoomName, "dw_city")) ? 1 :
+            (strstr(newRoomName, "dw_mansion")) ? 2 :
+            (strstr(newRoomName, "dw_castle") || strstr(newRoomName, "dw_ralsei")) ? 3 : 0;
+        bool vitaSharedCh2AreaTransition = g_vitaActiveChapter == 2 &&
+            oldCh2Region != 0 && oldCh2Region == newCh2Region;
+        bool vitaCh2HeavyCyberDestination = g_vitaActiveChapter == 2 &&
+            (strcmp(newRoomName, "room_dw_cyber_teacup_final") == 0 ||
+             strcmp(newRoomName, "room_dw_cyber_rollercoaster") == 0 ||
+             strcmp(newRoomName, "room_dw_cyber_viro_ring") == 0 ||
+             strcmp(newRoomName, "room_dw_cyber_maze_queenscreen") == 0 ||
+             strcmp(newRoomName, "room_dw_cyber_musical_shop") == 0 ||
+             // Room Navigator can jump straight from another Cyber room into
+             // a battle. Without an explicit trim this inherited the full
+             // 104 MiB regional cache and pages 2/5/7/17/22 replaced each
+             // other every frame, producing the measured 0-2 FPS loop.
+              strstr(newRoomName, "room_dw_cyber_battle") != nullptr);
+        bool vitaCh2BattleDestination = g_vitaActiveChapter == 2 &&
+            strstr(newRoomName, "room_dw_cyber_battle") != nullptr;
+        bool vitaCh2DynamicAssetDestination = g_vitaActiveChapter == 2 &&
+            (strstr(newRoomName, "room_dw_cyber_intro_2") != nullptr ||
+             strstr(newRoomName, "room_dw_cyber_intro_connector") != nullptr ||
+             strstr(newRoomName, "room_dw_cyber_keyboard") != nullptr);
+        bool vitaCh2HeavyCastleDestination = g_vitaActiveChapter == 2 &&
+            (strcmp(newRoomName, "room_dw_castle_area_1") == 0 ||
+             strcmp(newRoomName, "room_dw_castle_area_2") == 0 ||
+             strcmp(newRoomName, "room_dw_castle_area_2_transformed") == 0 ||
+             strcmp(newRoomName, "room_shop1") == 0);
+        // Town rooms share most character, dialogue and scenery pages, but the
+        // bordered cache is capped at 96 MiB.  Keeping the previous 108 MiB
+        // trim target therefore performed no transition cleanup: the first
+        // font/character atlas of the new room had no safe victim in the same
+        // frame, disappeared, and could exhaust the 16 MiB upload staging block.
+        // Retain 80 MiB of the shared set and reserve space for the incoming
+        // room plus its surfaces. The previous 88 MiB target could leave no
+        // contiguous graphics block for glFramebufferTexture2D.
+        bool vitaSharedTransition = !vitaChapter3VideoDestination &&
+                                    (vitaSharedTownTransition ||
+                                    vitaSharedDarkCastleTransition ||
+                                    vitaSharedFlowerCastleTransition ||
+                                    vitaSharedCouchTransition ||
+                                    vitaSharedCh3BackstageTransition ||
+                                    vitaSharedCh3TvBoardTransition ||
+                                    vitaSharedCh3GreenTransition ||
+                                    vitaSharedCh1AreaTransition ||
+                                    vitaSharedCh2AreaTransition);
+        // Keep the shared set below the Chapter 5 upload ceiling. Retaining
+        // 84 MiB here allowed the third town room to finish at 88.5 MiB of
+        // tracked atlases and exhausted untracked VitaGL/surface headroom.
+        // Dark Castle used a stale 92 MiB target even though Chapter 5 now
+        // admits at most 88 MiB. Consequently castle_town -> castle_tv did no
+        // cleanup and started surface/atlas creation at the full ceiling.
+        // Retain the same 80 MiB shared core used by the Light World town.
+        // Preserve the common pages, but leave enough space for at least two
+        // incoming BC3 atlases plus surfaces. The previous 80 MiB shared trim
+        // reached the 96 MiB VitaGL ceiling during creation and exhausted both
+        // RAM/PHY fallback pools before the next doorway.
+        // A 76 MiB retained set still grew to 80 MiB while room construction
+        // was finishing, leaving no swap/GC reserve and aborting inside
+        // vglSwapBuffers. Keep the common border, but start shared Chapter 5
+        // transitions at 60 MiB. The town_south -> town_mid trace entered the
+        // destination with CDRAM already at 96 MiB and stopped while uploading
+        // page 39: retaining 72 MiB left room for only two BC3 pages, while the
+        // destination also creates four surfaces and several transient pages.
+        // The border itself remains resident when both rooms resolve to the
+        // same path; only stale atlas pages are reclaimed here.
+        GLLegacyRenderer* vitaLegacy = (GLLegacyRenderer*)runner->renderer;
+        GLLegacyRenderer_prepareRoomTextureSet(vitaLegacy, newRoom);
+        // Non-shared transitions must fully retire the previous room/menu
+        // working set. Otherwise a resident set below the old target can pass
+        // through untouched and collide with the destination room's pages.
+        // Chapter 5 now uses reviewed 2048px compressed scenery plus explicit
+        // VitaGL collection. Keep 32 MiB before its two-page static preload:
+        // the previous 48 MiB target became 55 MiB after preload, leaving room
+        // for only two more BC3 pages. Castle Town then cycled visible pages
+        // 45/46/56/59 every few frames at roughly 0.9 seconds per upload.
+        // Static destination pages remain protected by textureRoomPreload;
+        // dynamically used pages naturally replace the stale outgoing set.
+        // Chapter 2 commonly arrives here at its exact 104 MiB ceiling. Keep
+        // the destination's static manifest, but release 16 MiB of stale room
+        // pages so the first visible character/background can load without a
+        // retry cycle. The room-trim routine now removes the selected stale
+        // page deterministically instead of accidentally evicting another one.
+        // Chapter 2's renderer ceiling is 104 MiB. Trimming it to 88 MiB at
+        // every doorway immediately reloaded the same 16 MiB working set and
+        // produced missing/stale atlas contents despite otherwise good FPS.
+        uint64_t vitaTrimMiB = vitaChapter3VideoDestination ? 0ULL :
+            g_vitaActiveChapter == 2 ?
+            (vitaCh2BattleDestination ? 48ULL :
+             vitaCh2DynamicAssetDestination ? 84ULL :
+             vitaCh2HeavyCyberDestination ? 68ULL :
+             vitaCh2HeavyCastleDestination ? 76ULL :
+             vitaSharedCh2AreaTransition ? 104ULL : 80ULL) :
+            (vitaSharedTransition ?
+            (g_vitaActiveChapter == 5 ?
+             // Flowery creates roughly 21 MiB of render surfaces and needs
+             // several battle-only atlases. Entering with the ordinary
+             // Flower Castle 64 MiB shared set reached 99.5 MiB in VitaGL,
+             // while another 16 MiB was still retired, corrupting/missing
+             // sprites and occasionally aborting the first battle frame.
+             // Keep only the destination manifest plus a 40 MiB shared core.
+             (vitaFloweryBattleDestination ? 32ULL :
+              vitaSharedFlowerCastleTransition ? 64ULL : 32ULL) :
+             vitaSharedCh1AreaTransition ? 80ULL :
+             // RGBA4444 TV pages use 8 MiB each. Start at 48 MiB so the
+             // two-page preload still leaves room for four dynamically drawn
+             // pages without immediately evicting the incoming room again.
+             vitaSharedCh3TvBoardTransition ? 48ULL :
+             vitaSharedCh3GreenTransition ? 48ULL : 36ULL) : 0ULL);
+        GLLegacyRenderer_trimTextureCacheForRoomChange(
+            (GLLegacyRenderer*)runner->renderer,
+            vitaTrimMiB * 1024ULL * 1024ULL,
+            g_vitaActiveChapter == 2 ? false : !vitaSharedTransition);
+        GLLegacyRenderer_collectRetiredTexturesForRoomChange(
+            (GLLegacyRenderer*)runner->renderer);
+        uint32_t vitaPreloadedPages = GLLegacyRenderer_preloadRoomTextureSet(
+            (GLLegacyRenderer*)runner->renderer);
+        snprintf(vitaRoomPhase, sizeof(vitaRoomPhase),
+                 "VITA_ROOM_PHASE=texture_trim_complete from=%d to=%d resident=%llu preloaded=%u",
+                 oldRoomIndex, newRoomIndex,
+                 (unsigned long long)((GLLegacyRenderer*)runner->renderer)->residentTextureBytes,
+                 vitaPreloadedPages);
+        VitaProbe_logLine(vitaRoomPhase);
+        } else {
+            // The modern backend has its own RGBA4444 LRU and cannot consume
+            // the legacy room manifest. The Chapter 3 board transition is a
+            // special safety case: repeated real-Vita GPU crashes occur while
+            // the gameshow working set is being evicted and the board/battle
+            // pages are uploaded. Fence and clear stale pages before room
+            // construction, then warm the small board core observed in logs.
+            GLRenderer* vitaModern = (GLRenderer*)runner->renderer;
+            bool vitaCh3Board2Destination =
+                g_vitaActiveChapter == 3 && strcmp(newRoomName, "room_board_2") == 0;
+            if (vitaCh3Board2Destination) {
+                GLRenderer_trimTextureCacheForRoomChange(vitaModern, 0);
+                static const uint16_t boardCorePages[] = {
+                    2, 0, 132, 190, 210, 217, 261, 268, 293, 307,
+                    311, 315, 316, 317, 335, 339, 343, 388, 389, 390,
+                    392, 427
+                };
+                uint32_t warmed = 0;
+                for (uint32_t pi = 0;
+                     pi < sizeof(boardCorePages) / sizeof(boardCorePages[0]); ++pi) {
+                    uint32_t page = boardCorePages[pi];
+                    if (page >= runner->dataWin->txtr.count) continue;
+                    if (GLRenderer_ensureTextureLoaded(vitaModern, page)) warmed++;
+                    if ((pi & 3u) == 3u) glFinish();
+                }
+                glFinish();
+                snprintf(vitaRoomPhase, sizeof(vitaRoomPhase),
+                         "MODERN_GL_CH3_BOARD_PREWARM room=%s pages=%u requested=%u resident=%llu",
+                         newRoomName, warmed,
+                         (unsigned)(sizeof(boardCorePages) / sizeof(boardCorePages[0])),
+                         (unsigned long long)vitaModern->residentTextureBytes);
+                VitaProbe_logLine(vitaRoomPhase);
+            } else {
+                uint64_t modernTrimMiB = g_vitaActiveChapter == 5 ? 8ULL : 16ULL;
+                if (VitaGpuRules_modernSynchronousEviction(
+                        g_vitaActiveChapter, newRoomName))
+                    modernTrimMiB = 0ULL;
+                GLRenderer_trimTextureCacheForRoomChange(
+                    vitaModern, modernTrimMiB * 1024ULL * 1024ULL);
+            }
+            VitaProbe_logLine("VITA_ROOM_PHASE=modern_gl_texture_lru_managed_by_renderer");
+        }
+#endif
+
+        // Keep lazy payload parsing separate from runtime room construction.
         phaseBegin = nowNanos();
         initRoom(runner, newRoomIndex);
         runner->profRoomCreateUs = (nowNanos() - phaseBegin) / 1000ULL;
+#ifdef PLATFORM_VITA
+        snprintf(vitaRoomPhase, sizeof(vitaRoomPhase),
+                 "VITA_ROOM_PHASE=create_complete from=%d to=%d us=%llu",
+                 oldRoomIndex, newRoomIndex,
+                 (unsigned long long)runner->profRoomCreateUs);
+        VitaProbe_logLine(vitaRoomPhase);
+#endif
 
         // Fire Room Start for all instances
         phaseBegin = nowNanos();
@@ -3552,9 +4393,285 @@ void Runner_handlePendingRoomChange(Runner* runner) {
         phaseBegin = nowNanos();
         Runner_cleanupDestroyedInstances(runner);
         Runner_sweepDeadStructs(runner);
+
         runner->profRoomCleanupUs = (nowNanos() - phaseBegin) / 1000ULL;
         runner->profRoomTotalUs = (nowNanos() - roomChangeBegin) / 1000ULL;
+#ifdef PLATFORM_VITA
+        if (vitaRoomAudioHoldOwned) {
+            // Do not release destination music at the end of Room Start. The
+            // first one or two frames may still upload several atlases and
+            // drain the new stream before it can be heard. Existing music was
+            // never paused (transitionHold was assigned directly above), so it
+            // can continue until the destination is visibly ready.
+            runner->vitaAudioTransitionWaitFrames = 2;
+            VitaProbe_logLine("ROOM_AUDIO=runner_new_streams_waiting_for_presented_frame");
+        }
+#endif
     }
+}
+
+void Runner_setObjectDisabled(Runner* runner, const char* objectName, bool disabled) {
+    if (runner == nullptr || objectName == nullptr || objectName[0] == '\0') return;
+    if (disabled) {
+        shput(runner->disabledObjects, safeStrdup(objectName), 1);
+    } else if (runner->disabledObjects != nullptr) {
+        shdel(runner->disabledObjects, objectName);
+    }
+}
+
+bool Runner_enableGameTrophies(Runner* runner) {
+    if (runner == nullptr || runner->vmContext == nullptr ||
+        runner->instancesByObject == nullptr) return false;
+
+    int32_t objectIndex = -1;
+    repeat(runner->dataWin->objt.count, i) {
+        const char* name = runner->dataWin->objt.objects[i].name;
+        if (name != nullptr && strcmp(name, "obj_event_manager") == 0) {
+            objectIndex = (int32_t)i;
+            break;
+        }
+    }
+    if (objectIndex < 0) return false;
+
+    int32_t enabledVar = VM_getOrAllocateVarID(runner->vmContext, "trophies_enabled");
+    Instance** managers = runner->instancesByObject[objectIndex];
+    bool found = false;
+    repeat(arrlen(managers), i) {
+        Instance* manager = managers[i];
+        if (manager == nullptr || manager->destroyed) continue;
+        Instance_setSelfVar(manager, enabledVar, RValue_makeBool(true));
+        found = true;
+    }
+    return found;
+}
+
+void Runner_noteLegacyTrophy(Runner* runner, int32_t id, const char* reason) {
+#ifdef PLATFORM_VITA
+    if (runner == nullptr || !runner->vitaLegacyTrophyMode || id <= 0 || id >= 30) return;
+    uint32_t bit = 1U << id;
+    if ((runner->vitaLegacyTrophyMask & bit) != 0) return;
+    runner->vitaLegacyTrophyMask |= bit;
+    char detail[128];
+    snprintf(detail, sizeof(detail), "TROPHY_BRIDGE=legacy id=%d reason=%s",
+             id, reason != nullptr ? reason : "unknown");
+    VitaProbe_logLine(detail);
+#else
+    (void)runner; (void)id; (void)reason;
+#endif
+}
+
+void Runner_getGameTrophies(Runner* runner, bool unlocked[30]) {
+    if (unlocked == nullptr) return;
+    memset(unlocked, 0, sizeof(bool) * 30);
+    if (runner == nullptr || runner->vmContext == nullptr ||
+        runner->vmContext->globalScopeInstance == nullptr) return;
+
+    int32_t trophiesVar = VM_getOrAllocateVarID(runner->vmContext, "trophies");
+    RValue trophies = Instance_getSelfVar(runner->vmContext->globalScopeInstance, trophiesVar);
+    if (trophies.type == RVALUE_ARRAY && trophies.array != nullptr) {
+        repeat(GMLArray_length1D(trophies.array), i) {
+            RValue* value = GMLArray_slot(trophies.array, i);
+            if (value == nullptr || value->type == RVALUE_UNDEFINED) continue;
+            int32_t id = RValue_toInt32(*value);
+            if (id >= 0 && id < 30) unlocked[id] = true;
+        }
+    }
+
+    // DELTARUNE does not move newly earned trophies into global.trophies
+    // immediately.  The event manager first stores them in trophies_queue and
+    // normally resolves that queue during a room-end/loading event.  Waiting
+    // for that event made equipment and other mid-room trophies appear broken
+    // on Vita (and they could be lost if the process ended first).  Treat the
+    // pending queue as earned for the native/local bridge while preserving the
+    // game's original queue lifecycle inside the VM.
+    int32_t objectIndex = -1;
+    repeat(runner->dataWin->objt.count, i) {
+        const char* name = runner->dataWin->objt.objects[i].name;
+        if (name != nullptr && strcmp(name, "obj_event_manager") == 0) {
+            objectIndex = (int32_t)i;
+            break;
+        }
+    }
+    if (objectIndex >= 0 && runner->instancesByObject != nullptr) {
+        int32_t queueVar = VM_getOrAllocateVarID(runner->vmContext, "trophies_queue");
+        Instance** managers = runner->instancesByObject[objectIndex];
+        repeat(arrlen(managers), i) {
+            Instance* manager = managers[i];
+            if (manager == nullptr || manager->destroyed) continue;
+            RValue pending = Instance_getSelfVar(manager, queueVar);
+            if (pending.type != RVALUE_ARRAY || pending.array == nullptr) continue;
+            repeat(GMLArray_length1D(pending.array), j) {
+                RValue* value = GMLArray_slot(pending.array, j);
+                if (value == nullptr || value->type == RVALUE_UNDEFINED) continue;
+                int32_t id = RValue_toInt32(*value);
+                if (id >= 0 && id < 30) unlocked[id] = true;
+            }
+        }
+    }
+
+#ifdef PLATFORM_VITA
+    if (runner->vitaLegacyTrophyMode) {
+        int32_t chapterVar = VM_getOrAllocateVarID(runner->vmContext, "chapter");
+        int32_t chapter = RValue_toInt32(Instance_getSelfVar(
+            runner->vmContext->globalScopeInstance, chapterVar));
+
+        // Chapter completion: use the actual credits destination rather than a
+        // translated string or timing heuristic. Chapter 1 owns obj_credits;
+        // Chapter 2 transitions to room_ed when its credits sequence begins.
+        if (chapter == 1 && runner->vitaLegacyCreditsObjectIndex >= 0 &&
+            runner->instancesByObject != nullptr) {
+            Instance** credits = runner->instancesByObject[runner->vitaLegacyCreditsObjectIndex];
+            repeat(arrlen(credits), i) {
+                if (credits[i] != nullptr && !credits[i]->destroyed) {
+                    Runner_noteLegacyTrophy(runner, 1, "chapter1_credits");
+                    break;
+                }
+            }
+        } else if (chapter == 2 && runner->currentRoom != nullptr &&
+                   runner->currentRoom->name != nullptr &&
+                   strcmp(runner->currentRoom->name, "room_ed") == 0) {
+            Runner_noteLegacyTrophy(runner, 2, "chapter2_room_ed");
+        }
+
+        // PAIN compatibility for old translations: award on the first real HP
+        // decrease in Ch1/Ch2. Establish a short stable baseline per room so a
+        // save/room initialization cannot be mistaken for damage.
+        int32_t hpVar = VM_getOrAllocateVarID(runner->vmContext, "hp");
+        RValue hpValue = Instance_getSelfVar(runner->vmContext->globalScopeInstance, hpVar);
+        if (hpValue.type == RVALUE_ARRAY && hpValue.array != nullptr) {
+            int32_t currentHp[5] = {0,0,0,0,0};
+            int32_t hpCount = GMLArray_length1D(hpValue.array);
+            for (int32_t i = 0; i < 5 && i < hpCount; ++i) {
+                RValue* slot = GMLArray_slot(hpValue.array, i);
+                currentHp[i] = (slot == nullptr || slot->type == RVALUE_UNDEFINED) ? 0 : RValue_toInt32(*slot);
+            }
+            if (runner->vitaLegacyHpRoomIndex != runner->currentRoomIndex) {
+                runner->vitaLegacyHpRoomIndex = runner->currentRoomIndex;
+                memcpy(runner->vitaLegacyHp, currentHp, sizeof(currentHp));
+                runner->vitaLegacyHpStableFrames = 1;
+                runner->vitaLegacyHpInitialized = false;
+            } else if (!runner->vitaLegacyHpInitialized) {
+                if (memcmp(runner->vitaLegacyHp, currentHp, sizeof(currentHp)) != 0) {
+                    memcpy(runner->vitaLegacyHp, currentHp, sizeof(currentHp));
+                    runner->vitaLegacyHpStableFrames = 1;
+                } else if (++runner->vitaLegacyHpStableFrames >= 4) {
+                    runner->vitaLegacyHpInitialized = true;
+                }
+            } else {
+                bool tookDamage = false;
+                for (int32_t i = 1; i < 5 && i < hpCount; ++i) {
+                    if (currentHp[i] < runner->vitaLegacyHp[i]) {
+                        tookDamage = true;
+                        break;
+                    }
+                }
+                memcpy(runner->vitaLegacyHp, currentHp, sizeof(currentHp));
+                if (tookDamage && (chapter == 1 || chapter == 2))
+                    Runner_noteLegacyTrophy(runner, chapter == 1 ? 5 : 6, "first_hp_drop");
+            }
+        }
+
+        // STRENGTHEN 2-A: old Chapter 2 translations still increment flag[65]
+        // inside scr_levelup(). Observe that exact state change.
+        if (chapter == 2) {
+            int32_t flagVar = VM_getOrAllocateVarID(runner->vmContext, "flag");
+            RValue flags = Instance_getSelfVar(runner->vmContext->globalScopeInstance, flagVar);
+            if (flags.type == RVALUE_ARRAY && flags.array != nullptr && GMLArray_length1D(flags.array) > 65) {
+                RValue* slot = GMLArray_slot(flags.array, 65);
+                int32_t flag65 = (slot == nullptr || slot->type == RVALUE_UNDEFINED) ? 0 : RValue_toInt32(*slot);
+                if (!runner->vitaLegacyStrengthInitialized) {
+                    if (runner->vitaLegacyStrengthStableFrames == 0 || flag65 != runner->vitaLegacyStrengthFlag65) {
+                        runner->vitaLegacyStrengthFlag65 = flag65;
+                        runner->vitaLegacyStrengthStableFrames = 1;
+                    } else if (++runner->vitaLegacyStrengthStableFrames >= 4) {
+                        runner->vitaLegacyStrengthInitialized = true;
+                    }
+                } else {
+                    if (flag65 > runner->vitaLegacyStrengthFlag65)
+                        Runner_noteLegacyTrophy(runner, 19, "flag65_levelup");
+                    runner->vitaLegacyStrengthFlag65 = flag65;
+                }
+            }
+        }
+
+        for (int id = 1; id < 30; ++id)
+            if ((runner->vitaLegacyTrophyMask & (1U << id)) != 0) unlocked[id] = true;
+    }
+
+    // Equipment fallback remains sampled every 30 frames. Runner_getGameTrophies
+    // now observes the transient event-manager trophy queue every frame, but
+    // equipment needs a slower stable baseline across room/save initialization.
+    if ((runner->frameCount % 30U) == 0U) {
+        // Equipment changes can be delayed or lost by translated event-manager
+        // scripts. Track weapons and armour independently so armour never gets
+        // incorrectly reported as SWORD.
+        // Some translated data.win builds play snd_equip but do not publish the
+        // event-manager queue in the same frame. Mirror only the equipped arrays
+        // (never inventory), so acquiring an item alone cannot unlock the trophy.
+        static const char* weaponVars[] = { "charweapon", "lweapon" };
+        static const char* armorVars[] = { "chararmor1", "chararmor2" };
+        uint64_t fingerprints[2] = { 1469598103934665603ULL, 1469598103934665603ULL };
+        const char** groups[2] = { weaponVars, armorVars };
+        const uint32_t groupSizes[2] = { 2, 2 };
+        for (uint32_t group = 0; group < 2; ++group) {
+          for (uint32_t v = 0; v < groupSizes[group]; ++v) {
+            int32_t varId = VM_getOrAllocateVarID(runner->vmContext, groups[group][v]);
+            RValue equipped = Instance_getSelfVar(runner->vmContext->globalScopeInstance, varId);
+            fingerprints[group] ^= (uint64_t)(uint32_t)equipped.type;
+            fingerprints[group] *= 1099511628211ULL;
+            if (equipped.type == RVALUE_ARRAY && equipped.array != nullptr) {
+                int32_t count = GMLArray_length1D(equipped.array);
+                fingerprints[group] ^= (uint64_t)(uint32_t)count;
+                fingerprints[group] *= 1099511628211ULL;
+                repeat(count, i) {
+                    RValue* slot = GMLArray_slot(equipped.array, i);
+                    int32_t value = (slot == nullptr || slot->type == RVALUE_UNDEFINED)
+                        ? INT32_MIN : RValue_toInt32(*slot);
+                    fingerprints[group] ^= (uint64_t)(uint32_t)value;
+                    fingerprints[group] *= 1099511628211ULL;
+                }
+            } else {
+                fingerprints[group] ^= (uint64_t)(uint32_t)RValue_toInt32(equipped);
+                fingerprints[group] *= 1099511628211ULL;
+            }
+          }
+        }
+        if (!runner->vitaEquipmentFingerprintInitialized) {
+            if (runner->vitaEquipmentFingerprintStablePolls == 0 ||
+                runner->vitaWeaponFingerprint != fingerprints[0] ||
+                runner->vitaArmorFingerprint != fingerprints[1]) {
+                runner->vitaWeaponFingerprint = fingerprints[0];
+                runner->vitaArmorFingerprint = fingerprints[1];
+                runner->vitaEquipmentFingerprintStablePolls = 1;
+            } else if (++runner->vitaEquipmentFingerprintStablePolls >= 4) {
+                // Four 30-frame polls provide a stable post-load baseline while
+                // keeping genuine equipment changes responsive afterwards.
+                runner->vitaEquipmentFingerprintInitialized = true;
+                VitaProbe_logLine("TROPHY_BRIDGE=equipment_baseline_ready");
+            }
+        } else {
+            if (runner->vitaWeaponFingerprint != fingerprints[0]) {
+                runner->vitaWeaponFingerprint = fingerprints[0];
+                unlocked[26] = true;
+                VitaProbe_logLine("TROPHY_BRIDGE=weapon_change id=26");
+            }
+            if (runner->vitaArmorFingerprint != fingerprints[1]) {
+                runner->vitaArmorFingerprint = fingerprints[1];
+                int32_t chapterVar = VM_getOrAllocateVarID(runner->vmContext, "chapter");
+                int32_t chapter = RValue_toInt32(Instance_getSelfVar(
+                    runner->vmContext->globalScopeInstance, chapterVar));
+                if (chapter < 1 || chapter > 4) chapter = 2;
+                int32_t armorTrophy = 13 + chapter;
+                unlocked[armorTrophy] = true;
+                char detail[64];
+                snprintf(detail, sizeof(detail), "TROPHY_BRIDGE=armor_change id=%d chapter=%d",
+                         armorTrophy, chapter);
+                VitaProbe_logLine(detail);
+            }
+        }
+
+    }
+#endif
 }
 
 // Finds the index for the first event larger than or equal to the timeStamp
@@ -3662,6 +4779,152 @@ static void tickTimelines(Runner* runner) {
     arrsetlen(runner->instanceSnapshots, snapBase);
 }
 
+#ifdef PLATFORM_VITA
+static Instance* vitaFirstActiveObjectInstance(Runner* runner, int32_t objectIndex) {
+    if (runner == nullptr || objectIndex < 0 ||
+        objectIndex >= (int32_t)runner->dataWin->objt.count) return nullptr;
+    Instance** bucket = runner->instancesByObject[objectIndex];
+    for (int32_t i = 0; i < (int32_t)arrlen(bucket); ++i)
+        if (bucket[i] != nullptr && bucket[i]->active) return bucket[i];
+    return nullptr;
+}
+
+static int32_t vitaCountActiveObjectInstances(Runner* runner, int32_t objectIndex) {
+    if (runner == nullptr || objectIndex < 0 ||
+        objectIndex >= (int32_t)runner->dataWin->objt.count) return 0;
+    int32_t count = 0;
+    Instance** bucket = runner->instancesByObject[objectIndex];
+    for (int32_t i = 0; i < (int32_t)arrlen(bucket); ++i)
+        if (bucket[i] != nullptr && bucket[i]->active) count++;
+    return count;
+}
+
+static int32_t vitaInstanceInt(Instance* inst, int32_t varId) {
+    return inst != nullptr && varId >= 0 ?
+        RValue_toInt32(Instance_getSelfVar(inst, varId)) : 0;
+}
+
+static void vitaCityMiceSoftlockGuard(Runner* runner) {
+    static uint32_t staleWaveFrames = 0;
+    if (runner == nullptr || runner->currentRoom == nullptr || runner->currentRoom->name == nullptr ||
+        strncmp(runner->currentRoom->name, "room_dw_city_mice", 17) != 0) {
+        staleWaveFrames = 0;
+        return;
+    }
+
+    VMContext* ctx = runner->vmContext;
+    int32_t switchObj = shget(runner->assetsByName, "obj_mouseSpawnSwitch");
+    if (switchObj < 0) switchObj = shget(runner->assetsByName, "obj_mice2Switch");
+    if (switchObj < 0) switchObj = shget(runner->assetsByName, "obj_mice3_platSwitch");
+
+    int32_t mouseObj = shget(runner->assetsByName, "obj_holemouse");
+    int32_t scaredNoelleObj = shget(runner->assetsByName, "obj_noelle_scared");
+
+    int32_t generatorObj = shget(runner->assetsByName, "obj_holemouse_generator");
+    if (generatorObj < 0) generatorObj = shget(runner->assetsByName, "obj_lottery_holemouse_generator");
+
+    int32_t dialogObj = shget(runner->assetsByName, "obj_dialoguer");
+    int32_t cutsceneObj = shget(runner->assetsByName, "obj_cutscene_master");
+
+    Instance* sw = vitaFirstActiveObjectInstance(runner, switchObj);
+    Instance* generator = vitaFirstActiveObjectInstance(runner, generatorObj);
+
+    // obj_noelle_scared spawns a fresh obj_caterpillarchara on landing without setting name="noelle".
+    // Restore name and target properties so subsequent mice collisions trigger Noelle's jump.
+    int32_t caterpId = shget(runner->assetsByName, "obj_caterpillarchara");
+    if (caterpId >= 0) {
+        int32_t nameVarId = shget(ctx->varNameMap, "name");
+        int32_t targetVarId = shget(ctx->varNameMap, "target");
+        for (ptrdiff_t i = 0; i < arrlen(runner->instances); ++i) {
+            Instance* catInst = runner->instances[i];
+            if (catInst != nullptr && catInst->objectIndex == caterpId && catInst->active && !catInst->destroyed) {
+                RValue nameVal = Instance_getSelfVar(catInst, nameVarId);
+                if (nameVal.type != RVALUE_STRING || nameVal.string == nullptr || strlen(nameVal.string) == 0) {
+                    Instance_setSelfVar(catInst, nameVarId, RValue_makeString("noelle"));
+                }
+                RValue targetVal = Instance_getSelfVar(catInst, targetVarId);
+                if (targetVal.type == RVALUE_UNDEFINED || (targetVal.type == RVALUE_INT32 && targetVal.int32 <= 0)) {
+                    Instance_setSelfVar(catInst, targetVarId, RValue_makeInt32(1));
+                }
+            }
+        }
+    }
+
+    // Between waves obj_noelle_scared persists with stale 'con' (e.g. con=4 from the landing phase).
+    // When the next wave of mice arrives and a holemouse hits Noelle, the Collision handler fires
+    // alarm[0]=1 correctly, but Alarm_0 checks 'con == 0' before starting the jump — so if 'con'
+    // is left non-zero from the previous wave the jump animation is silently skipped.
+    // Fix: while mice are spawning/active and Noelle is NOT mid-jump (con != 1/2/3), reset the
+    // scared Noelle instance back to its ready state so the next collision works properly.
+    if (scaredNoelleObj >= 0) {
+        int32_t conVarId        = shget(ctx->varNameMap, "con");
+        int32_t gracePeriodVarId = shget(ctx->varNameMap, "graceperiod");
+        int32_t jumpingVarId    = shget(ctx->varNameMap, "jumping");
+        int32_t jumpyVarId      = shget(ctx->varNameMap, "jumpy");
+        int32_t jumpySpeedVarId = shget(ctx->varNameMap, "jumpyspeed");
+        int32_t timerVarId2     = shget(ctx->varNameMap, "timer");
+        int32_t mouseCount      = vitaCountActiveObjectInstances(runner, mouseObj);
+
+        for (ptrdiff_t i = 0; i < arrlen(runner->instances); ++i) {
+            Instance* noelleInst = runner->instances[i];
+            if (noelleInst == nullptr || noelleInst->objectIndex != scaredNoelleObj ||
+                !noelleInst->active || noelleInst->destroyed) continue;
+
+            int32_t con = conVarId >= 0 ? RValue_toInt32(Instance_getSelfVar(noelleInst, conVarId)) : 0;
+            // con==1: running to mouse, con==2: jumping up, con==3: falling down — do NOT interrupt.
+            // con==0: idle/waiting, con==4+: post-landing states — safe to reset between waves.
+            bool midJump = (con >= 1 && con <= 3);
+            if (!midJump && mouseCount > 0) {
+                // Reset to idle so the Collision handler and Alarm_0 work on the next hit.
+                if (conVarId >= 0)         Instance_setSelfVar(noelleInst, conVarId,        RValue_makeInt32(0));
+                if (gracePeriodVarId >= 0) Instance_setSelfVar(noelleInst, gracePeriodVarId, RValue_makeInt32(0));
+                if (jumpingVarId >= 0)     Instance_setSelfVar(noelleInst, jumpingVarId,     RValue_makeInt32(0));
+                if (jumpyVarId >= 0)       Instance_setSelfVar(noelleInst, jumpyVarId,       RValue_makeInt32(0));
+                if (jumpySpeedVarId >= 0)  Instance_setSelfVar(noelleInst, jumpySpeedVarId,  RValue_makeInt32(0));
+                if (timerVarId2 >= 0)      Instance_setSelfVar(noelleInst, timerVarId2,      RValue_makeInt32(0));
+            }
+        }
+    }
+
+    int32_t timerId = shget(ctx->varNameMap, "timer");
+    int32_t mouseCreateId = shget(ctx->varNameMap, "mousecreate");
+    int32_t genTimerId = shget(ctx->varNameMap, "gentimer");
+    int32_t interactId = shget(ctx->varNameMap, "interact");
+
+    int32_t mouseCreate = generator != nullptr ? vitaInstanceInt(generator, mouseCreateId) : 0;
+    int32_t genTimer = generator != nullptr ? vitaInstanceInt(generator, genTimerId) : 0;
+    int32_t scaredNoelleCount = vitaCountActiveObjectInstances(runner, scaredNoelleObj);
+    int32_t dialogs = vitaCountActiveObjectInstances(runner, dialogObj);
+    int32_t cutscenes = vitaCountActiveObjectInstances(runner, cutsceneObj);
+    int32_t interact = vitaInstanceInt(ctx->globalScopeInstance, interactId);
+
+    // Watchdog ONLY triggers if Noelle is not currently performing her scared jump animation
+    // and controls have been locked with no active dialogs/cutscenes for more than 180 frames (3 seconds).
+    bool staleLock = interact == 1 && mouseCreate == 0 && genTimer <= 0 &&
+                     dialogs == 0 && cutscenes == 0 && scaredNoelleCount == 0;
+
+    staleWaveFrames = staleLock ? staleWaveFrames + 1U : 0U;
+
+    if (staleWaveFrames >= 180U) {
+        int32_t removed = 0;
+        Instance* staleMouse = nullptr;
+        while ((staleMouse = vitaFirstActiveObjectInstance(runner, mouseObj)) != nullptr) {
+            Runner_destroyInstance(runner, staleMouse, true);
+            removed++;
+        }
+        Instance_setSelfVar(ctx->globalScopeInstance, interactId, RValue_makeInt32(0));
+        if (sw != nullptr) Instance_setSelfVar(sw, timerId, RValue_makeInt32(61));
+        char line[128];
+        snprintf(line, sizeof(line),
+                 "MICE_SOFTLOCK_GUARD=released_stale_lock room=%s removed=%d",
+                 runner->currentRoom->name, removed);
+        extern void VitaProbe_logLine(const char* text);
+        VitaProbe_logLine(line);
+        staleWaveFrames = 0;
+    }
+}
+#endif
+
 void Runner_step(Runner* runner) {
     uint64_t stepStartNanos = nowNanos();
     runner->profStepEventsUs = 0;
@@ -3728,10 +4991,18 @@ void Runner_step(Runner* runner) {
 
     // Advance GMS2 layer parallax (hspeed/vspeed per frame)
     size_t layerCount = arrlenu(runner->runtimeLayers);
+    uint64_t tileTimeUs = (nowNanos() - runner->gameStartTime) / 1000;
     repeat(layerCount, i) {
         RuntimeLayer* rl = &runner->runtimeLayers[i];
         rl->xOffset += rl->hSpeed;
         rl->yOffset += rl->vSpeed;
+        for (size_t j = 0; j < arrlenu(rl->elements); ++j) {
+            RuntimeLayerElement* el = &rl->elements[j];
+            if (el->type != RuntimeLayerElementType_Tilemap || el->tilemapData == nullptr) continue;
+            int32_t bg = el->tilemapData->backgroundIndex;
+            if (bg >= 0 && (uint32_t)bg < runner->dataWin->bgnd.count)
+                el->tilemapFrame = Runner_tileAnimationFrame(&runner->dataWin->bgnd.backgrounds[bg], tileTimeUs, el->tilemapFrame);
+        }
     }
 
     uint64_t t1 = nowNanos();
@@ -3759,15 +5030,25 @@ void Runner_step(Runner* runner) {
             int32_t codeId = ResolvedEventTable_lookup(table, objIdx, alarmSlot, &ownerObjectIndex);
             if (0 > codeId) continue;
 
-            // Snapshot the bucket before dispatch: alarm code can call instance_change/instance_destroy/instance_create which mutate the live bucket. Iterating the snapshot also ensures newly-created instances do not fire alarms in this same phase.
+            // Snapshot only responders whose selected alarm is active.  The
+            // previous implementation copied every instance in every object
+            // bucket for every alarm slot, even when none of those instances
+            // had that alarm enabled. Particle-heavy rooms such as
+            // room_dw_mansion_fire_paintings consequently spent ~400 ms in
+            // alarm processing. Keep the mutation-safe snapshot semantics,
+            // but compact it to actual responders first.
             int32_t snapshotBase = (int32_t) arrlen(runner->instanceSnapshots);
-            arrsetlen(runner->instanceSnapshots, snapshotBase + bucketCount);
-            memcpy(&runner->instanceSnapshots[snapshotBase], bucket, (size_t) bucketCount * sizeof(Instance*));
-
+            uint16_t bit = (uint16_t) (1u << alarmIdx);
             repeat(bucketCount, i) {
+                Instance* inst = bucket[i];
+                if (inst->active && (inst->activeAlarmMask & bit) != 0)
+                    arrput(runner->instanceSnapshots, inst);
+            }
+            int32_t responderCount = (int32_t)arrlen(runner->instanceSnapshots) - snapshotBase;
+
+            repeat(responderCount, i) {
                 Instance* inst = runner->instanceSnapshots[snapshotBase + i];
                 if (!inst->active) continue;
-                uint16_t bit = (uint16_t) (1u << alarmIdx);
                 if ((inst->activeAlarmMask & bit) == 0) continue;
 
 #ifdef ENABLE_VM_TRACING
@@ -3981,6 +5262,10 @@ void Runner_step(Runner* runner) {
     uint64_t t7 = nowNanos();
     runner->profStepEventsUs += (t7 - t6) / 1000;
 
+#ifdef PLATFORM_VITA
+    vitaCityMiceSoftlockGuard(runner);
+#endif
+
     uint64_t totalStepUs = (nowNanos() - stepStartNanos) / 1000;
     uint64_t trackedUs = runner->profStepEventsUs + runner->profStepAlarmsUs + runner->profStepSpatialUs + runner->profStepCollisionUs;
     if (totalStepUs > trackedUs) runner->profStepOtherUs = totalStepUs - trackedUs;
@@ -4073,6 +5358,30 @@ void Runner_beginFrame(
     int32_t framebufferH
 ) {
     Renderer* renderer = runner->renderer;
+#ifdef PLATFORM_VITA
+    // Emit only on scene-state changes, not every Draw/particle. Distinguishes
+    // duplicated HUD instances from a multi-view/surface composition problem.
+    if (g_vitaActiveChapter == 5 && runner->frameCount % 120 == 0) {
+        static int lastRoom = -1, lastBars = -1, lastViews = -1, lastPetals = -1;
+        int bars = 0, petals = 0, views = 0;
+        for (size_t i = 0; i < arrlenu(runner->instances); ++i) {
+            Instance* inst = runner->instances[i];
+            if (!inst->active || inst->destroyed || inst->objectIndex < 0) continue;
+            const char* name = runner->dataWin->objt.objects[inst->objectIndex].name;
+            if (!name) continue;
+            if (strcmp(name, "obj_tensionbar") == 0) ++bars;
+            if (inst->visible && (strcmp(name, "obj_spin_petal") == 0 || strcmp(name, "obj_petal_rain") == 0)) petals = 1;
+        }
+        for (int i = 0; i < MAX_VIEWS; ++i) if (runner->views[i].enabled) views |= 1 << i;
+        if (lastRoom != runner->currentRoomIndex || lastBars != bars || lastViews != views || lastPetals != petals) {
+            char line[256];
+            snprintf(line, sizeof(line), "CH5_SCENE_STATE room=%s tp_instances=%d view_mask=%d petals_visible=%d",
+                     runner->currentRoom ? runner->currentRoom->name : "<none>", bars, views, petals);
+            VitaProbe_logLine(line);
+            lastRoom = runner->currentRoomIndex; lastBars = bars; lastViews = views; lastPetals = petals;
+        }
+    }
+#endif
 
     // The application surface (FBO) is sized to defaultWindowWidth x defaultWindowHeight.
     // It is a bit hard to understand, but here's how it works:

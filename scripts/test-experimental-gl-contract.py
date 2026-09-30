@@ -6,6 +6,8 @@ SETTINGS_H = (ROOT / "src/vita-probe/source/vita_settings.h").read_text(encoding
 SETTINGS_C = (ROOT / "src/vita-probe/source/vita_settings.c").read_text(encoding="utf-8")
 MAIN_C = (ROOT / "src/vita-probe/source/playable_main.c").read_text(encoding="utf-8")
 RUNNER_C = (ROOT / "src/butterscotch/src/runner.c").read_text(encoding="utf-8")
+LEGACY_H = (ROOT / "src/butterscotch/src/gl_legacy/gl_legacy_renderer.h").read_text(encoding="utf-8")
+LEGACY_C = (ROOT / "src/butterscotch/src/gl_legacy/gl_legacy_renderer.c").read_text(encoding="utf-8")
 
 
 def require(text: str, source: str, message: str) -> None:
@@ -52,5 +54,27 @@ require("extern bool g_vitaExperimentalGlActive;", RUNNER_C,
         "runner-side shader policy must consume the dedicated mode flag")
 require("g_vitaExperimentalGlActive && g_vitaShadersEnabled", RUNNER_C,
         "experimental shader work must require both mode and Shaders On")
+
+# Legacy's compact bridge is the only programmable path used by the new mode.
+# Its policy and diagnostics must stay explicit and bounded.
+require("GLLegacyRenderer_experimentalShadersEnabled", LEGACY_H,
+        "Legacy renderer must expose one Experimental shader policy boundary")
+require("g_vitaExperimentalGlActive && g_vitaShadersEnabled", LEGACY_C,
+        "Experimental shader policy must combine renderer mode and toggle")
+for shader_name in ("shd_channel_change", "shd_prophecy", "shd_fountaineffect",
+                    "shd_shadowblend", "shd_shoujo"):
+    require(f'"{shader_name}"', LEGACY_C,
+            f"audited shader missing from compact allow-list: {shader_name}")
+assert '"shd_video_yuv"' not in LEGACY_C, "native multi-plane video shader must remain excluded"
+require("gl->shaderAttempted[shaderIndex] = true;", LEGACY_C,
+        "shader attempts must be cached to prevent per-frame retries")
+require("EXPERIMENTAL_SHADER=%s", LEGACY_C,
+        "experimental diagnostics must use the documented outcome field")
+require('vitaLogExperimentalShader(gl, "compiled"', LEGACY_C,
+        "successful experimental compilation must be logged")
+require('vitaLogExperimentalShader(gl, "fallback"', LEGACY_C,
+        "unsupported or failed shaders must log a bounded fallback")
+require('vitaLogExperimentalShader(gl, "active"', LEGACY_C,
+        "experimental activation must be logged on state transition")
 
 print("Experimental-GL settings contract: PASS")

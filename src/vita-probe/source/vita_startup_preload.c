@@ -1,4 +1,5 @@
 #include "vita_startup_preload.h"
+#include "vita_io_profile.h"
 
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
@@ -18,8 +19,15 @@ static bool startupParseJob(void* userData, void** result,
     StartupParseJob* job = userData;
     if (job == NULL || result == NULL || resultBytes == NULL) return false;
     job->parseBeginUs = sceKernelGetProcessTimeWide();
+    VitaIoProfileSample io = VitaIoProfile_begin(
+        "chapter0_parse", "data_win", 0, 0, true);
     DataWin* parsed = DataWin_parse(job->path, job->options);
     job->parseEndUs = sceKernelGetProcessTimeWide();
+    VitaIoProfile_end(&io, parsed != NULL,
+                      job->parseEndUs - job->parseBeginUs, 0);
+    char ioLine[256];
+    VitaIoProfile_format(&io, ioLine, sizeof(ioLine));
+    fprintf(stderr, "%s\n", ioLine);
     *result = parsed;
     *resultBytes = parsed != NULL ? sizeof(*parsed) : 0;
     return parsed != NULL;
@@ -64,9 +72,12 @@ bool VitaStartupPreload_begin(VitaStartupPreload* preload,
 
 DataWin* VitaStartupPreload_join(VitaStartupPreload* preload,
                                  const char* expectedPath) {
-    if (preload == NULL || !preload->stats.submitted ||
-        expectedPath == NULL || strcmp(preload->path, expectedPath) != 0)
+    if (preload == NULL || !preload->stats.submitted || expectedPath == NULL)
         return NULL;
+    bool pathMatches = strcmp(preload->path, expectedPath) == 0;
+    if (!pathMatches)
+        VitaBackgroundWork_cancelGeneration(preload->work,
+                                            preload->generation);
 
     preload->stats.joinBeginUs = sceKernelGetProcessTimeWide();
     VitaBackgroundJob completed;
@@ -85,7 +96,7 @@ DataWin* VitaStartupPreload_join(VitaStartupPreload* preload,
         preload->stats.parseEndUs = parse->parseEndUs;
     }
     DataWin* result = NULL;
-    if (completed.state == VITA_BACKGROUND_JOB_READY) {
+    if (pathMatches && completed.state == VITA_BACKGROUND_JOB_READY) {
         result = completed.result;
         completed.result = NULL;
         preload->stats.adopted = true;

@@ -1,4 +1,5 @@
 #include "vita_room_prefetch.h"
+#include "vita_io_profile.h"
 
 #include <psp2/kernel/threadmgr.h>
 #include <stdio.h>
@@ -28,7 +29,13 @@ static bool roomPayloadJob(void* userData, void** result,
     RoomPayloadJob* job = userData;
     DataWinRoomPayload* payload = NULL;
     if (job == NULL || result == NULL || resultBytes == NULL) return false;
+    VitaIoProfileSample io = VitaIoProfile_begin(
+        "room_payload", "data_win", 0, 0, true);
     bool ok = DataWin_stageRoomPayload(job->dataWin, job->roomIndex, &payload);
+    VitaIoProfile_end(&io, ok, 0, 0);
+    char ioLine[256];
+    VitaIoProfile_format(&io, ioLine, sizeof(ioLine));
+    fprintf(stderr, "%s room=%d\n", ioLine, job->roomIndex);
     *result = payload;
     *resultBytes = ok ? sizeof(*payload) : 0;
     return ok;

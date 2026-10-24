@@ -12,7 +12,7 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 # Vita application configuration
 set(VITA_APP_NAME "Deltarune")
-set(VITA_TITLEID "DLTVITA01")
+set(VITA_TITLEID "DELT00001")
 set(VITA_VPKNAME "Deltarune")
 set(VITA_VERSION "00.04")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")

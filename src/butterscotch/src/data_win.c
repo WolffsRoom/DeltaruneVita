@@ -237,6 +237,7 @@ void GamePath_computeInternal(GamePath* path) {
 // Get interpolated position at t in [0,1] (yyPath.js:362-409)
 PathPositionResult GamePath_getPosition(GamePath* path, float t) {
     PathPositionResult result = {0};
+    result.speed = 100.0f;
 
     if (path->internalPointCount == 0) return result;
 
@@ -2544,29 +2545,74 @@ static void parseTXTR(BinaryReader* reader, DataWin* dw, size_t chunkEnd, bool l
     }
 }
 
+bool DataWin_stageTexture(const DataWin* dw, uint32_t textureId,
+                          size_t maxBytes, DataWinStagedTexture** stagedOut) {
+    if (stagedOut == nullptr) return false;
+    *stagedOut = nullptr;
+    if (dw == nullptr || textureId >= dw->txtr.count ||
+        dw->lazyLoadFilePath == nullptr) return false;
+    const Texture* texture = &dw->txtr.textures[textureId];
+    if (texture->blobOffset == 0 || texture->blobSize == 0 ||
+        texture->blobData != nullptr || texture->blobSize > maxBytes)
+        return false;
+
+    DataWinStagedTexture* staged = safeCalloc(1, sizeof(*staged));
+    staged->textureId = textureId;
+    staged->blobOffset = texture->blobOffset;
+    staged->blobSize = texture->blobSize;
+    staged->bytes = safeMalloc(texture->blobSize);
+    FILE* f = fopen(dw->lazyLoadFilePath, "rb");
+    if (f == nullptr) {
+        DataWin_freeStagedTexture(staged);
+        return false;
+    }
+    bool ok = fseek(f, texture->blobOffset, SEEK_SET) == 0 &&
+              fread(staged->bytes, 1, texture->blobSize, f) ==
+                  texture->blobSize;
+    fclose(f);
+    if (!ok) {
+        DataWin_freeStagedTexture(staged);
+        return false;
+    }
+    *stagedOut = staged;
+    return true;
+}
+
+bool DataWin_adoptStagedTexture(DataWin* dw, uint32_t textureId,
+                                DataWinStagedTexture* staged) {
+    if (dw == nullptr || staged == nullptr || textureId >= dw->txtr.count ||
+        textureId != staged->textureId) return false;
+    Texture* texture = &dw->txtr.textures[textureId];
+    if (texture->blobData != nullptr || texture->blobOffset != staged->blobOffset ||
+        texture->blobSize != staged->blobSize || staged->bytes == nullptr)
+        return false;
+    texture->blobData = staged->bytes;
+    texture->mapped = false;
+    staged->bytes = nullptr;
+    return true;
+}
+
+void DataWin_freeStagedTexture(DataWinStagedTexture* staged) {
+    if (staged == nullptr) return;
+    free(staged->bytes);
+    free(staged);
+}
+
 void DataWin_loadTxtrIfNeeded(DataWin* dw, uint32_t textureId) {
-    Txtr* t = &dw->txtr;
-    Texture* tex = &t->textures[textureId];
-
-    if (tex->blobOffset == 0 || tex->blobSize == 0) return;
-    if (tex->blobData != nullptr) return;
-
-    if (!dw->lazyLoadFile) {
-        fprintf(stderr, "loadTxtrIfNeeded: called without a lazy load file.\n");
+    if (dw == nullptr || textureId >= dw->txtr.count) return;
+    Texture* texture = &dw->txtr.textures[textureId];
+    if (texture->blobOffset == 0 || texture->blobSize == 0 ||
+        texture->blobData != nullptr) return;
+    DataWinStagedTexture* staged = nullptr;
+    if (!DataWin_stageTexture(dw, textureId, texture->blobSize, &staged)) {
+        fprintf(stderr, "loadTxtrIfNeeded: couldn't stage texture %u (%u bytes).\n",
+                textureId, texture->blobSize);
         return;
     }
-
-    tex->blobData = (uint8_t *)safeMalloc(tex->blobSize);
-
-    memset(tex->blobData, 0, tex->blobSize);
-    long old_seek = ftell(dw->lazyLoadFile);
-    fseek(dw->lazyLoadFile, tex->blobOffset, SEEK_SET);
-    size_t read = fread(tex->blobData, 1, tex->blobSize, dw->lazyLoadFile);
-    fseek(dw->lazyLoadFile, old_seek, SEEK_SET);
-
-    if (read != tex->blobSize) {
-        fprintf(stderr, "loadTxtrIfNeeded: couldn't read %u bytes to load a texture.\n", tex->blobSize);
-    }
+    if (!DataWin_adoptStagedTexture(dw, textureId, staged))
+        fprintf(stderr, "loadTxtrIfNeeded: couldn't adopt texture %u.\n",
+                textureId);
+    DataWin_freeStagedTexture(staged);
 }
 
 static void parseAUDO(BinaryReader* reader, DataWin* dw, bool lazyLoadAudio) {
@@ -3152,15 +3198,88 @@ void DataWin_freeRoomPayload(Room* room) {
     room->payloadLoaded = false;
 }
 
+bool DataWin_stageRoomPayload(const DataWin* dw, int32_t roomIndex,
+                              DataWinRoomPayload** payloadOut) {
+    if (payloadOut == nullptr) return false;
+    *payloadOut = nullptr;
+    if (dw == nullptr || roomIndex < 0 ||
+        dw->room.count <= (uint32_t)roomIndex ||
+        dw->lazyLoadFilePath == nullptr) return false;
+
+    const Room* source = &dw->room.rooms[roomIndex];
+    if (source->payloadLoaded) return false;
+    DataWinRoomPayload* payload = safeCalloc(1, sizeof(*payload));
+    payload->roomIndex = roomIndex;
+    payload->room = *source;
+    payload->room.backgrounds = nullptr;
+    payload->room.views = nullptr;
+    payload->room.gameObjectCount = 0;
+    payload->room.gameObjects = nullptr;
+    payload->room.tileCount = 0;
+    payload->room.tiles = nullptr;
+    payload->room.layerCount = 0;
+    payload->room.layers = nullptr;
+    payload->room.payloadLoaded = false;
+
+    FILE* f = fopen(dw->lazyLoadFilePath, "rb");
+    if (f == nullptr) {
+        free(payload);
+        return false;
+    }
+    BinaryReader lazyReader = BinaryReader_create(f, dw->fileSize);
+    readRoomPayload(&lazyReader, (DataWin*)dw, &payload->room);
+    fclose(f);
+    *payloadOut = payload;
+    return true;
+}
+
+bool DataWin_adoptRoomPayload(DataWin* dw, int32_t roomIndex,
+                              DataWinRoomPayload* payload) {
+    if (dw == nullptr || payload == nullptr || roomIndex < 0 ||
+        dw->room.count <= (uint32_t)roomIndex ||
+        payload->roomIndex != roomIndex) return false;
+    Room* room = &dw->room.rooms[roomIndex];
+    if (room->payloadLoaded || !payload->room.payloadLoaded) return false;
+
+    room->backgrounds = payload->room.backgrounds;
+    room->views = payload->room.views;
+    room->gameObjectCount = payload->room.gameObjectCount;
+    room->gameObjects = payload->room.gameObjects;
+    room->tileCount = payload->room.tileCount;
+    room->tiles = payload->room.tiles;
+    room->layerCount = payload->room.layerCount;
+    room->layers = payload->room.layers;
+    room->payloadLoaded = true;
+
+    payload->room.backgrounds = nullptr;
+    payload->room.views = nullptr;
+    payload->room.gameObjects = nullptr;
+    payload->room.gameObjectCount = 0;
+    payload->room.tiles = nullptr;
+    payload->room.tileCount = 0;
+    payload->room.layers = nullptr;
+    payload->room.layerCount = 0;
+    payload->room.payloadLoaded = false;
+    return true;
+}
+
+void DataWin_freeStagedRoomPayload(DataWinRoomPayload* payload) {
+    if (payload == nullptr) return;
+    if (payload->room.payloadLoaded)
+        DataWin_freeRoomPayload(&payload->room);
+    free(payload);
+}
+
 void DataWin_loadRoomPayload(DataWin* dw, int32_t roomIndex) {
     require(roomIndex >= 0 && dw->room.count > (uint32_t) roomIndex);
     Room* room = &dw->room.rooms[roomIndex];
     if (room->payloadLoaded) return;
-    requireMessage(dw->lazyLoadFile != nullptr, "DataWin_loadRoomPayload called without an open lazy-load FILE*");
-
-    FILE* f = dw->lazyLoadFile;
-    BinaryReader lazyReader = BinaryReader_create(f, dw->fileSize);
-    readRoomPayload(&lazyReader, dw, room);
+    DataWinRoomPayload* payload = nullptr;
+    requireMessage(DataWin_stageRoomPayload(dw, roomIndex, &payload),
+                   "DataWin_loadRoomPayload could not stage room payload");
+    requireMessage(DataWin_adoptRoomPayload(dw, roomIndex, payload),
+                   "DataWin_loadRoomPayload could not adopt room payload");
+    DataWin_freeStagedRoomPayload(payload);
 }
 
 // ===[ Dynamic Sprite Slot Allocation ]===

@@ -792,6 +792,9 @@ typedef struct {
     uint16_t argumentsCount;
     uint32_t bytecodeAbsoluteOffset;
     uint32_t offset;
+    uint8_t gardenLightNativeMatch; // runtime-only: 0 unchecked, 1 no, 2 exact verified bytecode
+    int32_t selfGetterVar; // runtime-only: 0 unchecked, -1 fallback, VARI index + 1
+    uint8_t tvDrawCullMatch;
 } CodeEntry;
 
 typedef struct {
@@ -943,12 +946,34 @@ struct DataWin {
     bool lazyLoadAudio; // ditto, but with AUDO entries
 };
 
+typedef struct DataWinRoomPayload {
+    int32_t roomIndex;
+    Room room;
+} DataWinRoomPayload;
+
+typedef struct DataWinStagedTexture {
+    uint32_t textureId;
+    uint32_t blobOffset;
+    uint32_t blobSize;
+    uint8_t* bytes;
+} DataWinStagedTexture;
+
 DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options);
 void DataWin_free(DataWin* dataWin);
 void DataWin_printDebugSummary(DataWin* dataWin);
 // Lazy room payload management. DataWin_loadRoomPayload is a no-op when the payload is already loaded.
 void DataWin_loadRoomPayload(DataWin* dw, int32_t roomIndex);
 void DataWin_freeRoomPayload(Room* room);
+bool DataWin_stageRoomPayload(const DataWin* dw, int32_t roomIndex,
+                              DataWinRoomPayload** payloadOut);
+bool DataWin_adoptRoomPayload(DataWin* dw, int32_t roomIndex,
+                              DataWinRoomPayload* payload);
+void DataWin_freeStagedRoomPayload(DataWinRoomPayload* payload);
+bool DataWin_stageTexture(const DataWin* dw, uint32_t textureId,
+                          size_t maxBytes, DataWinStagedTexture** stagedOut);
+bool DataWin_adoptStagedTexture(DataWin* dw, uint32_t textureId,
+                                DataWinStagedTexture* staged);
+void DataWin_freeStagedTexture(DataWinStagedTexture* staged);
 // Finds a reusable dynamic Sprite slot (textureCount == 0) at or above `startIndex`, or appends a new one.
 uint32_t DataWin_allocSpriteSlot(DataWin* dw, uint32_t startIndex);
 // Compares the detected effective GMS version (not the raw GEN8 version) against a lower bound.

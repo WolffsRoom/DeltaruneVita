@@ -10,8 +10,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define VITA_LAUNCHER_COUNTDOWN_US 3000000ULL
-
 typedef enum LaunchResult {
     LAUNCH_RESULT_READY = 0,
     LAUNCH_RESULT_GXM_FALLBACK = 1,
@@ -56,16 +54,29 @@ int main(void) {
     bool countdownHeld = (pad.buttons & SCE_CTRL_LTRIGGER) != 0 &&
                          (pad.buttons & SCE_CTRL_RTRIGGER) != 0;
     uint32_t previousButtons = pad.buttons;
-    uint64_t countdownStart = sceKernelGetProcessTimeWide();
     char status[128] = {0};
 
+    /* Backend selection belongs to Game Settings.  Normal launches jump
+     * straight to the saved backend, so the first-load movie is not delayed
+     * by a second boot menu.  Holding L+R remains an emergency selector. */
+    if (!countdownHeld) {
+        VitaBackend resolved;
+        LaunchResult result = resolveBackend(selected, &resolved);
+        if (result != LAUNCH_RESULT_MISSING_VITAGL) {
+            selected = resolved;
+            VitaBackendSelection_save(VITA_BACKEND_PREFERENCE_PATH, selected);
+            int error = launchBackend(selected);
+            snprintf(status, sizeof(status), "Falha ao iniciar %s: 0x%08X",
+                     VitaBackendSelection_name(selected), (unsigned int)error);
+        } else {
+            snprintf(status, sizeof(status),
+                     "Falha ao iniciar: vitagl.bin ausente. Reinstale o VPK.");
+        }
+        countdownHeld = true;
+    }
+
     for (;;) {
-        uint64_t now = sceKernelGetProcessTimeWide();
-        uint64_t elapsed = now - countdownStart;
-        uint32_t remaining = elapsed >= VITA_LAUNCHER_COUNTDOWN_US ? 0U :
-            (uint32_t)((VITA_LAUNCHER_COUNTDOWN_US - elapsed + 999999ULL) /
-                       1000000ULL);
-        LauncherUi_draw(selected, remaining, countdownHeld,
+        LauncherUi_draw(selected, 0U, countdownHeld,
                         previousGxmFailure, status);
 
         sceCtrlPeekBufferPositive(0, &pad, 1);
@@ -84,9 +95,6 @@ int main(void) {
             confirm = true;
         }
         if ((pressed & SCE_CTRL_CROSS) != 0) confirm = true;
-        if (!countdownHeld && elapsed >= VITA_LAUNCHER_COUNTDOWN_US)
-            confirm = true;
-
         if (confirm) {
             VitaBackend resolved;
             LaunchResult result = resolveBackend(selected, &resolved);

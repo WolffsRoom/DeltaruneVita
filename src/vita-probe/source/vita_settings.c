@@ -18,6 +18,7 @@
 #include "vita_borders.h"
 #include "text_utils.h"
 #include "gl/gl_renderer.h"
+#include "vita_backend_selection.h"
 
 extern bool g_vitaModernGlActive;
 static Renderer* activeSettingsRenderer = NULL;
@@ -167,6 +168,22 @@ static void drawCenteredUpperText(Renderer* r, const char* text, float x, float 
                                   float scale, uint32_t color) {
     char upper[512];
     settingsUppercase(text, upper, sizeof(upper));
+    drawCenteredText(r, upper, x, y, scale, color);
+}
+
+static void drawCenteredUpperTextFitted(Renderer* r, const char* text, float x, float y,
+                                        float scale, float maxWidth, uint32_t color) {
+    char upper[512];
+    settingsUppercase(text, upper, sizeof(upper));
+    int32_t fontIndex = r->drawFont;
+    if (fontIndex >= 0 && r->dataWin != NULL &&
+        (uint32_t)fontIndex < r->dataWin->font.count) {
+        Font* font = &r->dataWin->font.fonts[fontIndex];
+        if (font->present) {
+            float width = TextUtils_measureLineWidth(font, upper, (int)strlen(upper)) * scale;
+            if (width > maxWidth && width > 0.0f) scale *= maxWidth / width;
+        }
+    }
     drawCenteredText(r, upper, x, y, scale, color);
 }
 
@@ -356,6 +373,7 @@ static void resetDefaults(VitaSettings* s) {
     s->pvrEnabled = true;
     s->bc3Enabled = true;
     s->rendererMode = VITA_RENDERER_AUTOMATIC;
+    s->graphicsBackend = VITA_BACKEND_VITAGL;
     s->modernGlEnabled = true;
     s->shadersEnabled = false;
     g_vitaShadersEnabled = 0;
@@ -367,6 +385,7 @@ static void resetDefaults(VitaSettings* s) {
     s->pendingPvrEnabled = false;
     s->pendingBc3Enabled = false;
     s->pendingRendererMode = VITA_RENDERER_AUTOMATIC;
+    s->pendingGraphicsBackend = VITA_BACKEND_VITAGL;
     s->pendingShadersEnabled = false;
     s->modIndex = 0;
     s->pendingModIndex = 0;
@@ -528,6 +547,9 @@ static void saveSettings(const VitaSettings* s) {
         sceIoWrite(fd, text, length);
         sceIoClose(fd);
     }
+    VitaBackendSelection_save(VITA_BACKEND_PREFERENCE_PATH,
+        s->graphicsBackend == VITA_BACKEND_GXM ? VITA_BACKEND_GXM :
+                                                VITA_BACKEND_VITAGL);
     syncNativeGameLanguage(modName);
 }
 
@@ -788,6 +810,8 @@ void VitaSettings_load(VitaSettings* s) {
     s->pendingPvrEnabled = s->pvrEnabled;
     s->pendingBc3Enabled = s->bc3Enabled;
     s->pendingRendererMode = s->rendererMode;
+    s->graphicsBackend = VitaBackendSelection_load(VITA_BACKEND_PREFERENCE_PATH);
+    s->pendingGraphicsBackend = s->graphicsBackend;
     s->pendingShadersEnabled = s->shadersEnabled;
     s->pendingModIndex = s->modIndex;
     s->pendingTextureFormatProfile = s->textureFormatProfile;
@@ -1015,6 +1039,7 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
                     s->pvrEnabled = s->pendingPvrEnabled;
                     s->bc3Enabled = s->pendingBc3Enabled;
                     s->rendererMode = s->pendingRendererMode;
+                    s->graphicsBackend = s->pendingGraphicsBackend;
                     s->shadersEnabled = s->pendingShadersEnabled;
                     g_vitaShadersEnabled = s->shadersEnabled ? 1 : 0;
                     s->modIndex = s->pendingModIndex;
@@ -1036,6 +1061,7 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
                     s->pendingPvrEnabled = s->pvrEnabled;
             s->pendingBc3Enabled = s->bc3Enabled;
             s->pendingRendererMode = s->rendererMode;
+            s->pendingGraphicsBackend = s->graphicsBackend;
             s->pendingShadersEnabled = s->shadersEnabled;
             s->pendingModIndex = s->modIndex;
             s->pendingTextureFormatProfile = s->textureFormatProfile;
@@ -1075,11 +1101,11 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
 
     if (s->graphicsMenuOpen) {
         if (pressed & SCE_CTRL_UP) {
-            s->graphicsMenuSelected = (s->graphicsMenuSelected + 4) % 5;
+            s->graphicsMenuSelected = (s->graphicsMenuSelected + 5) % 6;
             playSettingSound(s, 0);
         }
         if (pressed & SCE_CTRL_DOWN) {
-            s->graphicsMenuSelected = (s->graphicsMenuSelected + 1) % 5;
+            s->graphicsMenuSelected = (s->graphicsMenuSelected + 1) % 6;
             playSettingSound(s, 0);
         }
         bool left = (pressed & SCE_CTRL_LEFT) != 0;
@@ -1113,6 +1139,11 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             playSettingSound(s, 0);
             return requestRestart;
         } else if (s->graphicsMenuSelected == 4 && (left || right)) {
+            s->pendingGraphicsBackend =
+                s->pendingGraphicsBackend == VITA_BACKEND_GXM ?
+                VITA_BACKEND_VITAGL : VITA_BACKEND_GXM;
+            playSettingSound(s, 0);
+        } else if (s->graphicsMenuSelected == 5 && (left || right)) {
             if (right) {
                 s->pendingRendererMode = (s->pendingRendererMode + 1) % 4;
             } else {
@@ -1127,7 +1158,9 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
                 playSettingSound(s, 1);
                 return requestRestart;
             }
-            const bool rendererChanged = s->pendingRendererMode != s->rendererMode;
+            const bool rendererChanged =
+                s->pendingRendererMode != s->rendererMode ||
+                s->pendingGraphicsBackend != s->graphicsBackend;
             const bool textureResidencyChanged =
                 s->pendingPvrEnabled != s->pvrEnabled ||
                 s->pendingBc3Enabled != s->bc3Enabled ||
@@ -1155,6 +1188,7 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             s->pendingPvrEnabled = s->pvrEnabled;
             s->pendingBc3Enabled = s->bc3Enabled;
             s->pendingRendererMode = s->rendererMode;
+            s->pendingGraphicsBackend = s->graphicsBackend;
             s->pendingShadersEnabled = s->shadersEnabled;
             s->pendingTextureFormatProfile = s->textureFormatProfile;
             s->pendingFpsTargetMode = s->fpsTargetMode;
@@ -1749,30 +1783,34 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
             (s->pendingRendererMode == VITA_RENDERER_LEGACY ?
                 settingsText(s, "Legacy GL (safe)", "Legacy GL (seguro)", "Legacy GL (seguro)") :
                 settingsText(s, "Automatic", "Automático", "Automático")));
+        const char* graphicsApi = s->pendingGraphicsBackend == VITA_BACKEND_GXM ?
+            "Native-GXM" : "VitaGL";
         const char* screenFilter = s->pendingScreenFilterMode == 1 ? "Scanlines" :
             (s->pendingScreenFilterMode == 2 ? "Sharp Bilinear" :
             (s->pendingScreenFilterMode == 3 ? "Dithering Blending" :
             (s->pendingScreenFilterMode == 4 ? "VHS" :
              settingsText(s, "None", "Nenhum", "Ninguno"))));
-        const char* values[5] = {pvr, sync, screenFilter, shaderMode, backend};
+        const char* values[6] = {pvr, sync, screenFilter, shaderMode,
+                                 graphicsApi, backend};
         drawCenteredText(r, settingsText(s, "GRAPHICS SETTINGS", "CONFIGURAÇÕES GRÁFICAS", "AJUSTES GRÁFICOS"), 480, 112, 1.4f, 0x00FFFF);
-        for (int i = 0; i < 5; ++i) {
-            float y = 154.0f + i * 43.0f;
+        for (int i = 0; i < 6; ++i) {
+            float y = 148.0f + i * 37.0f;
             uint32_t color = i == s->graphicsMenuSelected ? 0x00FFFF : 0xFFFFFF;
             if (i == s->graphicsMenuSelected) drawBundledControl("hearth1", 208.0f, y + 12.0f, 22.0f, 1.0f);
             const char* subLabel = i == 0 ? settingsText(s, "Texture Compression", "Compressão de textura", "Compresión de textura") :
                                    i == 1 ? settingsText(s, "FPS Limit", "Limite de FPS", "Límite de FPS") :
                                    i == 2 ? settingsText(s, "Screen Filter", "Filtro de tela", "Filtro de pantalla") :
                                    i == 3 ? settingsText(s, "Shaders", "Shaders", "Shaders") :
+                                   i == 4 ? settingsText(s, "Graphics API", "API Gráfica", "API Gráfica") :
                                             settingsText(s, "Renderer", "Renderizador", "Renderizador");
             if (strcmp(s->activeLanguage, "Italian") == 0) {
-                subLabel = i == 0 ? "Compressione Texture" : i == 1 ? "Limite FPS" : i == 2 ? "Filtro Schermo" : i == 3 ? "Shader" : "Renderizzatore";
+                subLabel = i == 0 ? "Compressione Texture" : i == 1 ? "Limite FPS" : i == 2 ? "Filtro Schermo" : i == 3 ? "Shader" : i == 4 ? "API Grafica" : "Renderizzatore";
             } else if (strcmp(s->activeLanguage, "Turkish") == 0) {
-                subLabel = i == 0 ? "Doku Sıkıştırma" : i == 1 ? "FPS Sınırı" : i == 2 ? "Ekran Filtresi" : i == 3 ? "Shaderlar" : "Oluşturucu";
+                subLabel = i == 0 ? "Doku Sıkıştırma" : i == 1 ? "FPS Sınırı" : i == 2 ? "Ekran Filtresi" : i == 3 ? "Shaderlar" : i == 4 ? "Grafik API" : "Oluşturucu";
             } else if (strcmp(s->activeLanguage, "German") == 0) {
-                subLabel = i == 0 ? "Texturkompression" : i == 1 ? "FPS-Limit" : i == 2 ? "Bildfilter" : i == 3 ? "Shader" : "Renderer";
+                subLabel = i == 0 ? "Texturkompression" : i == 1 ? "FPS-Limit" : i == 2 ? "Bildfilter" : i == 3 ? "Shader" : i == 4 ? "Grafik-API" : "Renderer";
             } else if (strcmp(s->activeLanguage, "Russian") == 0 || strcmp(s->activeLanguage, "Russkiy") == 0) {
-                subLabel = i == 0 ? "Szhatie tekstur" : i == 1 ? "Limit FPS" : i == 2 ? "Fil'tr ekrana" : i == 3 ? "Sheydery" : "Renderer";
+                subLabel = i == 0 ? "Szhatie tekstur" : i == 1 ? "Limit FPS" : i == 2 ? "Fil'tr ekrana" : i == 3 ? "Sheydery" : i == 4 ? "Graphics API" : "Renderer";
             }
             drawLabel(r, subLabel, 230, y, color, 1.55f);
             drawRightText(r, values[i], 750, y, 1.45f, color);
@@ -1798,11 +1836,38 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
             desc = s->pendingShadersEnabled ?
                 settingsText(s, "Uses the Vita shader compatibility layer for supported effects.", "Usa a camada de compatibilidade de shaders do Vita nos efeitos suportados.", "Usa la capa de compatibilidad de shaders de Vita en los efectos compatibles.") :
                 settingsText(s, "Uses the fixed pipeline and skips GameMaker shader effects.", "Usa o pipeline fixo e ignora efeitos de shader do GameMaker.", "Usa el pipeline fijo e ignora efectos de shader de GameMaker.");
+        } else if (s->graphicsMenuSelected == 4) {
+            desc = s->pendingGraphicsBackend == VITA_BACKEND_GXM ?
+                settingsText(s, "Restarts with the experimental direct GXM backend.",
+                    "Reinicia usando o backend GXM direto experimental.",
+                    "Reinicia usando el backend GXM directo experimental.") :
+                settingsText(s, "Restarts with the stable VitaGL backend.",
+                    "Reinicia usando o backend VitaGL estável.",
+                    "Reinicia usando el backend VitaGL estable.");
         } else {
-            desc = settingsText(s, "Legacy GL is recommended on PS Vita.", "Legacy GL é recomendado no PS Vita.", "Legacy GL es recomendado en PS Vita.");
+            if (s->pendingRendererMode == VITA_RENDERER_AUTOMATIC)
+                desc = settingsText(s,
+                    "Selects the safest renderer for the current chapter.",
+                    "Seleciona o renderizador mais seguro para o capítulo atual.",
+                    "Selecciona el renderizador más seguro para el capítulo actual.");
+            else if (s->pendingRendererMode == VITA_RENDERER_LEGACY)
+                desc = settingsText(s,
+                    "Uses the stable fixed-function renderer.",
+                    "Usa o renderizador estável de funções fixas.",
+                    "Usa el renderizador estable de funciones fijas.");
+            else if (s->pendingRendererMode == VITA_RENDERER_MODERN)
+                desc = settingsText(s,
+                    "Uses the complete programmable shader renderer.",
+                    "Usa o renderizador completo de shaders programáveis.",
+                    "Usa el renderizador completo de shaders programables.");
+            else if (s->pendingRendererMode == VITA_RENDERER_EXPERIMENTAL)
+                desc = settingsText(s,
+                    "Combines the stable renderer with adapted shaders.",
+                    "Combina o renderizador estável com shaders adaptados.",
+                    "Combina el renderizador estable con shaders adaptados.");
         }
         if (!s->confirmShaderChange)
-            drawCenteredUpperText(r, desc, 480, 390, 0.98f, 0xB8B8B8);
+            drawCenteredUpperTextFitted(r, desc, 480, 390, 0.98f, 690.0f, 0xB8B8B8);
         if (s->confirmShaderChange) {
             r->vtable->drawRectangle(r, 176, 174, 784, 370, 0x000000, 0.98f, false);
             drawDialogBorder(r, 176, 174, 784, 370);

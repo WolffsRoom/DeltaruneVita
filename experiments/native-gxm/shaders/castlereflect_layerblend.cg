@@ -1,0 +1,35 @@
+uniform float4 frag[11];
+uniform float4 gameParams;
+float2 shaderUV(float2 fpos) {
+    float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);
+    return mul(pm,float3(fpos,1.0)).xy/frag[9].xy;
+}
+float shaderMask(float2 fpos) {
+    float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);
+    float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;
+    float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);
+    return mask.x*mask.y;
+}
+// Chapter5 shd_castlereflect_layerblend: tiles + objects + mask.
+uniform float4 gameVectors[4]; // objectUV, tileUV, maskUV, bounds
+float4 main(uniform sampler2D tex:TEXUNIT0,
+    uniform sampler2D u_object_surface:TEXUNIT1,
+    uniform sampler2D u_mask_surface:TEXUNIT2,
+    float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {
+    float2 baseUV=shaderUV(fpos);
+    float4 objectUV=gameVectors[0],tileUV=gameVectors[1];
+    float4 maskUV=gameVectors[2],bounds=gameVectors[3];
+    float4 tiles=tex2D(tex,tileUV.xy+baseUV*tileUV.zw);
+    float2 norm=fpos/float2(640.0,480.0);
+    float4 obj=tex2D(u_object_surface,objectUV.xy+objectUV.zw*norm);
+    float4 maskSample=tex2D(u_mask_surface,
+        maskUV.xy+maskUV.zw*(norm*bounds.zw+bounds.xy));
+    float3 color=tiles.rgb*(obj.a<=0.00000001?1.0:0.0)+obj.rgb;
+    float a=(tiles.a*(obj.a<=0.00000001?1.0:0.0)+obj.a);
+    float coverage=(1.0-maskSample.a);
+    // Both source colors are straight GLSL. NanoVG's blend contract
+    // requires premultiplied output, unlike the original GameMaker target.
+    float opacity=saturate(a*coverage*frag[6].a);
+    float3 tint=frag[6].rgb/max(frag[6].a,0.00001);
+    return float4(color*tint*opacity,opacity)*shaderMask(fpos);
+}

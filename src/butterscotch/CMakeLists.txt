@@ -260,7 +260,17 @@ if(PLATFORM STREQUAL "desktop")
             set(BACKEND_LIBRARIES glfw3 opengl32 gdi32 winmm)
         elseif(MSVC)
             target_compile_definitions(butterscotch PRIVATE WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
-            find_package(glfw3 CONFIG REQUIRED)
+            include(FetchContent)
+            set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+            set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+            set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+            set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+            FetchContent_Declare(
+                glfw
+                GIT_REPOSITORY https://github.com/glfw/glfw.git
+                GIT_TAG 3.3.8
+            )
+            FetchContent_MakeAvailable(glfw)
             set(BACKEND_LIBRARIES glfw opengl32 gdi32 winmm)
         else()
             find_package(PkgConfig REQUIRED)

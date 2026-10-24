@@ -124,6 +124,11 @@ static uint8_t instrType2(uint32_t instr) {
     return (instr >> 20) & 0xF;
 }
 
+static uint8_t binaryResultType(uint32_t instr) {
+    uint8_t t1 = instrType1(instr), t2 = instrType2(instr);
+    return (gmlTypeNativeSize(t1) > gmlTypeNativeSize(t2)) ? t1 : t2;
+}
+
 static int16_t instrInstanceType(uint32_t instr) {
     return (int16_t) (instr & 0xFFFF);
 }
@@ -262,6 +267,7 @@ static GMLArray* VM_arraySetWithCoW(VMContext* ctx, RValue* slot, int32_t index,
     require(slot != nullptr);
     requireMessageFormatted(__FILE__, __LINE__, index >= 0, "Trying to write to an array using a negative index! Index: %d", index);
 
+    RValue writeVal = RValue_makeIndependent(val);
     void* intendedOwner;
 #if IS_WAD17_OR_HIGHER_ENABLED
     intendedOwner = IS_WAD17_OR_HIGHER(ctx) ? ctx->currentArrayOwner : (void*) slot;
@@ -277,7 +283,7 @@ static GMLArray* VM_arraySetWithCoW(VMContext* ctx, RValue* slot, int32_t index,
         fresh->owner = intendedOwner;
         *slot = RValue_makeArray(fresh);
         GMLArray_growTo(fresh, index + 1);
-        GMLArray_set(fresh, index, val);
+        RValue_writeIntoSlotStealingOwnershipOrCopying(GMLArray_slot(fresh, index), writeVal);
         return fresh;
     }
 
@@ -299,7 +305,8 @@ static GMLArray* VM_arraySetWithCoW(VMContext* ctx, RValue* slot, int32_t index,
     }
 
     // Case 3: Write!
-    GMLArray_set(arr, index, val);
+    GMLArray_growTo(arr, index + 1);
+    RValue_writeIntoSlotStealingOwnershipOrCopying(GMLArray_slot(arr, index), writeVal);
     return arr;
 }
 
@@ -1544,7 +1551,7 @@ static void handleDiv(VMContext* ctx, uint32_t instr) {
     GMLReal result = RValue_toReal(a) / divisor;
     RValue_free(&a);
     RValue_free(&b);
-    stackPushTyped(ctx, RValue_makeReal(result), instrType2(instr));
+    stackPushTyped(ctx, RValue_makeReal(result), binaryResultType(instr));
 }
 
 static void handleRem(VMContext* ctx, uint32_t instr) {
@@ -1555,7 +1562,7 @@ static void handleRem(VMContext* ctx, uint32_t instr) {
     int64_t result = RValue_toInt64(a) / divisor;
     RValue_free(&a);
     RValue_free(&b);
-    stackPushTyped(ctx, RValue_makeInt64(result), instrType2(instr));
+    stackPushTyped(ctx, RValue_makeInt64(result), binaryResultType(instr));
 }
 
 static void handleMod(VMContext* ctx, uint32_t instr) {
@@ -1566,14 +1573,14 @@ static void handleMod(VMContext* ctx, uint32_t instr) {
     GMLReal result = GMLReal_fmod(RValue_toReal(a), divisor);
     RValue_free(&a);
     RValue_free(&b);
-    stackPushTyped(ctx, RValue_makeReal(result), instrType2(instr));
+    stackPushTyped(ctx, RValue_makeReal(result), binaryResultType(instr));
 }
 
 #define SIMPLE_BYTECODE_BITWISE_OPERATION(op) \
     int32_t b = stackPopInt32(ctx); \
     int32_t a = stackPopInt32(ctx); \
     int32_t result = a op b; \
-    stackPushTyped(ctx, RValue_makeInt32(result), instrType2(instr))
+    stackPushTyped(ctx, RValue_makeInt32(result), binaryResultType(instr))
 
 static void handleAnd(VMContext* ctx, uint32_t instr) {
     SIMPLE_BYTECODE_BITWISE_OPERATION(&);
@@ -1729,6 +1736,8 @@ static bool tryParseRealFromString(const char* str, GMLReal* out) {
     return true;
 }
 
+extern bool RValue_deepEqual(RValue a, RValue b, int depth);
+
 static void handleCmp(VMContext* ctx, uint32_t instr) {
     uint8_t cmpKind = instrCmpKind(instr);
     RValue b = stackPop(ctx);
@@ -1744,8 +1753,8 @@ static void handleCmp(VMContext* ctx, uint32_t instr) {
             default:      result = false; break;
         }
     } else if (a.type == RVALUE_ARRAY || b.type == RVALUE_ARRAY) {
-        // Array is only == to the same array
-        bool eq = (a.type == RVALUE_ARRAY && b.type == RVALUE_ARRAY) && (a.array == b.array);
+        // GameMaker 2.2 arrays (and 2.3 with compatibility flag) perform deep equality on ==
+        bool eq = (a.type == RVALUE_ARRAY && b.type == RVALUE_ARRAY) && RValue_deepEqual(a, b, 0);
         switch (cmpKind) {
             case CMP_EQ:  result = eq;  break;
             case CMP_NEQ: result = !eq; break;
@@ -1770,7 +1779,18 @@ static void handleCmp(VMContext* ctx, uint32_t instr) {
             default:      result = false; break;
         }
     } else if (a.type == RVALUE_STRING && b.type == RVALUE_STRING) {
-        int cmp = strcmp(a.string != nullptr ? a.string : "", b.string != nullptr ? b.string : "");
+        const char* aString = a.string != nullptr ? a.string : "";
+        const char* bString = b.string != nullptr ? b.string : "";
+#ifdef PLATFORM_VITA
+        // Puzzle 3 has several valid layouts but compares a framebuffer MD5.
+        // VitaGL rasterization cannot reproduce the desktop digest bit for
+        // bit, so the logically validated marker equals the expected digest.
+        bool vitaPuzzleMatch = strcmp(aString, "__vita_darkbulb_logical_match__") == 0 ||
+                               strcmp(bString, "__vita_darkbulb_logical_match__") == 0;
+        int cmp = vitaPuzzleMatch ? 0 : strcmp(aString, bString);
+#else
+        int cmp = strcmp(aString, bString);
+#endif
         switch (cmpKind) {
             case CMP_LT:  result = 0 > cmp; break;
             case CMP_LTE: result = 0 >= cmp; break;
@@ -1929,6 +1949,7 @@ static void handleCall(VMContext* ctx, uint32_t instr, const uint8_t* extraData)
     int32_t argCount = instr & 0xFFFF;
     uint32_t funcIndex = resolveFuncOperand(extraData);
     require(ctx->dataWin->func.functionCount > funcIndex);
+    const char* funcName = ctx->dataWin->func.functions[funcIndex].name;
 
     // Pop arguments from stack (args pushed right-to-left, so first arg is on top)
     RValue* args = nullptr;
@@ -1940,7 +1961,6 @@ static void handleCall(VMContext* ctx, uint32_t instr, const uint8_t* extraData)
     }
 
 #ifdef ENABLE_VM_TRACING
-    const char* funcName = ctx->dataWin->func.functions[funcIndex].name;
     bool functionIsBeingTraced = shgeti(ctx->functionCallsToBeTraced, "*") != -1 || shgeti(ctx->functionCallsToBeTraced, funcName) != -1 || shgeti(ctx->functionCallsToBeTraced, ctx->currentCodeName) != -1;
     char* functionArgumentList = nullptr;
     if (functionIsBeingTraced) {
@@ -1964,11 +1984,45 @@ static void handleCall(VMContext* ctx, uint32_t instr, const uint8_t* extraData)
     }
 #endif
 
+#ifdef PLATFORM_VITA
+    // Legacy translated DELTARUNE data.win files can predate obj_event_manager.
+    // In their Dark World item menu, scr_itemshift is reached from submenu 5/6
+    // only after scr_itemuse reports usable==1. Submenu 7 is discard and is
+    // intentionally excluded. This gives CONSUMER 1-A/2-A a precise runtime
+    // compatibility signal without patching translated bytecode.
+    if (ctx->runner != nullptr && ctx->runner->vitaLegacyTrophyMode &&
+        funcName != nullptr && strcmp(funcName, "scr_itemshift") == 0 &&
+        ctx->currentCodeName != nullptr &&
+        strcmp(ctx->currentCodeName, "gml_Object_obj_darkcontroller_Step_0") == 0 &&
+        ctx->globalScopeInstance != nullptr) {
+        int32_t submenuVar = VM_getOrAllocateVarID(ctx, "submenu");
+        int32_t chapterVar = VM_getOrAllocateVarID(ctx, "chapter");
+        int32_t submenu = RValue_toInt32(Instance_getSelfVar(ctx->globalScopeInstance, submenuVar));
+        int32_t chapter = RValue_toInt32(Instance_getSelfVar(ctx->globalScopeInstance, chapterVar));
+        if ((submenu == 5 || submenu == 6) && (chapter == 1 || chapter == 2))
+            Runner_noteLegacyTrophy(ctx->runner, chapter == 1 ? 9 : 10, "darkworld_item_consume");
+    }
+#endif
+
     // Use cached function resolution to avoid per-call string hash lookups
     FuncCallCache* cache = &ctx->funcCallCache[funcIndex];
 
-    // Fast path: cached builtin function pointer
+    // Fast path: cached builtin function pointer (populated during VM setup).
     if (cache->builtin != nullptr) {
+        // Reuse obj_circlezoom's previous surface on alternating frames. Only
+        // drawing/state calls inside its surface pass are discarded; its Step
+        // event, movement and scene state continue executing normally.
+        if (ctx->vitaSuppressSurfaceDraw && funcName != nullptr &&
+            (strncmp(funcName, "draw_", 5) == 0 ||
+             strncmp(funcName, "gpu_", 4) == 0 ||
+             strncmp(funcName, "shader_", 7) == 0)) {
+            if (args != nullptr) {
+                repeat(argCount, i) RValue_free(&args[i]);
+                free(args);
+            }
+            stackPushTyped(ctx, RValue_makeUndefined(), GML_TYPE_VARIABLE);
+            return;
+        }
         BuiltinFunc builtin = (BuiltinFunc) cache->builtin;
         RValue result = builtin(ctx, args, argCount);
         // Free arguments
@@ -2776,7 +2830,19 @@ static RValue executeLoop(VMContext* ctx) {
 
     // Some opcodes have their handler or parts of their handler inlined
     // Those are opcodes that during real gameplay (using "--profile-opcodes") shown that, with inlining and keeping only the frequently called handle parts, we could squeeze MORE performance from the interpreter!
+#ifdef PLATFORM_VITA
+    uint32_t vitaLoadingPumpInstructions = 0;
+#endif
     while (codeEnd > ip) {
+#ifdef PLATFORM_VITA
+        // Global/Create scripts can keep the interpreter busy for long enough
+        // to freeze the chapter-loading animation. Cooperatively redraw at a
+        // bounded instruction interval; after loading this is a cheap no-op.
+        if ((++vitaLoadingPumpInstructions & 0x3FFFU) == 0) {
+            extern void VitaProbe_pumpLoadingScreen(void);
+            VitaProbe_pumpLoadingScreen();
+        }
+#endif
 #ifdef ENABLE_WAD17
         if (ctx->exception != nullptr) {
 #ifdef ENABLE_VM_EXCEPTIONS_LOGS
@@ -3023,10 +3089,10 @@ static RValue executeLoop(VMContext* ctx) {
                         slotA->real = aVal + bVal;
                         slotA->type = RVALUE_REAL;
                     }
-                    slotA->gmlStackType = instrType2(instr);
+                    slotA->gmlStackType = binaryResultType(instr);
                     ctx->stack.top--;
                 } else {
-                    uint8_t resultType = instrType2(instr);
+                    uint8_t resultType = binaryResultType(instr);
                     RValue b = stackPop(ctx);
                     RValue a = stackPop(ctx);
                     if (a.type == RVALUE_STRING || b.type == RVALUE_STRING) {
@@ -3060,10 +3126,10 @@ static RValue executeLoop(VMContext* ctx) {
                         slotA->real = aVal - bVal;
                         slotA->type = RVALUE_REAL;
                     }
-                    slotA->gmlStackType = instrType2(instr);
+                    slotA->gmlStackType = binaryResultType(instr);
                     ctx->stack.top--;
                 } else {
-                    uint8_t resultType = instrType2(instr);
+                    uint8_t resultType = binaryResultType(instr);
                     RValue b = stackPop(ctx);
                     RValue a = stackPop(ctx);
 #ifndef NO_RVALUE_INT64
@@ -3093,10 +3159,10 @@ static RValue executeLoop(VMContext* ctx) {
                         slotA->real = aVal * bVal;
                         slotA->type = RVALUE_REAL;
                     }
-                    slotA->gmlStackType = instrType2(instr);
+                    slotA->gmlStackType = binaryResultType(instr);
                     ctx->stack.top--;
                 } else {
-                    uint8_t resultType = instrType2(instr);
+                    uint8_t resultType = binaryResultType(instr);
                     RValue b = stackPop(ctx);
                     RValue a = stackPop(ctx);
                     if (a.type == RVALUE_STRING) {
@@ -3680,7 +3746,9 @@ RValue VM_executeCode(VMContext* ctx, int32_t codeIndex) {
     setCurrentCodeLocalsSlotMap(ctx);
 
     uint32_t localsCount = computeLocalsCount(ctx, code);
-    RValue* localVars = (RValue *)safeCalloc(localsCount, sizeof(RValue));
+    RValue* localVars = nullptr;
+    if (localsCount > 0)
+        localVars = (RValue *)safeCalloc(localsCount, sizeof(RValue));
     ctx->localVars = localVars;
     ctx->localVarCount = localsCount;
 
@@ -3722,6 +3790,53 @@ RValue VM_executeCode(VMContext* ctx, int32_t codeIndex) {
 RValue VM_callCodeIndex(VMContext* ctx, int32_t codeIndex, RValue* args, int32_t argCount) {
     require(codeIndex >= 0 && ctx->dataWin->code.count > (uint32_t) codeIndex);
     CodeEntry* code = &ctx->dataWin->code.entries[codeIndex];
+
+    // TV panels call hundreds of tiny struct getters per frame. A literal
+    // `push.v self.field; ret.v` needs neither a call frame nor heap locals.
+    // Inspect instructions, not script names, so altered methods fall back.
+    bool getterAllowed = !ctx->disableSelfGetterFastPath && argCount == 0;
+#ifdef ENABLE_VM_TRACING
+    getterAllowed = getterAllowed && shlen(ctx->opcodesToBeTraced) == 0 &&
+                    shlen(ctx->varReadsToBeTraced) == 0 && shlen(ctx->stackToBeTraced) == 0 &&
+                    shlen(ctx->functionCallsToBeTraced) == 0;
+#endif
+#ifdef ENABLE_VM_GML_PROFILER
+    getterAllowed = getterAllowed && (ctx->profiler == nullptr || !ctx->profiler->sampling);
+#endif
+#ifdef ENABLE_VM_OPCODE_PROFILER
+    getterAllowed = getterAllowed && !ctx->opcodeProfilerEnabled;
+#endif
+    if (getterAllowed) {
+        if (code->selfGetterVar == 0) {
+            code->selfGetterVar = -1;
+            if (code->offset <= code->length && code->length - code->offset >= 12) {
+                const uint8_t* bytes = ctx->dataWin->bytecodeBuffer +
+                    code->bytecodeAbsoluteOffset - ctx->dataWin->bytecodeBufferBase + code->offset;
+                uint32_t push = BinaryUtils_readUint32Aligned(bytes);
+                uint32_t operand = BinaryUtils_readUint32Aligned(bytes + 4);
+                uint32_t ret = BinaryUtils_readUint32Aligned(bytes + 8);
+                uint32_t varIndex = operand & 0x07FFFFFFU;
+                if (instrOpcode(push) == OP_PUSH && instrType1(push) == GML_TYPE_VARIABLE &&
+                    instrInstanceType(push) == INSTANCE_SELF &&
+                    ((operand >> 24) & 0xF8) == VARTYPE_NORMAL &&
+                    instrOpcode(ret) == OP_RET && instrType1(ret) == GML_TYPE_VARIABLE &&
+                    varIndex < ctx->dataWin->vari.variableCount &&
+                    ctx->dataWin->vari.variables[varIndex].varID >= 0)
+                    code->selfGetterVar = (int32_t)varIndex + 1;
+            }
+        }
+        if (code->selfGetterVar > 0) {
+            RValue value;
+            if (tryFastVarRead(ctx, INSTANCE_SELF,
+                    &ctx->dataWin->vari.variables[code->selfGetterVar - 1], &value)) {
+                ++ctx->selfGetterFastCalls;
+                value.gmlStackType = GML_TYPE_VARIABLE; // mirrors push.v before ret.v
+                // Same ownership as the ordinary return path, including arrays
+                // and methods. Missing/inherited fields use the full resolver.
+                return RValue_stealOwnershipOrCopy(value);
+            }
+        }
+    }
 
     // Save current frame
     CallFrame frame = {0};

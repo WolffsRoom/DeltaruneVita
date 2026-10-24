@@ -14,6 +14,7 @@ Profiler* Profiler_create(void) {
     p->entries = nullptr;
     p->frameDepth = 0;
     p->instructionCount = 0;
+    p->sampling = true;
     return p;
 }
 
@@ -35,7 +36,7 @@ void Profiler_setEnabled(Profiler** slot, bool enabled) {
 }
 
 void Profiler_enter(Profiler* p, const char* name) {
-    if (p == nullptr) return;
+    if (p == nullptr || !p->sampling) return;
     if (p->frameDepth >= PROFILER_MAX_DEPTH) return;
     ProfilerFrame* f = &p->frameStack[p->frameDepth];
     f->startNanos = nowNanos();
@@ -47,7 +48,7 @@ void Profiler_enter(Profiler* p, const char* name) {
 }
 
 void Profiler_exit(Profiler* p) {
-    if (p == nullptr) return;
+    if (p == nullptr || !p->sampling) return;
     if (0 >= p->frameDepth) return;
     p->frameDepth--;
     ProfilerFrame* f = &p->frameStack[p->frameDepth];
@@ -104,6 +105,15 @@ void Profiler_reset(Profiler* p) {
     if (p == nullptr) return;
     shfree(p->entries);
     p->entries = nullptr;
+}
+
+void Profiler_setSampling(Profiler* p, bool sampling) {
+    if (p == nullptr || p->sampling == sampling) return;
+    p->sampling = sampling;
+    // Sampling changes only between VM frames. Reset defensive state so an
+    // interrupted capture can never leave a stale call stack behind.
+    p->frameDepth = 0;
+    p->instructionCount = 0;
 }
 
 char* Profiler_createReport(const Profiler* p, int topN, int framesInWindow) {

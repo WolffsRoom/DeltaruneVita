@@ -1,0 +1,45 @@
+// GXM shader research — Chapter5 SHDR[55] shd_shoujo (NOT LINKED).
+// Translated from the game's original GL-ES shader for native SceGxm/Cg.
+// Stage bindings: 0=gm_BaseTexture, 1=texGradient, 2=texBubble, 3=texStars.
+// Uniforms: time, appSurfWidth, appSurfHeight.
+// Cg stage bindings/viewport orientation need on-device validation.
+uniform float4 frag[11];
+uniform float time;
+uniform float appSurfWidth;
+uniform float appSurfHeight;
+float4 main(
+    uniform sampler2D gm_BaseTexture : TEXUNIT0,
+    uniform sampler2D texGradient : TEXUNIT1,
+    uniform sampler2D texBubble : TEXUNIT2,
+    uniform sampler2D texStars : TEXUNIT3,
+    float2 ftcoord : TEXCOORD0,
+    float2 fpos : TEXCOORD1
+): COLOR {
+    float3x3 paintMat = float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);
+    float3x3 scissorMat = float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);
+    float2 sc = abs(mul(scissorMat,float3(fpos,1.0)).xy)-frag[8].xy;
+    float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);
+    float2 uv=mul(paintMat,float3(fpos,1.0)).xy/frag[9].xy;
+    float4 colour=tex2D(gm_BaseTexture,uv);
+    float w=max(appSurfWidth,1.0);
+    float coordX=fpos.x;
+    float coordY=max(appSurfHeight,1.0)-fpos.y;
+    float gradPos=frac(coordX/w+time);
+    float2 gradCoord=float2(gradPos,0.0);
+    colour.rgb=tex2D(texGradient,gradCoord).rgb;
+    float2 oneStep=float2(0.5/128.0,0.0);
+    float mixpercent=frac(coordX/(w/128.0));
+    colour.rgb=lerp(colour.rgb,tex2D(texGradient,gradCoord+oneStep).rgb,mixpercent);
+    colour.rgb+=abs(-1.0+frac(coordX/w)*2.0)*0.5;
+    float2 bublCoord=float2(frac(coordX/w*4.0+time*1.25),
+                            frac(coordY/w*4.0+time*1.20));
+    colour.rgb+=tex2D(texBubble,bublCoord).rgb;
+    bublCoord=float2(frac(coordX/w*4.0+time*2.65),
+                     frac(coordY/w*4.0+time*2.60));
+    colour.rgb+=tex2D(texBubble,bublCoord).rgb*0.15;
+    float2 starsCoord=float2(frac(coordX/w*4.0+time*1.95),
+                             frac(coordY/w*4.0+time*1.90));
+    colour.rgb+=tex2D(texStars,starsCoord).rgb;
+    float alpha=colour.a;
+    return float4(colour.rgb*alpha,alpha)*frag[6]*mask.x*mask.y;
+}

@@ -223,8 +223,18 @@ struct VMContext {
     int32_t creatorVarID;
     uint32_t funcCallCacheCount;
     bool traceEventInherited;
+    bool disableSelfGetterFastPath; // differential tests; false in normal play
+    uint64_t selfGetterFastCalls;
+    bool disableTVPanelCull;
+    uint64_t tvPanelCulledDraws;
+    uint64_t tvPanelCandidates, tvPanelSignatureMisses, tvPanelShaderSkips;
+    int32_t tvFrozenSpritePlusOne; // 0 unchecked, -1 missing, sprite index + 1
     bool hasFixedSeed;
     bool actionRelativeFlag; // D&D action relative flag (set by action_set_relative)
+    // Runner-owned cadence for expensive off-screen effects.
+    bool vitaSuppressSurfaceDraw;
+    struct Instance* boardScreenOwner;
+    bool boardScreenReuse;
 
     // V17+ extended BREAK opcode state
     bool* staticInitialized; // Per-code-entry flag for isstaticok/setstatic (allocated in VM_create)

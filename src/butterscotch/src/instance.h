@@ -6,6 +6,7 @@
 #include "rvalue.h"
 #include "gml_array.h"
 #include "int_rvalue_hashmap.h"
+#include "board_screen_cache.h"
 
 #define GML_ALARM_COUNT 12
 
@@ -42,6 +43,7 @@ struct Instance {
     int32_t maskIndex; // collision mask sprite override (-1 = use spriteIndex)
     int32_t* collisionCells; // Used to track where we are
     uint32_t lastCollisionQueryId;
+    BoardScreenCache boardScreenCache;
 
     // Per-instance self variable storage (sparse open-addressed hashmap, keyed by varID).
     IntRValueHashMap selfVars;

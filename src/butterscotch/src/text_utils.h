@@ -124,6 +124,21 @@ static inline float TextUtils_lineStride(Font* font) {
     return font->emSize;
 }
 
+// Sample font atlas rectangles from texel centres. Using the exact rectangle
+// edges lets VitaGL's nearest sampler resolve the final fragment to the next
+// atlas row (or omit it), which removes a horizontal pixel line from small
+// battle-dialogue glyphs. The destination quad keeps its original dimensions;
+// only the source coordinates move half a texel inward.
+static inline float TextUtils_glyphUvStart(int32_t pixel, int32_t textureSize) {
+    return textureSize > 0 ? ((float)pixel + 0.5f) / (float)textureSize : 0.0f;
+}
+
+static inline float TextUtils_glyphUvEnd(int32_t pixel, int32_t extent, int32_t textureSize) {
+    if (textureSize <= 0) return 0.0f;
+    if (extent <= 1) return ((float)pixel + 0.5f) / (float)textureSize;
+    return ((float)pixel + (float)extent - 0.5f) / (float)textureSize;
+}
+
 static inline float TextUtils_measureLineWidth(Font* font, const char* line, int32_t len) {
     float width = 0;
     int32_t pos = 0;
@@ -212,6 +227,30 @@ static inline PreprocessedText TextUtils_preprocessGmlText(const char* text) {
 
 // Preprocess GML text ONLY if the runner is not GameMaker: Studio 2
 static inline PreprocessedText TextUtils_preprocessGmlTextIfNeeded(Runner* runner, const char* text) {
+    if (text != nullptr &&
+        (strstr(text, "{PORT_VERSION}") != nullptr ||
+         strstr(text, "v0.68 - Wolff") != nullptr ||
+         strstr(text, "DELTARUNE v0.68 (Internal Build)") != nullptr ||
+         strstr(text, "DELTARUNE VITA v0.69") != nullptr ||
+         strstr(text, "DELTARUNE VITA v0.70") != nullptr ||
+         strstr(text, "DELTARUNE VITA v0.71") != nullptr ||
+         strstr(text, "DELTARUNE VITA") != nullptr ||
+         strncmp(text, "DELTARUNE v", 11) == 0 ||
+         strncmp(text, "DELTARUNE VITA", 14) == 0)) {
+        PreprocessedText ret = {0};
+        char version[96] = "DELTARUNE VITA v0.71";
+        FILE* versionFile = fopen("app0:assets/build_version.txt", "rb");
+        if (versionFile != nullptr) {
+            size_t count = fread(version, 1, sizeof(version) - 1, versionFile);
+            fclose(versionFile);
+            version[count] = '\0';
+            while (count > 0 && (version[count - 1] == '\r' || version[count - 1] == '\n' || version[count - 1] == ' '))
+                version[--count] = '\0';
+        }
+        ret.text = safeStrdup(version);
+        ret.owning = true;
+        return ret;
+    }
     if (DataWin_isVersionAtLeast(runner->dataWin, 2, 0, 0, 0)) {
         PreprocessedText ret = {0};
         ret.text = text;

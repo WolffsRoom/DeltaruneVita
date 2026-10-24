@@ -41,6 +41,11 @@ int _newlib_heap_size_user = 256 * 1024 * 1024;
 #include "vita_borders.h"
 #include "vita_video.h"
 #include "vita_media_rules.h"
+#include "vita_thread_policy.h"
+#include "vita_frame_pacer.h"
+#include "vita_background_work.h"
+#include "vita_startup_preload.h"
+#include "vita_room_prefetch.h"
 #include "vita_trophies.h"
 #include "vita_network.h"
 #include "vm.h"
@@ -48,6 +53,10 @@ int _newlib_heap_size_user = 256 * 1024 * 1024;
 #include "vm_builtins.h"
 #include "profiler.h"
 #include "stb_image.h"
+
+// Exported by the VitaGL fork used by the Vita build, but not declared by the
+// public vitaGL.h shipped with the SDK.
+extern void vglForceGarbageCollection(void);
 
 #define DATA_ROOT "ux0:data/deltarune/deltarunevita/"
 #define SAVE_PATH "ux0:data/deltarune_saves/"
@@ -968,6 +977,9 @@ static bool tai_config_has_risky_usb_plugin(const char* path, char* found,
                                              size_t foundSize) {
     FILE* config = fopen(path, "rb");
     if (config == NULL) return false;
+    // These USB capture plugins compete directly with AvPlayer's hardware
+    // audio/video path. VitaGrafix/VGi is deliberately allowed because it is
+    // system-wide and does not target Deltarune Vita.
     const char* patterns[] = {"uac_uvc", "uvc_uac", "udcd_uvc"};
     char line[384];
     bool detected = false;
@@ -990,7 +1002,7 @@ static bool tai_config_has_risky_usb_plugin(const char* path, char* found,
     return detected;
 }
 
-static bool detect_risky_usb_video_plugin(char* found, size_t foundSize) {
+static bool detect_risky_usb_plugin(char* found, size_t foundSize) {
     return tai_config_has_risky_usb_plugin("ur0:tai/config.txt", found, foundSize) ||
            tai_config_has_risky_usb_plugin("ux0:tai/config.txt", found, foundSize);
 }
@@ -2515,10 +2527,12 @@ static void progress(const char *chunk, int index, int total, DataWin *dw, void 
     if (first_load_animation_active) {
         first_load_animation_pump(false);
     } else if (loading_overlay_active) {
-        loading_overlay_label_type = LOADING_LABEL_PLAIN;
-        loading_overlay_show_progress = false;
+        loading_overlay_label_type = LOADING_LABEL_LOADING_TEXTURES;
+        loading_overlay_show_progress = true;
         loading_overlay_ratio = total > 0 ? (float)(index + 1) / (float)total : 0.0f;
-        draw_loading_screen(false, loading_overlay_ratio, loading_overlay_label_type);
+        loading_overlay_current = index + 1;
+        loading_overlay_total = total;
+        draw_loading_screen(true, loading_overlay_ratio, loading_overlay_label_type);
     }
     sceKernelDelayThread(1000);
 }
@@ -3016,7 +3030,7 @@ static bool first_load_video_play(float volume) {
             path = "ux0:data/deltarune/deltarunevita/first_load.mp4";
     }
     char logBuf[256];
-    snprintf(logBuf, sizeof(logBuf), "FIRST_LOAD_VIDEO=init_begin path=%s duration_ms=4500 fps=30", path);
+    snprintf(logBuf, sizeof(logBuf), "FIRST_LOAD_VIDEO=init_begin path=%s eof_driven=1", path);
     log_line(logBuf);
 
     int initResult = VitaVideo_init();
@@ -3085,9 +3099,9 @@ static bool first_load_video_play(float volume) {
             break;
 
         // Corrupt timestamps must never stall startup indefinitely.
-        if (now - openedAt >= 6500000ULL) {
+        if (now - openedAt >= 30000000ULL) {
             timedOut = true;
-            log_line("FIRST_LOAD_VIDEO=playback_timeout timeout_us=6500000");
+            log_line("FIRST_LOAD_VIDEO=playback_timeout timeout_us=30000000");
             break;
         }
     }
@@ -3168,9 +3182,13 @@ static void first_load_animation_begin(void) {
         first_load_animation_start_us = sceKernelGetProcessTimeWide();
     }
 
-    first_load_decoder_thread = sceKernelCreateThread(
+    bool firstLoadFourthCore = false;
+    first_load_decoder_thread = VitaThread_createBackground(
         "Deltarune first-load decoder", first_load_decoder_worker,
-        0x10000100, 0x18000, 0, 0, NULL);
+        0x10000100, 0x18000, 0, &firstLoadFourthCore);
+    log_line(firstLoadFourthCore
+        ? "CAPUNLOCKER=first_load_decoder core=4 enabled=1"
+        : "CAPUNLOCKER=first_load_decoder core=default enabled=0 fallback=1");
     if (first_load_decoder_thread >= 0) {
         if (sceKernelStartThread(first_load_decoder_thread, 0, NULL) < 0) {
             first_load_decoder_thread = -1;
@@ -3338,9 +3356,13 @@ static bool loading_texture_worker_start(DataWin* dw) {
     loading_texture_worker_job.current = loading_overlay_current;
     loading_texture_worker_job.total = loading_overlay_total;
     LoadingTextureWorkerJob* job = &loading_texture_worker_job;
-    loading_texture_worker_thread_id = sceKernelCreateThread(
+    bool textureWorkerFourthCore = false;
+    loading_texture_worker_thread_id = VitaThread_createBackground(
         "Deltarune texture generator", loading_texture_worker_entry,
-        0x10000100, 0x80000, 0, 0, NULL);
+        0x10000100, 0x80000, 0, &textureWorkerFourthCore);
+    log_line(textureWorkerFourthCore
+        ? "CAPUNLOCKER=texture_generator core=4 enabled=1"
+        : "CAPUNLOCKER=texture_generator core=default enabled=0 fallback=1");
     if (loading_texture_worker_thread_id < 0) return false;
     if (sceKernelStartThread(loading_texture_worker_thread_id, sizeof(job), &job) < 0) {
         loading_texture_worker_thread_id = -1;
@@ -3466,6 +3488,81 @@ static void migrate_old_saves(void) {
     migrate_save_directory("ux0:data/deltarune/");
 }
 
+static void resolve_game_paths(int active_chapter, const VitaSettings* settings,
+                               char* game_path, size_t game_path_size,
+                               char* bundle_path, size_t bundle_path_size) {
+    snprintf(game_path, game_path_size, DATA_ROOT "chapter%d/data.win",
+             active_chapter);
+    snprintf(bundle_path, bundle_path_size, DATA_ROOT "chapter%d/",
+             active_chapter);
+    if (active_chapter == 0) {
+        SceIoStat st;
+        if (sceIoGetstat(game_path, &st) < 0) {
+            snprintf(game_path, game_path_size, "app0:assets/chapter0/data.win");
+            snprintf(bundle_path, bundle_path_size, "app0:assets/chapter0/");
+            log_line("LAUNCHER=app0_fallback_loaded");
+        }
+    }
+
+    if (settings_language_uses_external_mod(settings)) {
+        SceIoStat mod_stat;
+        char mod_game[192];
+        const char* modName = settings->modNames[settings->modIndex];
+        snprintf(mod_game, sizeof(mod_game),
+                 DATA_ROOT "mods/Lang/%s/chapter%d/data.win", modName,
+                 active_chapter);
+        if (sceIoGetstat(mod_game, &mod_stat) >= 0) {
+            snprintf(game_path, game_path_size, "%s", mod_game);
+            log_line("MOD=alternate_game=enabled");
+            return;
+        }
+
+        const char* alias = strcmp(modName, "Russkiy") == 0 ? "Russian" :
+                            (strcmp(modName, "Russian") == 0 ? "Russkiy" : NULL);
+        if (alias != NULL) {
+            snprintf(mod_game, sizeof(mod_game),
+                     DATA_ROOT "mods/Lang/%s/chapter%d/data.win", alias,
+                     active_chapter);
+            if (sceIoGetstat(mod_game, &mod_stat) >= 0) {
+                snprintf(game_path, game_path_size, "%s", mod_game);
+                log_line("MOD=alternate_game=enabled_alias");
+                return;
+            }
+        }
+        if (active_chapter == 0) {
+            const char* legacyName = strcmp(modName, "Portuguese-BR") == 0 ?
+                                     "PTBR" : modName;
+            snprintf(mod_game, sizeof(mod_game),
+                     DATA_ROOT "mods/%s/chapter0/data.win", legacyName);
+            if (sceIoGetstat(mod_game, &mod_stat) >= 0) {
+                snprintf(game_path, game_path_size, "%s", mod_game);
+                log_line("MOD=alternate_game=legacy_chapter0_fallback");
+            } else {
+                log_line("MOD=alternate_game=missing_chapter0_using_english");
+            }
+        }
+    }
+}
+
+static DataWinParserOptions make_datawin_options(bool worker) {
+    DataWinParserOptions options = {0};
+    options.parseGen8 = true; options.parseOptn = true; options.parseLang = true;
+    options.parseExtn = true; options.parseSond = true; options.parseAgrp = true;
+    options.parseSprt = true; options.parseBgnd = true; options.parsePath = true;
+    options.parseScpt = true; options.parseGlob = true; options.parseShdr = true;
+    options.parseFont = true; options.parseTmln = true; options.parseObjt = true;
+    options.parseRoom = true; options.parseTpag = true; options.parseCode = true;
+    options.parseVari = true; options.parseFunc = true; options.parseStrg = true;
+    options.parseTxtr = true; options.parseAudo = true;
+    options.skipLoadingPreciseMasksForNonPreciseSprites = true;
+    options.lazyLoadRooms = true;
+    options.lazyLoadTextures = true;
+    options.lazyLoadAudio = true;
+    options.loadType = DATAWINLOADTYPE_LOAD_PER_CHUNK;
+    options.progressCallback = worker ? NULL : progress;
+    return options;
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -3486,6 +3583,7 @@ int main(void) {
     g_vitaActiveChapter = active_chapter;
 
     log_line("Deltarune Windows data + Butterscotch VitaRenderer " PORT_BUILD_VERSION);
+    log_line("BACKEND=vitagl executable=app0:/vitagl.bin");
     log_line("MAIN_STACK=4194304");
     char startup_line[96];
     snprintf(startup_line, sizeof(startup_line), "AUDIO=openal ENTRY=chapter%d CONTROLS=vita+touch", active_chapter);
@@ -3575,15 +3673,44 @@ int main(void) {
     if (firstLoadGain > 1.0f) firstLoadGain = 1.0f;
     first_load_audio_volume = (int)(firstLoadGain * SCE_AUDIO_VOLUME_0DB);
 
-    char usbPlugin[128] = {0};
-    const bool riskyUsbVideoPlugin = detect_risky_usb_video_plugin(usbPlugin, sizeof(usbPlugin));
-    VitaVideo_setHardwareDisabled(riskyUsbVideoPlugin, usbPlugin);
-    if (riskyUsbVideoPlugin) {
-        char usbLog[192];
-        snprintf(usbLog, sizeof(usbLog),
-                 "VIDEO_GUARD=usb_plugin_detected plugin=%s avplayer=disabled",
-                 usbPlugin);
-        log_line(usbLog);
+    char riskyUsbPlugin[128] = {0};
+    const bool hasRiskyUsbPlugin = detect_risky_usb_plugin(
+        riskyUsbPlugin, sizeof(riskyUsbPlugin));
+    VitaVideo_setHardwareDisabled(hasRiskyUsbPlugin, riskyUsbPlugin);
+    if (hasRiskyUsbPlugin) {
+        char pluginLog[192];
+        snprintf(pluginLog, sizeof(pluginLog),
+                 "VIDEO_GUARD=usb_capture_plugin_detected plugin=%s avplayer=disabled",
+                 riskyUsbPlugin);
+        log_line(pluginLog);
+    }
+
+    VitaBackgroundWork* background_work = NULL;
+    VitaStartupPreload startup_preload;
+    memset(&startup_preload, 0, sizeof(startup_preload));
+    char preload_game_path[192] = {0};
+    char preload_bundle_path[128] = {0};
+    bool startup_preload_started = false;
+    if (active_chapter == 0 && !g_vitaHadExplicitChapterRequest) {
+        resolve_game_paths(active_chapter, &settings,
+                           preload_game_path, sizeof(preload_game_path),
+                           preload_bundle_path, sizeof(preload_bundle_path));
+        background_work =
+            VitaBackgroundWork_create(VITA_BACKGROUND_DEFAULT_BUDGET);
+        if (background_work != NULL) {
+            DataWinParserOptions preload_options = make_datawin_options(true);
+            startup_preload_started = VitaStartupPreload_begin(
+                &startup_preload, background_work, preload_game_path,
+                preload_options, 1U);
+        }
+        char preloadLog[320];
+        snprintf(preloadLog, sizeof(preloadLog),
+                 "STARTUP_PRELOAD=begin submitted=%d core4=%d path=%s",
+                 startup_preload_started ? 1 : 0,
+                 background_work != NULL &&
+                     VitaBackgroundWork_usedUnlockedCore(background_work) ? 1 : 0,
+                 preload_game_path);
+        log_line(preloadLog);
     }
 
     // Cold LiveArea launch: the validated SceAvPlayer loader needs a small
@@ -3591,13 +3718,14 @@ int main(void) {
     // PHYCONT available to the decoder's dedicated raw frame buffers.
     const bool coldLauncherVideo = active_chapter == 0 && !g_vitaHadExplicitChapterRequest;
     if (coldLauncherVideo) {
-        if (riskyUsbVideoPlugin) {
+        if (hasRiskyUsbPlugin) {
             log_line("FIRST_LOAD_VIDEO=disabled_plugin_conflict fallback=png");
             show_startup_warning(
-                "Plugin USB de audio/video detectado.\n\n"
+                "Plugin USB de captura de audio/video detectado.\n\n"
                 "A reproducao MP4 por hardware foi desativada para evitar crash. "
                 "A abertura por imagens sera usada automaticamente.\n\n"
-                "Para reativar os videos, desative UAC_UVC/UDCD_UVC no taiHEN e reinicie o Vita.");
+                "Para reativar os videos, desative UAC_UVC/UDCD_UVC "
+                "no taiHEN e reinicie o Vita.");
             log_line("FIRST_LOAD_VIDEO=fallback_png_begin");
             first_load_animation_begin();
             first_load_animation_play_to_end();
@@ -3649,17 +3777,9 @@ int main(void) {
         }
     }
 
-    bool nativeTrophies = VitaTrophies_init();
-    VitaSettings_setNativeTrophiesActive(&settings, nativeTrophies);
-    char trophyLog[192];
-    snprintf(trophyLog, sizeof(trophyLog),
-             "TROPHIES_NATIVE=%s stage=%s result=0x%08X %s",
-             nativeTrophies ? "ready" : "unavailable",
-             VitaTrophies_lastStage(), (unsigned int)VitaTrophies_lastResult(),
-             nativeTrophies ? "notrpdrm_pack_available" : "local_fallback_active");
-    log_line(trophyLog);
-    log_memory_snapshot("after_vitagl_init", NULL);
-
+    // The chapter process used to remain black through trophy setup and the
+    // complete data.win parse. VitaGL is ready here, so establish the same
+    // chapter Loading presentation before either blocking stage begins.
     const char* selectedLoadingLanguage =
         (settings.modIndex >= 0 && settings.modIndex < settings.modCount) ?
         settings.modNames[settings.modIndex] : "English";
@@ -3671,6 +3791,25 @@ int main(void) {
         selectedLoadingLanguage = "Italian";
     snprintf(loading_language_name, sizeof(loading_language_name), "%s",
              selectedLoadingLanguage);
+    if (active_chapter > 0) {
+        loading_screen_init();
+        loading_overlay_current = 0;
+        loading_overlay_total = 31;
+        draw_loading_screen(true, 0.0f, LOADING_LABEL_LOADING_TEXTURES);
+        log_line("CHAPTER_LOADING=visible phase=pre_trophies_datawin");
+    }
+
+    bool nativeTrophies = VitaTrophies_init();
+    VitaSettings_setNativeTrophiesActive(&settings, nativeTrophies);
+    char trophyLog[192];
+    snprintf(trophyLog, sizeof(trophyLog),
+             "TROPHIES_NATIVE=%s stage=%s result=0x%08X %s",
+             nativeTrophies ? "ready" : "unavailable",
+             VitaTrophies_lastStage(), (unsigned int)VitaTrophies_lastResult(),
+             nativeTrophies ? "notrpdrm_pack_available" : "local_fallback_active");
+    log_line(trophyLog);
+    log_memory_snapshot("after_vitagl_init", NULL);
+
     // vglSwapBuffers()'s boolean argument controls Common Dialog updates, not
     // synchronization.  Configure VitaGL's real swap interval explicitly.
     vglWaitVblankStart(settings.vsyncEnabled ? GL_TRUE : GL_FALSE);
@@ -3793,7 +3932,29 @@ int main(void) {
     options.progressCallback = progress;
 
     log_line("DATAWIN=parse_begin");
-    DataWin *dw = DataWin_parse(game_path, options);
+    DataWin *dw = NULL;
+    if (startup_preload_started) {
+        dw = VitaStartupPreload_join(&startup_preload, game_path);
+        log_line(dw != NULL ? "STARTUP_PRELOAD=adopted" :
+                              "STARTUP_PRELOAD=fallback");
+        char preloadResult[320];
+        snprintf(preloadResult, sizeof(preloadResult),
+                 "STARTUP_PRELOAD=%s parse_us=%llu overlap_us=%llu join_us=%llu",
+                 dw != NULL ? "adopted" : "fallback",
+                 (unsigned long long)(startup_preload.stats.parseEndUs -
+                                      startup_preload.stats.parseBeginUs),
+                 (unsigned long long)(startup_preload.stats.joinBeginUs >
+                                      startup_preload.stats.parseBeginUs ?
+                                      startup_preload.stats.joinBeginUs -
+                                      startup_preload.stats.parseBeginUs : 0),
+                 (unsigned long long)(startup_preload.stats.joinEndUs -
+                                      startup_preload.stats.joinBeginUs));
+        log_line(preloadResult);
+    }
+    if (dw == NULL) {
+        log_line("STARTUP_PRELOAD=fallback synchronous=1");
+        dw = DataWin_parse(game_path, options);
+    }
     if (dw == NULL) {
         log_line("STARTUP_FATAL=data_win_parse_failed");
         show_startup_error_and_exit(
@@ -3889,6 +4050,10 @@ int main(void) {
     first_load_animation_pump(false);
 
     log_line("RUNNER=create_begin");
+    if (background_work == NULL)
+        background_work =
+            VitaBackgroundWork_create(VITA_BACKGROUND_DEFAULT_BUDGET);
+    VitaRoomPrefetch_init(background_work, dw);
     Runner *runner = Runner_create(dw, vm, renderer, (FileSystem *)fs, audio);
     log_line("RUNNER=create_returned");
     first_load_audio_ready = true;
@@ -4045,6 +4210,7 @@ int main(void) {
         bool preloadSfxBuffers = false;
         uint32_t audioCached = AlAudioSystem_preloadChapterSfx((AlAudioSystem*)audio,
                                                                preloadSfxBuffers);
+        audioCached += AlAudioSystem_preloadBattleIntroSfx((AlAudioSystem*)audio);
         char audioCacheLine[96];
         snprintf(audioCacheLine, sizeof(audioCacheLine),
                  "AUDIO_PRELOAD=complete cached=%u capacity=%u decode=%s", audioCached,
@@ -4164,7 +4330,8 @@ int main(void) {
     bool gp_previous[20] = {0};
     uint32_t frame = 0;
     uint64_t last_time = sceKernelGetProcessTimeWide();
-    uint64_t next_frame_deadline = last_time;
+    VitaFramePacer frame_pacer;
+    VitaFramePacer_init(&frame_pacer, 0, last_time);
     bool exit_requested = false;
     int logged_game_w = -1;
     int logged_game_h = -1;
@@ -4204,15 +4371,17 @@ int main(void) {
         // PS4/PS5/Switch.  The Vita identifies as Windows to retain normal
         // filesystem/save behavior, so "Give up" otherwise waits on a black
         // screen until the long AUDIO_DARKNESS timeout expires.  Once the
-        // failure scene has stopped drawing its dialogue, accept a face button
+        // failure controller explicitly reaches Give up (EVENT=28), accept a face button
         // like the console builds and keep a bounded fallback for audio streams
-        // that never report completion.
+        // that never report completion. Primitive counts alone also match the
+        // white Continue fade and must never trigger a chapter reload there.
         const char* input_room = runner->currentRoom != NULL ? runner->currentRoom->name : NULL;
         uint32_t submittedPrimitives = g_vitaModernGlActive ?
             ((GLRenderer*)renderer)->frameSubmittedPrimitives :
             ((GLLegacyRenderer*)renderer)->frameSubmittedPrimitives;
         bool failure_black = active_chapter > 0 && input_room != NULL &&
                              strcmp(input_room, "PLACE_FAILURE") == 0 &&
+                             Runner_isFailureGivingUp(runner) &&
                              submittedPrimitives <= 2;
         if (failure_black) {
             if (failure_black_frames < UINT32_MAX) failure_black_frames++;
@@ -4337,6 +4506,20 @@ int main(void) {
                              targetName != NULL ? targetName : "<null>");
                     log_line(jump);
                     dev_log_write(jump);
+                    // Room Navigator can bypass the normal path between two
+                    // unrelated, GPU-heavy scenes. Fence the outgoing command
+                    // list and collect already-retired allocations before the
+                    // runner starts destroying surfaces and replacing atlas
+                    // pages. The Flowery -> cliff capture otherwise submitted
+                    // the destination while work from 36 old surfaces was
+                    // still pending, then GPU-crashed on the following jump.
+                    renderer->vtable->flush(renderer);
+                    glFinish();
+                    if (!g_vitaModernGlActive)
+                        GLLegacyRenderer_collectRetiredTexturesForRoomChange(
+                            (GLLegacyRenderer*)renderer);
+                    vglForceGarbageCollection();
+                    log_line("DEV_ROOM_JUMP_GPU_BARRIER=complete");
                     runner->pendingRoom = dev_room_target;
                     dev_force_move = true;
                 }
@@ -4981,9 +5164,9 @@ int main(void) {
             // A 40 Hz presentation cadence cannot divide evenly into Vita's
             // 60 Hz VBlank. Waiting here produced an alternating 16/33 ms
             // cadence while the software limiter also tried to hold 25 ms.
-            // Keep synchronized presentation for the exact 30/60 divisors;
-            // 40 FPS uses only the precise software deadline below.
-            bool waitForVblank = settings.vsyncEnabled && settings.fpsTargetMode != 1;
+            // At 30 FPS a late vblank also adds up to 16.7 ms before the
+            // deadline wait. Use one software pacer for both 30 and 40 FPS.
+            bool waitForVblank = settings.vsyncEnabled && settings.fpsTargetMode >= 2;
             vglWaitVblankStart(waitForVblank ? GL_TRUE : GL_FALSE);
             vglSwapBuffers(GL_FALSE);
             render_swap_us = sceKernelGetProcessTimeWide() - swap_begin;
@@ -5088,6 +5271,8 @@ int main(void) {
             log_line("ROOM_AUDIO=hold_delegated_to_runner");
         }
         Runner_handlePendingRoomChange(runner);
+        if (runner->currentRoomIndex != room_before_pending)
+            VitaFramePacer_reset(&frame_pacer, sceKernelGetProcessTimeWide());
         // Runner_handlePendingRoomChange keeps destination streams queued
         // until two complete frames of the new room have reached the display.
         // Releasing here made music play during late texture uploads, underrun
@@ -5229,6 +5414,18 @@ int main(void) {
                      (unsigned long long)perf_max_us, perf_drops, perf_severe,
                      runner->currentRoom && runner->currentRoom->name ? runner->currentRoom->name : "<null>");
             log_line(summary);
+            if (active_chapter == 3 && runner->currentRoom && runner->currentRoom->name &&
+                (strcmp(runner->currentRoom->name,"room_dw_teevie_stealth_d")==0 ||
+                 strcmp(runner->currentRoom->name,"room_dw_teevie_maze_quiz")==0)) {
+                snprintf(summary,sizeof(summary),
+                    "CH3_TV_STATS getters=%llu candidates=%llu culled=%llu signature_miss=%llu shader_skip=%llu",
+                    (unsigned long long)runner->vmContext->selfGetterFastCalls,
+                    (unsigned long long)runner->vmContext->tvPanelCandidates,
+                    (unsigned long long)runner->vmContext->tvPanelCulledDraws,
+                    (unsigned long long)runner->vmContext->tvPanelSignatureMisses,
+                    (unsigned long long)runner->vmContext->tvPanelShaderSkips);
+                log_line(summary);
+            }
             log_memory_snapshot("perf_summary",
                                 g_vitaModernGlActive ? NULL : (GLLegacyRenderer*)renderer);
             perf_window_start = frame_begin;
@@ -5255,29 +5452,24 @@ int main(void) {
             default: targetFps = 30; break;
         }
 
-        if (targetFps > 0) {
-            const uint64_t target = 1000000ULL / targetFps;
-            next_frame_deadline += target;
-            uint64_t current_time = sceKernelGetProcessTimeWide();
-            if (next_frame_deadline > current_time) {
-                // sceKernelDelayThread can overshoot short waits. Sleep most of
-                // the interval, then finish against the monotonic deadline for
-                // stable 33.3/25/16.7 ms pacing.
-                uint64_t remaining = next_frame_deadline - current_time;
-                if (remaining > 1200)
-                    sceKernelDelayThread((unsigned int)(remaining - 1000));
-                while (sceKernelGetProcessTimeWide() < next_frame_deadline) {
-                    // The bounded tail is at most ~1 ms and avoids another
-                    // scheduler quantum without changing game timing.
-                }
-            } else {
-                // Never attempt to catch up a missed deadline with a short
-                // follow-up frame; that was the source of visible oscillation
-                // after texture/audio hitches.
-                next_frame_deadline = current_time;
+        uint64_t pacing_now = sceKernelGetProcessTimeWide();
+        VitaFramePacer_setRate(&frame_pacer, targetFps, pacing_now);
+        VitaFramePacerPlan pacing_plan =
+            VitaFramePacer_plan(&frame_pacer, pacing_now);
+        if (pacing_plan.enabled) {
+            if (pacing_plan.coarseSleepUs != 0) {
+                uint64_t sleep_begin = sceKernelGetProcessTimeWide();
+                sceKernelDelayThread(pacing_plan.coarseSleepUs);
+                VitaFramePacer_noteSleep(&frame_pacer,
+                                         pacing_plan.coarseSleepUs,
+                                         sceKernelGetProcessTimeWide() -
+                                             sleep_begin);
             }
-        } else {
-            next_frame_deadline = sceKernelGetProcessTimeWide();
+            while (sceKernelGetProcessTimeWide() < pacing_plan.deadlineUs) {
+                // Adaptive sleep leaves at most a short, bounded tail.
+            }
+            VitaFramePacer_finish(&frame_pacer,
+                                  sceKernelGetProcessTimeWide());
         }
     }
 
@@ -5301,7 +5493,9 @@ int main(void) {
     renderer->vtable->destroy(renderer);
     OverlayFileSystem_destroy(fs);
     VM_free(vm);
+    VitaRoomPrefetch_shutdown();
     DataWin_free(dw);
+    VitaBackgroundWork_destroy(background_work);
     log_line("PROCESS=exit_clean");
     sceKernelExitProcess(0);
     return 0;

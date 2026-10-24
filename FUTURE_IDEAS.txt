@@ -1,0 +1,34 @@
+DELTARUNE VITA - IDEIAS PARA AVALIACAO FUTURA
+==============================================
+
+Estas ideias foram identificadas durante a revisao do projeto em 2026-09-01 e ficaram deliberadamente fora do ciclo atual.
+
+1. Fragmentacao cautelosa dos arquivos C de maior responsabilidade
+   - Avaliar, em outro momento, a divisao de playable_main.c, vita_settings.c e partes de gl_legacy_renderer.c.
+   - Tratar como refatoracao sensivel, em etapas pequenas, com build e validacao em hardware real entre cada etapa.
+   - Evitar alterar comportamento enquanto a separacao estrutural estiver sendo feita.
+
+2. Separar compatibilidade especifica de DELTARUNE do core generico do Butterscotch
+   - Reduzir gradualmente DELTARUNE HACK / excecoes de jogo espalhadas no runner generico.
+   - Considerar uma camada dedicada de compatibilidade para facilitar futuras atualizacoes do upstream.
+
+3. Formalizar ainda mais o pipeline de assets e texturas
+   - Documentar contratos entre data.win, repack, BC3/RGBA4444, cache e patcher.
+   - Reduzir regras implicitas e garantir que cada cache esteja vinculado de forma verificavel ao layout que o gerou.
+
+4. Modularizar o CMake do Vita
+   - Avaliar VitaSources.cmake, VitaAssets.cmake e VitaLibraries.cmake.
+   - Remover entradas duplicadas do manifesto do VPK e tornar a lista de assets mais simples de auditar.
+   - Fazer isso apenas depois que o pipeline atual estiver estabilizado.
+
+5. Consolidar uma baseline limpa da v0.71
+   - Quando as mudancas em desenvolvimento estiverem validadas, separar commits por area e reduzir o working tree acumulado.
+   - Usar essa baseline como ponto seguro antes de novas mudancas estruturais.
+
+Observacao:
+- O TITLE ID atual e DELT00001.
+- A versao-base passa a ser definida por config/version.txt.
+- A fragmentacao dos arquivos .c nao deve ser feita automaticamente sem uma etapa especifica de revisao e testes.
+REGRA DE MANUTENCAO:
+- Evitar exclusao definitiva. Arquivos removidos da estrutura ativa devem ser movidos para scratch/ ou research/ para permitir recuperacao posterior.
+

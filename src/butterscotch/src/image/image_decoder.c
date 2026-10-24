@@ -164,12 +164,21 @@ uint8_t* ImageDecoder_decodeToRgba(const uint8_t* blob, size_t blobSize, bool gm
         #ifdef __vita__
         FILE* f = fopen("ux0:data/deltarune/stb_error.log", "a");
         if (f) {
-            fprintf(f, "ImageDecoder: STB failed: %s (blobSize=%zu, header=%02x %02x %02x %02x)\n", 
-                    stbi_failure_reason(), blobSize, blob[0], blob[1], blob[2], blob[3]);
+            // Vita newlib's printf does not reliably consume %zu; using it
+            // shifted the following arguments and made the diagnostic itself
+            // look like a corrupt PNG header.
+            // Do not dereference stbi_failure_reason() while the process is
+            // already under memory pressure. The previous %s diagnostic could
+            // itself abort in strlen/vfprintf after STB returned out-of-memory.
+            fprintf(f, "ImageDecoder: STB failed: decode_failed (blobSize=%lu, header=%02x %02x %02x %02x)\n",
+                    (unsigned long)blobSize, blob[0], blob[1], blob[2], blob[3]);
             fclose(f);
         }
         #endif
-        fprintf(stderr, "ImageDecoder: STB failed: %s (blobSize=%zu)\n", stbi_failure_reason(), blobSize);
+        #ifndef __vita__
+        fprintf(stderr, "ImageDecoder: STB failed: %s (blobSize=%lu)\n",
+                stbi_failure_reason(), (unsigned long)blobSize);
+        #endif
         return nullptr;
     }
     *outW = w;

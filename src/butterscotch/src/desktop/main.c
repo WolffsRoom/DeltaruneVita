@@ -1,5 +1,6 @@
 #include <ctype.h>
 
+#include "common_args.h"
 #include "data_win.h"
 #include "vm.h"
 
@@ -67,7 +68,8 @@
 enum GraphicsAPI gfx;
 
 #if defined(ENABLE_LEGACY_GL) || defined(ENABLE_MODERN_GL)
-const GLuint *hostFramebuffer;
+static GLuint defaultFBO = 0;
+const GLuint *hostFramebuffer = &defaultFBO;
 #endif
 
 #ifdef __linux__
@@ -242,6 +244,7 @@ typedef struct {
     const char* recordInputsPath;
     const char* playbackInputsPath;
     const char* renderer;
+    const char* startRoom; // Desktop debug helper: room name or numeric room index.
     YoYoOperatingSystem osType;
     int32_t windowWidth, windowHeight; // 0 = auto (gen8 default, or the console-native size for console os-types)
     float widescreenAspect; // "widescreen hack" target aspect ratio (width/height), 0 = disabled
@@ -428,10 +431,11 @@ static void printUsage(const char *argv0) {
         "    --renderer <renderer>                  - Set the rendering API\n"
         "    --lazy-rooms                           - Lazily load rooms, increases load times but reduces memory usage\n"
         "    --eager-room <rooms>                   - When --lazy-rooms is set, keep these rooms always in memory\n"
+        "    --start-room <room>                    - Start a debug run directly in a room (name or index)\n"
         "    --os-type <os>                         - Set the reported OS type\n"
         "    --window-size <dimentions>             - Set a custom window size\n"
         "    --widescreen-hack <aspect ratio>       - Set a custom aspect ratio\n"
-        "    --profile-gml-scripts                  - Log which GML scripts are the heaviest in terms of time and executed instructions\n"
+        "    --profile-gml-scripts <frames>         - Log the heaviest GML scripts at the specified frame interval\n"
         "    --save-folder <directory>              - Set the directory will save files will be stored\n"
         "    --game-args <args>                     - Arguments to pass to the game\n"
         "    --lazy-textures                        - Load textures into VRAM on first use, improving startup times\n"
@@ -495,6 +499,7 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
         {"game-args", required_argument, nullptr, 'N'},
         {"lazy-textures", no_argument, nullptr, 'L'},
         {"load-type", required_argument, nullptr, 999},
+        {"start-room", required_argument, nullptr, 1001},
 #ifdef ENABLE_VM_OPCODE_PROFILER
         {"profile-opcodes", no_argument, nullptr, 'Q'},
 #endif
@@ -786,6 +791,9 @@ static void parseCommandLineArgs(CommandLineArgs* args, int argc, char* argv[]) 
                 }
                 break;
             }
+            case 1001:
+                args->startRoom = optarg;
+                break;
             default:
                 printUsage(argv[0]);
                 exit(1);
@@ -871,7 +879,11 @@ static void writeFramebufferAsPng(GLuint fbo, int width, int height, const char*
 
 static void captureScreenshot(GLuint fbo, const char* filenamePattern, int frameNumber, int width, int height, bool flipY) {
     char filename[512];
-    snprintf(filename, sizeof(filename), filenamePattern, frameNumber);
+    if (filenamePattern != nullptr && filenamePattern[0] != '\0') {
+        snprintf(filename, sizeof(filename), filenamePattern, frameNumber);
+    } else {
+        snprintf(filename, sizeof(filename), "screenshot_frame_%d.png", frameNumber);
+    }
     writeFramebufferAsPng(fbo, width, height, filename, "Screenshot saved", true, flipY);
 }
 
@@ -997,11 +1009,27 @@ char* collapseNewlines(const char *input) {
 }
 
 // ===[ MAIN ]===
+#ifdef _WIN32
+#include "../../tests/ch3_surface_regression.inc"
+#include "../../tests/board_screen_regression.inc"
+#include "../../tests/self_getter_regression.inc"
+#include "../../tests/retry_regression.inc"
+#include "../../tests/finale_render_regression.inc"
+#include "../../tests/legacy_shader_target_regression.inc"
+#include "../../tests/ch5_shadow_regression.inc"
+#include "../../tests/ch5_tilemap_regression.inc"
+#include "../../tests/video_gl_regression.inc"
+#include "../../tests/garden_light_regression.inc"
+#endif
+
 int main(int argc, char* argv[]) {
     setbuf(stderr, NULL);
 #ifdef _WIN32
     timeBeginPeriod(1);
 #endif
+
+    RunnerArgs runnerArgs;
+    RunnerArgs_parseCommandLineArguments(argc, argv, &runnerArgs);
 
     CommandLineArgs args;
     parseCommandLineArgs(&args, argc, argv);
@@ -1400,6 +1428,9 @@ int main(int argc, char* argv[]) {
 
         // Initialize the runner
         Runner* runner = Runner_create(dataWin, vm, renderer, (FileSystem*) overlayFs, audioSystem);
+        vm->disableSelfGetterFastPath = getenv("BS_TEST_DISABLE_SELF_GETTERS") != nullptr;
+        vm->disableTVPanelCull = getenv("BS_TEST_DISABLE_TV_CULL") != nullptr;
+        if (getenv("BS_TEST_VITA_PROFILING")) Profiler_setEnabled(&vm->profiler,true);
 
         if (!args.lazyTextures) {
             repeat(runner->dataWin->txtr.count, i) {
@@ -1467,6 +1498,78 @@ int main(int argc, char* argv[]) {
         // Initialize the first room and fire Game Start / Room Start events
         Runner_initFirstRoom(runner);
 
+        // Keep GameMaker's global/game-start initialization intact, then move
+        // to the requested room through the normal transition path. This is
+        // intentionally desktop-only and makes visual shader regression tests
+        // reproducible without walking through an entire chapter or save.
+        if (args.startRoom != nullptr && args.startRoom[0] != '\0') {
+            int32_t targetRoom = -1;
+            char* endPtr = nullptr;
+            long numericRoom = strtol(args.startRoom, &endPtr, 10);
+            if (endPtr != args.startRoom && *endPtr == '\0' && numericRoom >= 0 &&
+                numericRoom < (long)dataWin->room.count) {
+                targetRoom = (int32_t)numericRoom;
+            } else {
+                repeat(dataWin->room.count, roomIndex) {
+                    const char* roomName = dataWin->room.rooms[roomIndex].name;
+                    if (roomName != nullptr && strcmp(roomName, args.startRoom) == 0) {
+                        targetRoom = roomIndex;
+                        break;
+                    }
+                }
+            }
+            if (targetRoom < 0) {
+                fprintf(stderr, "Error: --start-room '%s' was not found\n", args.startRoom);
+            } else if (targetRoom != runner->currentRoomIndex) {
+                // The single-pot shader regression test normally inherits
+                // these values from Chapter 2's story/save flow. Starting the
+                // room in isolation otherwise creates Light World Kris with
+                // movement locked and never spawns the Swatchling encounter.
+                // Keep the preset desktop-only and scoped to this debug room.
+                if (strcmp(dataWin->room.rooms[targetRoom].name,
+                           "room_dw_mansion_single_pot") == 0) {
+                    VMContext* vm = runner->vmContext;
+                    VM_structSet(vm, vm->globalScopeInstance, "darkzone", RValue_makeReal(1.0), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "interact", RValue_makeReal(0.0), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "entrance", RValue_makeReal(0.0), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "facing", RValue_makeReal(1.0), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "flag", RValue_makeReal(2.0), 400);
+                    VM_structSet(vm, vm->globalScopeInstance, "flag", RValue_makeReal(6.0), 540);
+                    fprintf(stderr, "Debug: Applied Chapter 2 single-pot Dark World preset\n");
+                }
+                // Chapter 5's town rooms normally receive the morning state
+                // from the save loader. A direct room jump inherits whatever
+                // festival state global init happened to restore, which made
+                // automated screenshots stop on a black string-lights scene.
+                // Pin the normal morning state for deterministic shadow tests.
+                const char* targetName = dataWin->room.rooms[targetRoom].name;
+                if (getenv("BS_TEST_CH5_GARDEN")) {
+                    VMContext* vm = runner->vmContext;
+                    VM_structSet(vm, vm->globalScopeInstance, "darkzone", RValue_makeReal(1), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "interact", RValue_makeReal(0), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "entrance", RValue_makeReal(0), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "flag", RValue_makeReal(1), 1410);
+                }
+                if (strcmp(targetName, "room_town_south") == 0 ||
+                    strcmp(targetName, "room_town_krisyard") == 0 ||
+                    strcmp(targetName, "room_town_mid") == 0 ||
+                    strcmp(targetName, "room_town_north") == 0) {
+                    VMContext* vm = runner->vmContext;
+                    VM_structSet(vm, vm->globalScopeInstance, "darkzone", RValue_makeReal(0.0), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "interact", RValue_makeReal(0.0), -1);
+                    VM_structSet(vm, vm->globalScopeInstance, "entrance", RValue_makeReal(0.0), -1);
+                    const char* festivalTest = getenv("BS_TEST_FESTIVAL_STATE");
+                    int festivalState = festivalTest ? atoi(festivalTest) : 0;
+                    VM_structSet(vm, vm->globalScopeInstance, "flag", RValue_makeReal(festivalState), 1324);
+                    fprintf(stderr, "Debug: Applied Chapter 5 town morning/shadow preset\n");
+                }
+                fprintf(stderr, "Debug: Starting directly in %s (room %d)\n",
+                        dataWin->room.rooms[targetRoom].name, targetRoom);
+                runner->pendingRoom = targetRoom;
+                Runner_handlePendingRoomChange(runner);
+            }
+        }
+
         // Main loop
         bool debugPaused = false;
         bool debugShowCollisionMasks = false;
@@ -1518,6 +1621,8 @@ int main(int argc, char* argv[]) {
             uint64_t frameStartTime = 0;
 
             if (shouldStep) {
+                if (getenv("BS_TEST_VITA_PROFILING"))
+                    Profiler_setSampling(vm->profiler,(runner->frameCount % 120U)==0U);
                 if (args.traceFrames) {
                     frameStartTime = nowNanos();
                     fprintf(stderr, "Frame %d (Start)\n", runner->frameCount);
@@ -1577,14 +1682,14 @@ int main(int argc, char* argv[]) {
                     free(json);
                 }
 
-                // Toggle the collision mask debug overlay
-                if (RunnerKeyboard_checkPressed(runner->keyboard, VK_F2)) {
+                // Toggle the collision mask debug overlay (F2 or '1')
+                if (RunnerKeyboard_checkPressed(runner->keyboard, VK_F2) || RunnerKeyboard_checkPressed(runner->keyboard, '1')) {
                     debugShowCollisionMasks = !debugShowCollisionMasks;
                     fprintf(stderr, "Debug: Collision mask overlay %s!\n", debugShowCollisionMasks ? "enabled" : "disabled");
                 }
 
-                // Enable free cam
-                if (RunnerKeyboard_checkPressed(runner->keyboard, VK_F3)) {
+                // Enable free cam (F3 or '2')
+                if (RunnerKeyboard_checkPressed(runner->keyboard, VK_F3) || RunnerKeyboard_checkPressed(runner->keyboard, '2')) {
                     runner->freeCamPanX = 0.0f;
                     runner->freeCamPanY = 0.0f;
                     runner->freeCamZoom = 1.0f;
@@ -1611,12 +1716,39 @@ int main(int argc, char* argv[]) {
                     }
                 }
 
-                // Reset global interact state because I HATE when I get stuck while moving through rooms
-                if (RunnerKeyboard_checkPressed(runner->keyboard, VK_F10)) {
+                // Reset global interact state (F10 or '0')
+                if (RunnerKeyboard_checkPressed(runner->keyboard, VK_F10) || RunnerKeyboard_checkPressed(runner->keyboard, '0')) {
                     int32_t interactVarId = shget(runner->vmContext->varNameMap, "interact");
 
                     Instance_setSelfVar(runner->vmContext->globalScopeInstance, interactVarId, RValue_makeInt32(0));
                     printf("Changed global.interact [%d] value!\n", interactVarId);
+                }
+
+                // Toggle detailed logging mode ('3')
+                static bool detailedLoggingActive = false;
+                if (RunnerKeyboard_checkPressed(runner->keyboard, '3')) {
+                    detailedLoggingActive = !detailedLoggingActive;
+                    if (detailedLoggingActive) {
+                        shput(runner->vmContext->eventsToBeTraced, "*", true);
+                        runner->vmContext->alwaysLogUnknownFunctions = true;
+                        runner->vmContext->alwaysLogStubbedFunctions = true;
+                        fprintf(stderr, "\n========== [LOG DETALHADO: INICIADO (EVENTS & STUBS)] ==========\n");
+                    } else {
+                        shdel(runner->vmContext->eventsToBeTraced, "*");
+                        runner->vmContext->alwaysLogUnknownFunctions = false;
+                        runner->vmContext->alwaysLogStubbedFunctions = false;
+                        fprintf(stderr, "\n========== [LOG DETALHADO: FINALIZADO] ==========\n");
+                    }
+                }
+
+                // Emulate Gamepad SELECT button with 'V' key to trigger Vita settings menu
+                if (RunnerKeyboard_check(runner->keyboard, 'V') || RunnerKeyboard_check(runner->keyboard, 'v')) {
+                    runner->gamepads->slots[0].connected = true;
+                    runner->gamepads->slots[0].buttonDown[8] = true;
+                    runner->gamepads->slots[0].buttonValue[8] = 1.0f;
+                    if (RunnerKeyboard_checkPressed(runner->keyboard, 'V') || RunnerKeyboard_checkPressed(runner->keyboard, 'v')) {
+                        runner->gamepads->slots[0].buttonPressed[8] = true;
+                    }
                 }
 
                 bool currentKeyDown[GML_KEY_COUNT];
@@ -1635,7 +1767,49 @@ int main(int argc, char* argv[]) {
                 }
 
                 // Run one game step (Begin Step, Keyboard, Alarms, Step, End Step, room transitions)
+                // Opt-in local regression route; uses the normal room transition path.
+                static int32_t lastTestTransitionFrame = -1;
+                if ((getenv("BS_TEST_TOWN_TRANSITIONS") || getenv("BS_TEST_CH5_NAVIGATOR")) && runner->frameCount > 0 &&
+                    runner->frameCount != lastTestTransitionFrame &&
+                    runner->frameCount % 120 == 0 && runner->frameCount <= 480) {
+                    lastTestTransitionFrame = runner->frameCount;
+                    const char* next = (runner->frameCount / 120) % 2 ? "room_town_mid" : "room_town_south";
+                    if (getenv("BS_TEST_CH5_NAVIGATOR")) {
+                        const uint32_t route[] = {22, 54, 225, 226};
+                        uint32_t room = route[runner->frameCount / 120 - 1];
+                        if (room < dataWin->room.count) next = dataWin->room.rooms[room].name;
+                    }
+                    for (uint32_t room = 0; room < dataWin->room.count; ++room) {
+                        if (dataWin->room.rooms[room].name && strcmp(dataWin->room.rooms[room].name, next) == 0) {
+                            runner->pendingRoom = room;
+                            fprintf(stderr, "LOCAL_TEST_ROOM_TRANSITION frame=%d target=%s\n", runner->frameCount, next);
+                            break;
+                        }
+                    }
+                }
                 Runner_step(runner);
+
+                if (getenv("BS_TEST_FESTIVAL_STATE") && runner->frameCount == 60) {
+                    // Inspect both layer handles and live membership: removing only
+                    // the handle would leave invisible collision/Step instances behind.
+                    Room* room = runner->currentRoom;
+                    for (uint32_t li = 0; li < room->layerCount; ++li) {
+                        RoomLayer* layer = &room->layers[li];
+                        RuntimeLayer* live = Runner_findRuntimeLayerById(runner, layer->id);
+                        int members = 0;
+                        for (size_t ii = 0; ii < arrlenu(runner->instances); ++ii) {
+                            Instance* inst = runner->instances[ii];
+                            if (!inst->destroyed && inst->active && inst->layer == (int32_t)layer->id) ++members;
+                        }
+                        fprintf(stderr, "LOCAL_TEST_FESTIVAL_LAYER name=%s exists=%d visible=%d active=%d\n",
+                                layer->name, live != nullptr, live ? live->visible : 0, members);
+                    }
+                    for (size_t ii = 0; ii < arrlenu(runner->instances); ++ii) {
+                        Instance* inst = runner->instances[ii];
+                        if (inst->active && !inst->destroyed && inst->objectIndex >= 0)
+                            fprintf(stderr, "LOCAL_TEST_FESTIVAL_OBJECT name=%s\n", dataWin->objt.objects[inst->objectIndex].name);
+                    }
+                }
 
                 if (freeCamActive) {
                     memcpy(runner->keyboard->keyDown, currentKeyDown, sizeof(runner->keyboard->keyDown));
@@ -1741,6 +1915,18 @@ int main(int argc, char* argv[]) {
 
                 Runner_drawPre(runner, fbWidth, fbHeight);
 
+                if (getenv("BS_TEST_STEALTH_CAMERA") && runner->currentRoom &&
+                    (strcmp(runner->currentRoom->name,"room_dw_teevie_stealth_d")==0 ||
+                     strcmp(runner->currentRoom->name,"room_dw_teevie_maze_quiz")==0)) {
+                    GMLCamera* camera=Runner_getCameraForView(runner,0);
+                    if (camera) {
+                        bool quiz=strcmp(runner->currentRoom->name,"room_dw_teevie_maze_quiz")==0;
+                        camera->viewX=(runner->frameCount % (quiz?150:300))*18.0f;
+                        if (quiz) camera->viewY=runner->frameCount>=150?640:0;
+                        Runner_updateCameraViewSimple(camera);
+                    }
+                }
+
                 // Calculate viewport (letterboxing) in screen coordinates for mouse mapping
                 int32_t winW, winH;
                 platformGetScaledWindowSize(&winW, &winH);
@@ -1752,13 +1938,49 @@ int main(int argc, char* argv[]) {
                 Runner_updateMousePosition(runner, winW, winH, mx, my);
 
                 Runner_drawViews(runner, gameW, gameH, debugShowCollisionMasks);
-                renderer->vtable->endFrameInit(renderer);
+                if (renderer->vtable->endFrameInit != nullptr) renderer->vtable->endFrameInit(renderer);
                 Runner_drawPost(runner, fbWidth, fbHeight);
-                renderer->vtable->endFrameEnd(renderer);
+                if (renderer->vtable->endFrameEnd != nullptr) renderer->vtable->endFrameEnd(renderer);
                 Runner_drawGUI(runner, fbWidth, fbHeight, gameW, gameH);
+                if (getenv("BS_TEST_RENDER_PROFILE") && runner->frameCount % 60 == 0 &&
+                    strcmp(args.renderer, "modern-gl") == 0) {
+                    GLRenderer* modern = (GLRenderer*)runner->renderer;
+                    fprintf(stderr, "LOCAL_TEST_RENDER batches=%u primitives=%u buffer_us=%llu submit_us=%llu targets=%u draw_max_us=%llu\n",
+                            modern->frameFlushCount, modern->frameSubmittedPrimitives,
+                            (unsigned long long)modern->frameBufferUploadUs,
+                            (unsigned long long)modern->frameDrawSubmitUs,
+                            modern->frameTargetSwitches, (unsigned long long)runner->profDrawMaxUs);
+                }
+#ifdef _WIN32
+                if (runner->frameCount == 10 && getenv("BS_TEST_CH3_SURFACES"))
+                    return testChapter3Surfaces(renderer);
+                if (runner->frameCount == 10 && getenv("BS_TEST_BOARD_SCREEN_REGRESSION"))
+                    return testBoardScreens(runner);
+                if (runner->frameCount == 10 && getenv("BS_TEST_SELF_GETTERS"))
+                    return testSelfGetters(runner);
+                if (runner->frameCount == 10 && getenv("BS_TEST_RETRY"))
+                    return testRetry(runner);
+                if (runner->frameCount == 10 && getenv("BS_TEST_FINALE_RENDER"))
+                    return testFinaleRender(renderer);
+                  if (runner->frameCount == 10 && getenv("BS_TEST_LEGACY_SHADER_TARGET"))
+                      return testLegacyShaderTarget(renderer);
+                  if (runner->frameCount == 10 && getenv("BS_TEST_CH5_SHADOW"))
+                      return testCh5Shadow(renderer);
+                if (runner->frameCount == 10 && getenv("BS_TEST_CH5_TILEMAPS"))
+                    return testChapter5Tilemaps(runner);
+                if (runner->frameCount == 10 && getenv("BS_TEST_VIDEO_GL"))
+                    return testVideoGL(renderer);
+                if (runner->frameCount == 10 && getenv("BS_TEST_GARDEN_LIGHT"))
+                    return testGardenLight(runner);
+                if (gfx == MODERN_GL && runner->frameCount == 10 && getenv("BS_TEST_EXTERNAL_PNG")) {
+                    // A regression failure must not open the Windows abort
+                    // dialog and stall every automated case until timeout.
+                    if (!GLRenderer_testExternalPng((GLRenderer*)renderer, getenv("BS_TEST_EXTERNAL_PNG"))) return EXIT_FAILURE;
+                }
+#endif
 
 #if defined(ENABLE_LEGACY_GL) || defined(ENABLE_MODERN_GL)
-                // Capture screenshot if this frame matches a requested frame
+                // Capture screenshot if this frame matches a requested frame (F5)
                 bool shouldScreenshot = hmget(args.screenshotFrames, runner->frameCount);
 
                 if (shouldScreenshot || RunnerKeyboard_checkPressed(runner->keyboard, VK_F5)) {
@@ -1766,10 +1988,10 @@ int main(int argc, char* argv[]) {
                     glBindFramebuffer(GL_FRAMEBUFFER, *hostFramebuffer);
                 }
 
-                // Dump all surfaces if this frame matches a requested frame
+                // Dump all surfaces if this frame matches a requested frame (F6 or '4')
                 bool shouldDumpSurfaces = hmget(args.screenshotSurfacesFrames, runner->frameCount);
 
-                if (shouldDumpSurfaces || RunnerKeyboard_checkPressed(runner->keyboard, VK_F6)) {
+                if (shouldDumpSurfaces || RunnerKeyboard_checkPressed(runner->keyboard, VK_F6) || RunnerKeyboard_checkPressed(runner->keyboard, '4')) {
                     GLRenderer* gl = (GLRenderer*) renderer;
                     dumpAllSurfaces(gl, args.screenshotSurfacesPattern, runner->frameCount);
                     glBindFramebuffer(GL_FRAMEBUFFER, *hostFramebuffer);
@@ -1777,6 +1999,12 @@ int main(int argc, char* argv[]) {
 #endif
 
                 if (args.exitAtFrame >= 0 && runner->frameCount >= args.exitAtFrame) {
+                    if (getenv("BS_TEST_STEALTH_METRICS"))
+                        fprintf(stderr,"STEALTH_METRICS getter_calls=%llu culled_panels=%llu signature_misses=%llu shader_skips=%llu\n",
+                            (unsigned long long)vm->selfGetterFastCalls,
+                            (unsigned long long)vm->tvPanelCulledDraws,
+                            (unsigned long long)vm->tvPanelSignatureMisses,
+                            (unsigned long long)vm->tvPanelShaderSkips);
                     printf("Exiting at frame %d (--exit-at-frame)\n", runner->frameCount);
                     shouldWindowClose = true;
                 }
@@ -1913,10 +2141,40 @@ int main(int argc, char* argv[]) {
             }
 
             // The pendingWorkingDirectory contains a slash at the beginning of it (example: /chapter3)
-            // The parentDir does NOT have a trailing slash, so we don't need to bother with it
-            size_t newPathLen = strlen(parentDir) + strlen(nextWorkingDirectory) + 1 + strlen(dataWinFilename) + 1;
+            const char* workDirName = nextWorkingDirectory;
+            if (workDirName[0] == '/' || workDirName[0] == '\\') workDirName++;
+
+            size_t pLen = strlen(parentDir);
+            size_t wLen = strlen(workDirName);
+            bool alreadyInDir = false;
+            if (pLen >= wLen) {
+                if (_stricmp(parentDir + (pLen - wLen), workDirName) == 0) {
+                    alreadyInDir = true;
+                }
+            }
+
+            size_t newPathLen = strlen(parentDir) + strlen(nextWorkingDirectory) + 1 + strlen(dataWinFilename) + 256;
             char* newPath = (char *)safeMalloc(newPathLen);
-            snprintf(newPath, newPathLen, "%s%s/%s", parentDir, nextWorkingDirectory, dataWinFilename);
+            if (alreadyInDir) {
+                snprintf(newPath, newPathLen, "%s/%s", parentDir, dataWinFilename);
+            } else {
+                snprintf(newPath, newPathLen, "%s%s/%s", parentDir, nextWorkingDirectory, dataWinFilename);
+            }
+
+            // Check if file exists, if not fallback to grandparent directory
+            FILE* testF = fopen(newPath, "rb");
+            if (testF != NULL) {
+                fclose(testF);
+            } else {
+                char* grandparentDir = safeStrdup(parentDir);
+                char* lastSlash = strrchr(grandparentDir, '/');
+                char* lastBackslash = strrchr(grandparentDir, '\\');
+                char* sep = (lastSlash > lastBackslash) ? lastSlash : lastBackslash;
+                if (sep != nullptr) *sep = '\0';
+
+                snprintf(newPath, newPathLen, "%s%s/%s", grandparentDir, nextWorkingDirectory, dataWinFilename);
+                free(grandparentDir);
+            }
 
             free(parentDir);
             free(currentDataWinPath);

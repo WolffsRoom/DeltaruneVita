@@ -1,0 +1,23 @@
+// SHDR shd_lut translated from Deltarune chapter5 GLSL.
+uniform float4 frag[11];
+uniform float4 gameParams; // x: strength
+float4 main(uniform sampler2D tex:TEXUNIT0,
+            uniform sampler2D lut_tex:TEXUNIT1,
+            float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {
+    float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);
+    float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);
+    float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;
+    float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);
+    float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;
+    float4 base=tex2D(tex,uv);
+    float bc=base.b*63.0;
+    float l=floor(bc),h=ceil(bc);
+    float2 lowCell=float2(l-floor(l/8.0)*8.0,floor(l/8.0));
+    float2 highCell=float2(h-floor(h/8.0)*8.0,floor(h/8.0));
+    float2 chroma=base.rg*0.123046875+float2(0.0009765625,0.0009765625);
+    float3 a=tex2D(lut_tex,lowCell*0.125+chroma).rgb;
+    float3 b=tex2D(lut_tex,highCell*0.125+chroma).rgb;
+    float3 corrected=lerp(base.rgb,lerp(a,b,frac(bc)),gameParams.x);
+    float opacity=base.a*frag[6].a;
+    return float4(corrected*frag[6].rgb*base.a,opacity)*mask.x*mask.y;
+}

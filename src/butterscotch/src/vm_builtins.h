@@ -4,6 +4,12 @@
 #include "common.h"
 #include "vm.h"
 
+// Apply optional creation overrides after Variable Definitions, before Create.
+void VMBuiltins_applyCreationVariables(VMContext* ctx, Instance* target, Instance* variables);
+bool VMBuiltins_tryGardenLightDraw(VMContext* ctx, Instance* target, int32_t codeId);
+bool VMBuiltins_tryCullTVPanel(VMContext* ctx, Instance* target, int32_t codeId);
+bool VMBuiltins_tryManeDraw(VMContext* ctx, Instance* target, int32_t codeId);
+
 // ===[ Built-in Variable ID Enum ]===
 typedef enum {
     BUILTIN_VAR_UNKNOWN = -1,
@@ -277,5 +283,9 @@ int16_t VMBuiltins_resolveBuiltinVarId(const char* name);
 void VMBuiltins_checkIfBuiltinVarTableIsSorted(void);
 RValue VMBuiltins_getVariable(VMContext* ctx, Instance* inst, int16_t builtinVarId, const char* name, int32_t arrayIndex);
 void VMBuiltins_setVariable(VMContext* ctx, Instance* inst, int16_t builtinVarId, const char* name, RValue val, int32_t arrayIndex);
+const char* VMBuiltins_getShapePuzzleDiagnostic(void);
+// Writes and clears shader API activity accumulated since the previous call.
+// Returns false when no shader-related GML call occurred.
+bool VMBuiltins_takeShaderDiagnostic(char* output, size_t outputSize);
 
 #endif /* _BS_VM_BUILTINS_H_ */

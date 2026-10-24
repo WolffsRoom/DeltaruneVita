@@ -6,7 +6,7 @@ MAIN = (ROOT / "src/vita-probe/source/playable_main.c").read_text(encoding="utf-
 BUILD = (ROOT / "scripts/build-butterscotch-probe.ps1").read_text(encoding="utf-8")
 
 assert "vita_create_self(vitagl.bin ${PROJECT_NAME} UNSAFE)" in CMAKE
-assert "add_subdirectory(../vita-launcher" in CMAKE
+assert "add_executable(deltarune_renderer_launcher" in CMAKE
 assert "vita_create_self(eboot.bin deltarune_renderer_launcher UNSAFE)" in CMAKE
 assert '"${CMAKE_BINARY_DIR}/vitagl.bin" vitagl.bin' in CMAKE
 assert "add_dependencies(Deltarune.vpk-vpk vitagl.bin-self)" in CMAKE

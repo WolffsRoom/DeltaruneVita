@@ -1,0 +1,805 @@
+diff --git a/source/custom_shaders.c b/source/custom_shaders.c
+index f1156e3..414b7a8 100644
+--- a/source/custom_shaders.c
++++ b/source/custom_shaders.c
+@@ -136,17 +136,23 @@ char vgl_file_cache_path[256];
+ 		disable_draw_attrib(i) \
+ 	}
+ 
++// Reuse a program's custom uniform allocation until its values change. The
++// backing arena is fenced before recycling, so unchanged draws do not consume
++// GXM's small default-uniform reservation ring.
+ #ifndef HAVE_FFP_SHADER_SUPPORT
+ #define upload_uniforms() \
++	GLboolean uniforms_ready = GL_TRUE; \
+ 	if (p->vert_uniforms && dirty_shader_vert_unifs) { \
+ 		void *buffer = vglReserveVertexUniformBuffer(p->vshader->unif_buf_size); \
+-		vgl_fast_memcpy(buffer, p->unif_vbuffer, p->vshader->unif_buf_size); \
+-		dirty_shader_vert_unifs = GL_FALSE; \
++		if (buffer) vgl_fast_memcpy(buffer, p->unif_vbuffer, p->vshader->unif_buf_size); \
++		else uniforms_ready = GL_FALSE; \
++		dirty_shader_vert_unifs = !buffer; \
+ 	} \
+ 	if (p->frag_uniforms && dirty_shader_frag_unifs) { \
+ 		void *buffer = vglReserveFragmentUniformBuffer(p->fshader->unif_buf_size); \
+-		vgl_fast_memcpy(buffer, p->unif_fbuffer, p->fshader->unif_buf_size); \
+-		dirty_shader_frag_unifs = GL_FALSE; \
++		if (buffer) vgl_fast_memcpy(buffer, p->unif_fbuffer, p->fshader->unif_buf_size); \
++		else uniforms_ready = GL_FALSE; \
++		dirty_shader_frag_unifs = !buffer; \
+ 	} \
+ 	if (p->vert_ubos) { \
+ 		ubo *u = p->vert_ubos; \
+@@ -167,6 +173,7 @@ char vgl_file_cache_path[256];
+ 	}
+ #else
+ #define upload_uniforms() \
++	GLboolean uniforms_ready = GL_TRUE; \
+ 	if (p->vert_uniforms && (dirty_vert_unifs || dirty_shader_vert_unifs)) { \
+ 		void *buffer = vglReserveVertexUniformBuffer(p->vshader->unif_buf_size); \
+ 		if (dirty_vert_unifs) { \
+@@ -191,13 +198,15 @@ char vgl_file_cache_path[256];
+ 				vglSetUniformData(p->ffp_binds[FFP_NORMAL_MATRIX]->vptr, SCE_GXM_PARAMETER_TYPE_F32, 0, 3, 3, (const float *)normal_matrix, SCE_GXM_PARAMETER_TYPE_F32); \
+ 			} \
+ 		} \
+-		vgl_fast_memcpy(buffer, p->unif_vbuffer, p->vshader->unif_buf_size); \
+-		dirty_shader_vert_unifs = GL_FALSE; \
++		if (buffer) vgl_fast_memcpy(buffer, p->unif_vbuffer, p->vshader->unif_buf_size); \
++		else uniforms_ready = GL_FALSE; \
++		dirty_shader_vert_unifs = !buffer; \
+ 	} \
+ 	if (p->frag_uniforms && dirty_shader_frag_unifs) { \
+ 		void *buffer = vglReserveFragmentUniformBuffer(p->fshader->unif_buf_size); \
+-		vgl_fast_memcpy(buffer, p->unif_fbuffer, p->fshader->unif_buf_size); \
+-		dirty_shader_frag_unifs = GL_FALSE; \
++		if (buffer) vgl_fast_memcpy(buffer, p->unif_fbuffer, p->fshader->unif_buf_size); \
++		else uniforms_ready = GL_FALSE; \
++		dirty_shader_frag_unifs = !buffer; \
+ 	} \
+ 	if (p->vert_ubos) { \
+ 		ubo *u = p->vert_ubos; \
+@@ -582,22 +591,34 @@ void *serialize_shader(void *out, size_t *sz, shader *s, GLboolean save_bindings
+ void unserialize_shader(void *in, size_t sz, shader *s, GLboolean load_bindings) {
+ 	uint8_t *buf = (uint8_t *)in;
+ 	uint32_t matrix_uniforms_num;
++	// Disk caches may be truncated or produced with a different binding layout.
++	// Validate offsets before subtracting them from size (unsigned underflow
++	// previously requested gigabytes and crashed in memcpy at chapter startup).
++	if (!in || sz < sizeof(uint32_t)) return;
+ 	vgl_fast_memcpy(&matrix_uniforms_num, buf, sizeof(uint32_t));
++	if (matrix_uniforms_num > (sz - sizeof(uint32_t)) / sizeof(uint32_t)) return;
+ 	buf += sizeof(uint32_t) * (matrix_uniforms_num + 1);
+ 	if (load_bindings) {
++		if (sz - (size_t)(buf - (uint8_t *)in) < sizeof(binds_map)) return;
+ 		vgl_fast_memcpy(&s->semantics, buf, sizeof(binds_map));
+ 		buf += sizeof(binds_map);
+ 	}
+ #ifdef HAVE_GLSL_TEXTURE_SIZE
++	if ((size_t)(buf - (uint8_t *)in) >= sz) return;
+ 	s->sized_samplers_num = *buf;
+ 	buf++;
+ 	if (s->sized_samplers_num) {
++		if ((size_t)s->sized_samplers_num * sizeof(glsl_samplers_info) > sizeof(s->sized_samplers) ||
++		    (size_t)s->sized_samplers_num * sizeof(glsl_samplers_info) > sz - (size_t)(buf - (uint8_t *)in)) return;
+ 		vgl_fast_memcpy(s->sized_samplers, buf, sizeof(glsl_samplers_info) * s->sized_samplers_num);
+ 		buf += sizeof(glsl_samplers_info) * s->sized_samplers_num;
+ 	}
+ #endif
+-	s->size = sz - ((uintptr_t)buf - (uintptr_t)in);
+-	s->prog = (SceGxmProgram *)vglMalloc(s->size);
++	size_t program_size = sz - ((uintptr_t)buf - (uintptr_t)in);
++	if (program_size < 16 || memcmp(buf, "GXP", 3) != 0) return;
++	s->prog = (SceGxmProgram *)vglMalloc(program_size);
++	if (!s->prog) return;
++	s->size = program_size;
+ 	vgl_fast_memcpy((SceGxmProgram *)s->prog, buf, s->size);
+ 	sceGxmShaderPatcherRegisterProgram(gxm_shader_patcher, s->prog, &s->id);
+ 	s->unif_buf_size = sceGxmProgramGetDefaultUniformBufferSize(s->prog);
+@@ -877,7 +898,7 @@ void _glMultiDrawArrays_CustomShadersIMPL(SceGxmPrimitiveType gxm_p, uint16_t *i
+ 	// Uploading both fragment and vertex uniforms data
+ 	upload_uniforms();
+ 	
+-	for (int j = 0; j < drawcount; j++) {
++	for (int j = 0; uniforms_ready && j < drawcount; j++) {
+ 		// Uploading vertex streams
+ 		for (int i = 0; i < p->attr_num; i++) {
+ 			uint8_t attr_idx = p->attr_map[i];
+@@ -1151,7 +1172,7 @@ GLboolean _glDrawArrays_CustomShadersIMPL(GLint first, GLsizei count, GLboolean
+ 	shaders_draw_profiler_cnt += sceKernelGetProcessTimeLow() - draw_start;
+ 	shaders_draw_cnt++;
+ #endif
+-	return GL_TRUE;
++	return uniforms_ready;
+ }
+ 
+ GLboolean _glDrawElements_CustomShadersIMPL(uint16_t *idx_buf, GLsizei count, uint32_t top_idx, uint32_t base_idx, SceGxmIndexSource index_type) {
+@@ -1431,11 +1452,11 @@ GLboolean _glDrawElements_CustomShadersIMPL(uint16_t *idx_buf, GLsizei count, ui
+ 	shaders_draw_profiler_cnt += sceKernelGetProcessTimeLow() - draw_start;
+ 	shaders_draw_cnt++;
+ #endif
+-	return GL_TRUE;
++	return uniforms_ready;
+ }
+ 
+ #ifdef ENABLE_LEGACY_PIPELINE
+-void _vglDrawObjects_CustomShadersIMPL() {
++GLboolean _vglDrawObjects_CustomShadersIMPL() {
+ #ifdef HAVE_PROFILING
+ 	uint32_t draw_start = sceKernelGetProcessTimeLow();
+ #endif
+@@ -1479,6 +1500,7 @@ void _vglDrawObjects_CustomShadersIMPL() {
+ 	shaders_draw_profiler_cnt += sceKernelGetProcessTimeLow() - draw_start;
+ 	shaders_draw_cnt++;
+ #endif
++	return uniforms_ready;
+ }
+ #endif
+ 
+@@ -1758,19 +1780,17 @@ void glCompileShader(GLuint handle) {
+ 	
+ #ifdef HAVE_SHADER_CACHE
+ 	char fname[256];
+-	sprintf(fname, "%s/%llX.gxp", vgl_shader_cache_path, XXH3_64bits(s->source, s->size));
++	snprintf(fname, sizeof(fname), "%s/single-v2-%llX.gxp", vgl_shader_cache_path, XXH3_64bits(s->source, s->size));
+ 	SceUID f = sceIoOpen(fname, SCE_O_RDONLY, 0777);
+ 	if (f >= 0) {
+-		vgl_free(s->source);
+-		s->source = NULL;
+ 		size_t sz = sceIoLseek(f, 0, SCE_SEEK_END);
+ 		sceIoLseek(f, 0, SCE_SEEK_SET);
+ 		void *buf = vglMalloc(sz);
+-		sceIoRead(f, buf, sz);
++		int bytes_read = buf ? sceIoRead(f, buf, sz) : -1;
+ 		sceIoClose(f);
+-		unserialize_shader(buf, sz, s, GL_FALSE);
++		if (bytes_read == sz) unserialize_shader(buf, sz, s, GL_FALSE);
+ 		vgl_free(buf);
+-		return;
++		if (s->prog) { vgl_free(s->source); s->source = NULL; return; }
+ 	}
+ #endif
+ 
+@@ -2135,29 +2155,31 @@ void glLinkProgram(GLuint progr) {
+ #ifdef HAVE_SHADER_CACHE
+ 		char frag_fname[256], vert_fname[256];
+ 		char *fname;
++		uint64_t vertex_cache_hash = p->vshader->source ? XXH3_64bits(p->vshader->source, p->vshader->size) : 0;
++		uint64_t fragment_cache_hash = p->fshader->source ? XXH3_64bits(p->fshader->source, p->fshader->size) : 0;
+ 		if (!p->vshader->prog) {
+-			sprintf(vert_fname, "%s/%llX.gxp", vgl_shader_cache_path, XXH3_64bits(p->vshader->source, p->vshader->size));
++			snprintf(vert_fname, sizeof(vert_fname), "%s/pair-v2-%llX-%llX-v.gxp", vgl_shader_cache_path, vertex_cache_hash, fragment_cache_hash);
+ 			SceUID f = sceIoOpen(vert_fname, SCE_O_RDONLY, 0777);
+ 			if (f >= 0) {
+ 				size_t sz = sceIoLseek(f, 0, SCE_SEEK_END);
+ 				sceIoLseek(f, 0, SCE_SEEK_SET);
+ 				void *buf = vglMalloc(sz);
+-				sceIoRead(f, buf, sz);
++				int bytes_read = buf ? sceIoRead(f, buf, sz) : -1;
+ 				sceIoClose(f);
+-				unserialize_shader(buf, sz, p->vshader, GL_TRUE);
++				if (bytes_read == sz) unserialize_shader(buf, sz, p->vshader, GL_TRUE);
+ 				vgl_free(buf);
+ 			}
+ 		}
+ 		if (!p->fshader->prog) {
+-			sprintf(frag_fname, "%s/%llX.gxp", vgl_shader_cache_path, XXH3_64bits(p->fshader->source, p->fshader->size));
++			snprintf(frag_fname, sizeof(frag_fname), "%s/pair-v2-%llX-%llX-f.gxp", vgl_shader_cache_path, vertex_cache_hash, fragment_cache_hash);
+ 			SceUID f = sceIoOpen(frag_fname, SCE_O_RDONLY, 0777);
+ 			if (f >= 0) {
+ 				size_t sz = sceIoLseek(f, 0, SCE_SEEK_END);
+ 				sceIoLseek(f, 0, SCE_SEEK_SET);
+ 				void *buf = vglMalloc(sz);
+-				sceIoRead(f, buf, sz);
++				int bytes_read = buf ? sceIoRead(f, buf, sz) : -1;
+ 				sceIoClose(f);
+-				unserialize_shader(buf, sz, p->fshader, GL_TRUE);
++				if (bytes_read == sz) unserialize_shader(buf, sz, p->fshader, GL_TRUE);
+ 				vgl_free(buf);
+ 			}
+ 		}
+diff --git a/source/draw.c b/source/draw.c
+index e9e6c8c..33cb91c 100644
+--- a/source/draw.c
++++ b/source/draw.c
+@@ -180,9 +180,8 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count) {
+ 		_glDrawArrays_FixedFunctionIMPL(first, count);
+ 	}
+ 
+-#ifndef SKIP_ERROR_HANDLING
++	// Allocation failures must suppress GPU submission in release builds too.
+ 	if (is_draw_legal)
+-#endif
+ 	{
+ 		uint16_t *ptr;
+ 		switch (mode) {
+@@ -292,9 +291,8 @@ void glDrawArraysInstanced(GLenum mode, GLint first, GLsizei count, GLsizei prim
+ 	scene_reset();
+ 	GLboolean is_draw_legal = _glDrawArrays_CustomShadersIMPL(first, count, GL_TRUE);
+ 
+-#ifndef SKIP_ERROR_HANDLING
++	// Allocation failures must suppress GPU submission in release builds too.
+ 	if (is_draw_legal)
+-#endif
+ 	{
+ 		uint16_t *ptr;
+ 		switch (mode) {
+@@ -372,9 +370,8 @@ void glDrawElements(GLenum mode, GLsizei count, GLenum type, const GLvoid *gl_in
+ 		_glDrawElements_FixedFunctionIMPL(src, count, 0, 0, type != GL_UNSIGNED_INT ? SCE_GXM_INDEX_SOURCE_INDEX_16BIT : SCE_GXM_INDEX_SOURCE_INDEX_32BIT);
+ 	}
+ 
+-#ifndef SKIP_ERROR_HANDLING
++	// Allocation failures must suppress GPU submission in release builds too.
+ 	if (is_draw_legal)
+-#endif
+ 	{
+ 		if (type == GL_UNSIGNED_SHORT) {
+ 			setup_elements_indices(uint16_t);
+@@ -418,9 +415,8 @@ void glDrawElementsBaseVertex(GLenum mode, GLsizei count, GLenum type, const GLv
+ 		_glDrawElements_FixedFunctionIMPL(src, count, 0, baseVertex, type == GL_UNSIGNED_SHORT ? SCE_GXM_INDEX_SOURCE_INDEX_16BIT : SCE_GXM_INDEX_SOURCE_INDEX_32BIT);
+ 	}
+ 
+-#ifndef SKIP_ERROR_HANDLING
++	// Allocation failures must suppress GPU submission in release builds too.
+ 	if (is_draw_legal)
+-#endif
+ 	{
+ 		if (type == GL_UNSIGNED_INT) {
+ 			setup_elements_indices(uint32_t);
+@@ -465,9 +461,8 @@ void glDrawRangeElements(GLenum mode, GLuint start, GLuint end, GLsizei count, G
+ 		_glDrawElements_FixedFunctionIMPL(src, count, end + 1, 0, type == GL_UNSIGNED_SHORT ? SCE_GXM_INDEX_SOURCE_INDEX_16BIT : SCE_GXM_INDEX_SOURCE_INDEX_32BIT);
+ 	}
+ 
+-#ifndef SKIP_ERROR_HANDLING
++	// Allocation failures must suppress GPU submission in release builds too.
+ 	if (is_draw_legal)
+-#endif
+ 	{
+ 		if (type == GL_UNSIGNED_INT) {
+ 			setup_elements_indices(uint32_t);
+@@ -510,9 +505,8 @@ void glDrawRangeElementsBaseVertex(GLenum mode, GLuint start, GLuint end, GLsize
+ 		_glDrawElements_FixedFunctionIMPL(src, count, end + baseVertex + 1, baseVertex, type == GL_UNSIGNED_SHORT ? SCE_GXM_INDEX_SOURCE_INDEX_16BIT : SCE_GXM_INDEX_SOURCE_INDEX_32BIT);
+ 	}
+ 
+-#ifndef SKIP_ERROR_HANDLING
++	// Allocation failures must suppress GPU submission in release builds too.
+ 	if (is_draw_legal)
+-#endif
+ 	{
+ 		if (type == GL_UNSIGNED_INT) {
+ 			setup_elements_indices(uint32_t)
+@@ -550,9 +544,8 @@ void glDrawElementsInstanced(GLenum mode, GLsizei count, GLenum type, const void
+ 	uint16_t *src = gpu_buf ? (uint16_t *)((uint8_t *)gpu_buf->ptr + (uint32_t)gl_indices) : (uint16_t *)gl_indices;
+ 	GLboolean is_draw_legal = _glDrawElements_CustomShadersIMPL(src, count, 0, 0, type == GL_UNSIGNED_SHORT ? SCE_GXM_INDEX_SOURCE_INSTANCE_16BIT : SCE_GXM_INDEX_SOURCE_INSTANCE_32BIT);
+ 
+-#ifndef SKIP_ERROR_HANDLING
++	// Allocation failures must suppress GPU submission in release builds too.
+ 	if (is_draw_legal)
+-#endif
+ 	{
+ 		if (type == GL_UNSIGNED_INT) {
+ 			setup_elements_indices(uint32_t);
+@@ -585,7 +578,7 @@ void vglDrawObjects(GLenum mode, GLsizei count) {
+ 
+ 	texture_unit *tex_unit = &texture_units[0];
+ 	if (cur_program != 0) {
+-		_vglDrawObjects_CustomShadersIMPL();
++		{ if (!_vglDrawObjects_CustomShadersIMPL()) return; }
+ 		sceGxmDraw(gxm_context, gxm_p, SCE_GXM_INDEX_FORMAT_U16, index_object, count);
+ 	} else if (ffp_vertex_attrib_state & (1 << FFP_ATTRIB_POSITION)) {
+ 		reload_ffp_shaders(NULL, NULL, SCE_GXM_INDEX_SOURCE_INDEX_16BIT);
+diff --git a/source/gxm.c b/source/gxm.c
+index 1c71013..7804269 100644
+--- a/source/gxm.c
++++ b/source/gxm.c
+@@ -162,7 +162,10 @@ static inline __attribute__((always_inline)) int setup_render_target(SceGxmRende
+ 
+ #ifdef HAVE_SHARED_RENDERTARGETS
+ #define MAX_RENDER_TARGETS_NUM 47 // Maximum amount of dedicated render targets usable for fbos
+-#define MAX_SHARED_RT_SIZE 256 // Maximum  width value in pixels for shared rendertargets usage
++// Chapter 5's flowery room uses many 360x360 effect surfaces. Sharing the
++// driver render target (not their colour/depth storage) avoids one private
++// driver allocation per surface. GXM supports at most eight references.
++#define MAX_SHARED_RT_SIZE 512 // Maximum width for shared render targets
+ render_target rt_list[MAX_RENDER_TARGETS_NUM];
+ 
+ render_target *get_free_render_target(int w, int h) {
+@@ -427,9 +430,8 @@ void init_gxm_context(SceGxmContext **ctx, uint8_t ctx_slot) {
+ #ifdef DISABLE_W_CLAMPING
+ 	sceGxmSetWClampEnable(**ctx, SCE_GXM_WCLAMP_MODE_DISABLED);
+ #endif
+-
+-	// Initializing circular pool for uniform buffers
+ 	vglSetupUniformCircularPool();
++
+ }
+ 
+ void create_display_render_target(void) {
+@@ -626,6 +628,13 @@ void scene_reset(void) {
+ 			if (sceGxmColorSurfaceGetData(&active_write_fb->colorbuffer) != active_write_fb->tex->data) {
+ 				_glFramebufferTexture2D(active_write_fb, GL_COLOR_ATTACHMENT0, active_write_fb->tex, 1);
+ 			}
++
++#ifndef TEXTURES_SPEEDHACK
++			// Rendering writes this allocation just as sampling reads it. Without
++			// this stamp an unsampled surface is freed immediately while GXM is
++			// still writing to it, corrupting the next allocation in the heap.
++			active_write_fb->tex->last_frame = vgl_framecount;
++#endif
+ 			
+ 			// If the depthbuffer is dirty, we re-gen it
+ 			if (!(active_write_fb->depthbuffer_state & DEPTHBUFFER_READY)) {
+@@ -800,6 +809,7 @@ void vglSwapBuffers(GLboolean has_commondialog) {
+ 
+ 	if (!needs_scene_reset)
+ 		scene_end();
++	vglUniformPoolFrameBoundary();
+ 
+ 	if (vgl_has_cdlg_support && has_commondialog) {
+ 		// Performing commondialog update
+@@ -967,6 +977,28 @@ void glFinish(void) {
+ 	sceGxmFinish(gxm_context);
+ }
+ 
++static int last_internal_uniform_error = 0;
++
++int vglGetLastInternalUniformError(void) {
++    int result = last_internal_uniform_error;
++    last_internal_uniform_error = 0;
++    return result;
++}
++
++GLboolean vglReserveInternalUniformBuffer(GLboolean fragment, void **buffer) {
++    // GXM can reject a reservation (e.g. after a failed scene setup). Never
++    // pass the caller's uninitialised stack value to sceGxmSetUniformDataF.
++    *buffer = NULL;
++    int result = fragment ? sceGxmReserveFragmentDefaultUniformBuffer(gxm_context, buffer) :
++                            sceGxmReserveVertexDefaultUniformBuffer(gxm_context, buffer);
++    if (result < 0 || *buffer == NULL) {
++        last_internal_uniform_error = result < 0 ? result : (int)SCE_GXM_ERROR_RESERVE_FAILED;
++        vgl_error = GL_OUT_OF_MEMORY;
++        return GL_FALSE;
++    }
++    return GL_TRUE;
++}
++
+ void glReleaseShaderCompiler(void) {
+ 	THREAD_SAFE()
+ 
+@@ -1000,4 +1032,55 @@ void vglSetupDisplayRenderTarget(uint8_t size) {
+ 	}
+ #endif
+ 	gxm_display_rt_size = size;
+-}
+\ No newline at end of file
++}
++
++void vglForceGarbageCollection(void) {
++    // glDeleteTextures/glDeleteFramebuffers defer their backing allocations
++    // for several swaps. A room transition can delete and replace dozens of
++    // atlases before another swap happens, so those pending allocations used
++    // to overlap the destination room and exhaust every mapped pool. Once GXM
++    // is idle all purge generations are safe to reclaim immediately.
++    if (!gxm_initialized) return;
++    // Do not use glFinish here: it calls scene_reset, which opens another
++    // scene and can enqueue scissor draws. sceGxmFinish only waits for
++    // submitted scenes; that newly opened scene would survive the purge.
++    // Leave scene creation to the next draw, after all retired data is freed.
++    if (needs_end_scene) {
++        scene_end();
++        needs_end_scene = GL_FALSE;
++    }
++    needs_scene_reset = GL_TRUE;
++    sceGxmFinish(gxm_context);
++#ifdef HAVE_SINGLE_THREADED_GC
++    // Use vitaGL's own generation rotation instead of walking every backing
++    // array manually. Besides preserving the producer/clean indices, this
++    // only visits the populated prefix of each generation and avoids freeing
++    // stale entries left beyond its terminator.
++    for (int generation = 0; generation < FRAME_PURGE_FREQ; ++generation)
++        garbage_collector(0, NULL);
++    return;
++#else
++    // gc_mutex[1] is a counting semaphore with one token per purge
++    // generation, not a binary mutex. Taking a single token did not exclude
++    // the worker: it could free a texture concurrently with this loop, which
++    // corrupted the mspace accounting during repeated room transitions.
++    // Acquire every token so no asynchronous collection can be active while
++    // the fully-idle GXM queue is drained.
++    sceKernelWaitSema(gc_mutex[1], FRAME_PURGE_FREQ, NULL);
++    for (int generation = 0; generation < FRAME_PURGE_FREQ; ++generation) {
++        for (int i = 0; i < FRAME_PURGE_LIST_SIZE; ++i) {
++            if (frame_purge_list[generation][i] == NULL) continue;
++            vgl_free(frame_purge_list[generation][i]);
++            frame_purge_list[generation][i] = NULL;
++        }
++        for (int i = 0; i < FRAME_PURGE_RENDERTARGETS_LIST_SIZE; ++i) {
++            if (frame_rt_purge_list[generation][i] == NULL) continue;
++            sceGxmDestroyRenderTarget(frame_rt_purge_list[generation][i]);
++            frame_rt_purge_list[generation][i] = NULL;
++        }
++    }
++    frame_elem_purge_idx = 0;
++    frame_rt_purge_idx = 0;
++    sceKernelSignalSema(gc_mutex[1], FRAME_PURGE_FREQ);
++#endif
++}
+diff --git a/source/misc.c b/source/misc.c
+index 1a27d55..4ecf10e 100644
+--- a/source/misc.c
++++ b/source/misc.c
+@@ -670,11 +670,11 @@ void glClear(GLbitfield mask) {
+ 	sceGxmSetVertexProgram(gxm_context, clear_vertex_program_patched);
+ 	sceGxmSetFragmentProgram(gxm_context, is_fbo_float ? clear_fragment_program_float_patched : clear_fragment_program_patched);
+ 
+-	sceGxmReserveVertexDefaultUniformBuffer(gxm_context, &vbuffer);
++	if (!vglReserveInternalUniformBuffer(GL_FALSE, &vbuffer)) goto restore_clear_state;
+ 	sceGxmSetUniformDataF(vbuffer, clear_position, 0, 4, &clear_vertices->x);
+ 	sceGxmSetUniformDataF(vbuffer, clear_depth, 0, 1, &clear_depth_value);
+ 
+-	sceGxmReserveFragmentDefaultUniformBuffer(gxm_context, &fbuffer);
++	if (!vglReserveInternalUniformBuffer(GL_TRUE, &fbuffer)) goto restore_clear_state;
+ 	sceGxmSetUniformDataF(fbuffer, clear_color, 0, 4, &clear_rgba_val.r);
+ 
+ 	// Disable fragment program if not clearing color buffer. Depth and stencil clears are unaffected.
+@@ -716,6 +716,7 @@ void glClear(GLbitfield mask) {
+ 
+ 	sceGxmDraw(gxm_context, SCE_GXM_PRIMITIVE_TRIANGLE_FAN, SCE_GXM_INDEX_FORMAT_U16, depth_clear_indices, 4);
+ 
++restore_clear_state:
+ 	validate_depth_test();
+ 	change_depth_write((depth_mask_state && depth_test_state) ? SCE_GXM_DEPTH_WRITE_ENABLED : SCE_GXM_DEPTH_WRITE_DISABLED);
+ 
+diff --git a/source/shared.h b/source/shared.h
+index c1943b1..d454ccb 100644
+--- a/source/shared.h
++++ b/source/shared.h
+@@ -1175,6 +1175,7 @@ extern uint8_t dirty_framebuffer; // Flag wether current in use framebuffer is i
+ // Scissor test shaders
+ extern SceGxmFragmentProgram *scissor_test_fragment_program; // Scissor test fragment program
+ extern vector4f *scissor_test_vertices; // Scissor test region vertices
++GLboolean vglReserveInternalUniformBuffer(GLboolean fragment, void **buffer);
+ 
+ extern uint16_t *depth_clear_indices; // Memblock starting address for clear screen indices
+ 
+@@ -1230,7 +1231,7 @@ GLenum gxm_blend_eq_to_gl(SceGxmBlendFunc factor); // Converts SceGxmBlendFunc t
+ /* custom_shaders.c */
+ void reset_custom_shaders(void); // Resets custom shaders
+ float *reserve_attrib_pool(uint8_t count);
+-void _vglDrawObjects_CustomShadersIMPL(); // vglDrawObjects implementation for rendering with custom shaders
++GLboolean _vglDrawObjects_CustomShadersIMPL(); // vglDrawObjects implementation for rendering with custom shaders
+ GLboolean _glDrawElements_CustomShadersIMPL(uint16_t *idx_buf, GLsizei count, uint32_t top_idx, uint32_t base_idx, GLboolean is_short); // glDrawElements implementation for rendering with custom shaders
+ GLboolean _glDrawArrays_CustomShadersIMPL(GLint first, GLsizei count, GLboolean instanced); // glDrawArrays implementation for rendering with custom shaders
+ void _glMultiDrawArrays_CustomShadersIMPL(SceGxmPrimitiveType gxm_p, uint16_t *idx_buf, const GLint *first, const GLsizei *count, GLint lowest, GLsizei highest, GLsizei drawcount); // glMultiDrawArrays implementation for rendering with custom shaders
+diff --git a/source/tests.c b/source/tests.c
+index aad6b0e..dd161ec 100644
+--- a/source/tests.c
++++ b/source/tests.c
+@@ -252,6 +252,7 @@ inline __attribute__((always_inline)) void update_alpha_test_settings() {
+ 
+ void update_scissor_test() {
+ 	const float scissor_depth = 1.0f;
++	GLboolean uniforms_ready = GL_TRUE;
+ 
+ 	// Setting current vertex program to clear screen one and fragment program to scissor test one
+ 	sceGxmSetVertexProgram(gxm_context, clear_vertex_program_patched);
+@@ -294,7 +295,10 @@ void update_scissor_test() {
+ 		vector4f_convert_to_local_space(scissor_test_vertices, region.x, region.y, region.w, region.h);
+ 
+ 		void *vertex_buffer;
+-		sceGxmReserveVertexDefaultUniformBuffer(gxm_context, &vertex_buffer);
++		if (!vglReserveInternalUniformBuffer(GL_FALSE, &vertex_buffer)) {
++			uniforms_ready = GL_FALSE;
++			goto restore_scissor_state;
++		}
+ 		sceGxmSetUniformDataF(vertex_buffer, clear_position, 0, 4, &clear_vertices->x);
+ 		sceGxmSetUniformDataF(vertex_buffer, clear_depth, 0, 1, &scissor_depth);
+ 
+@@ -329,12 +333,16 @@ void update_scissor_test() {
+ 		0, 0);
+ 
+ 	void *vertex_buffer;
+-	sceGxmReserveVertexDefaultUniformBuffer(gxm_context, &vertex_buffer);
++	if (!vglReserveInternalUniformBuffer(GL_FALSE, &vertex_buffer)) {
++		uniforms_ready = GL_FALSE;
++		goto restore_scissor_state;
++	}
+ 	sceGxmSetUniformDataF(vertex_buffer, clear_position, 0, 4, scissor_test_state ? &scissor_test_vertices->x : &clear_vertices->x);
+ 	sceGxmSetUniformDataF(vertex_buffer, clear_depth, 0, 1, &scissor_depth);
+ 
+ 	sceGxmDraw(gxm_context, SCE_GXM_PRIMITIVE_TRIANGLE_FAN, SCE_GXM_INDEX_FORMAT_U16, depth_clear_indices, 4);
+ 
++restore_scissor_state:
+ 	// Restoring viewport and culling
+ 	validate_viewport();
+ 	change_cull_mode();
+@@ -356,7 +364,7 @@ void update_scissor_test() {
+ 	refresh_stencil_settings();
+ 
+ 	vglRestoreVertexUniformBuffer();
+-	dirty_scissor_state = GL_FALSE;
++	dirty_scissor_state = !uniforms_ready;
+ }
+ 
+ void reset_scissor_test_region(void) {
+diff --git a/source/utils/gpu_utils.c b/source/utils/gpu_utils.c
+index f54e9cf..be43924 100644
+--- a/source/utils/gpu_utils.c
++++ b/source/utils/gpu_utils.c
+@@ -89,7 +89,10 @@ void dxt_compress(uint8_t *dst, uint8_t *src, int w, int h, int isdxt5) {
+ }
+ 
+ static inline __attribute__((always_inline)) void *gpu_alloc_mapped_aligned_for_cpu_inner(size_t alignment, size_t size) {
+-	void *res;
++	// Keep the failure result deterministic. When every mapped pool is full
++	// and external memory is disabled, the old code returned an uninitialised
++	// stack value which could look like a valid texture address.
++	void *res = NULL;
+ 	vgl_alloc_attempt(alignment, size, VGL_MEM_RAM)
+ 	vgl_alloc_attempt(alignment, size, VGL_MEM_SLOW)
+ 	vgl_alloc_attempt(alignment, size, VGL_MEM_BUDGET)
+@@ -101,7 +104,9 @@ static inline __attribute__((always_inline)) void *gpu_alloc_mapped_aligned_for_
+ }
+ 
+ static inline __attribute__((always_inline)) void *gpu_alloc_mapped_aligned_for_gpu_inner(size_t alignment, size_t size) {
+-	void *res;
++	// See the CPU variant above: callers must receive NULL on exhaustion so
++	// they can defer the upload instead of writing through a garbage pointer.
++	void *res = NULL;
+ 	vgl_alloc_attempt(alignment, size, VGL_MEM_VRAM)
+ 	vgl_alloc_attempt(alignment, size, VGL_MEM_RAM)
+ 	vgl_alloc_attempt(alignment, size, VGL_MEM_SLOW)
+@@ -262,6 +267,37 @@ void *gpu_alloc_mapped_aligned_for_gpu(size_t alignment, size_t size) {
+ 	return res;
+ }
+ 
++void *gpu_alloc_mapped_for_texture(size_t size) {
++    void *res = NULL;
++    // Chapter 5 still filled CDRAM after room construction because only the
++    // first few BC3 pages could use RAM/PHY; the old 8/4 MiB reserves then
++    // redirected every late page back to VRAM. Keep smaller operational
++    // reserves and allow two more 4 MiB atlases to remain outside CDRAM.
++    const size_t ram_reserve = 3 * 1024 * 1024;
++    const size_t slow_reserve = 1 * 1024 * 1024;
++    // BC3 is sampled by GXM from every mapped pool. Use the otherwise-idle
++    // pools first, but leave enough space for transient uploads/audio and room
++    // construction. The ordinary GPU allocator remains VRAM-first for display
++    // buffers, render targets and application surfaces.
++    if (vglMemFree(VGL_MEM_RAM) > size + ram_reserve) {
++        res = vgl_memalign(MEM_ALIGNMENT, size, VGL_MEM_RAM);
++        if (res) return res;
++    }
++    if (vglMemFree(VGL_MEM_SLOW) > size + slow_reserve) {
++        res = vgl_memalign(MEM_ALIGNMENT, size, VGL_MEM_SLOW);
++        if (res) return res;
++    }
++    res = vgl_memalign(MEM_ALIGNMENT, size, VGL_MEM_VRAM);
++    if (res) return res;
++    // If VRAM is fragmented, use the remaining mapped pools as a last resort.
++    res = vgl_memalign(MEM_ALIGNMENT, size, VGL_MEM_RAM);
++    if (res) return res;
++    res = vgl_memalign(MEM_ALIGNMENT, size, VGL_MEM_SLOW);
++    if (res) return res;
++    if (use_extra_mem) return vgl_memalign(MEM_ALIGNMENT, size, VGL_MEM_EXTERNAL);
++    return NULL;
++}
++
+ void *gpu_vertex_usse_alloc_mapped(size_t size, unsigned int *usse_offset) {
+ 	// Allocating memblock
+ 	void *addr;
+@@ -394,9 +430,27 @@ void gpu_alloc_texture(uint32_t w, uint32_t h, SceGxmTextureFormat format, const
+ 	// Allocating texture data buffer
+ 	const int aligned_w = VGL_ALIGN(w, 8);
+ 	const int tex_size = aligned_w * h * bpp;
+-	void *texture_data = gpu_alloc_mapped_for_gpu(tex_size);
+-
+-	if (texture_data) {
++    // Large immutable atlas uploads do not need to consume CDRAM. GXM can
++    // sample them directly from mapped RAM/PHY, while render-target textures
++    // (data == NULL) retain the VRAM-first path. This prevents Chapter 5's
++    // lossless RGBA4444/font pages from filling CDRAM even though the BC3
++    // pages already use the distributed texture allocator.
++    void *texture_data = data != NULL && tex_size >= 512 * 1024 ?
++                         gpu_alloc_mapped_for_texture(tex_size) :
++                         gpu_alloc_mapped_for_gpu(tex_size);
++
++    // The unsafe generic allocator can otherwise return from an exhausted
++    // room transition with no valid backing store and the conversion loop
++    // writes through an invalid pointer. Report OOM to glTexImage2D's caller;
++    // the runner will defer and retry this page on a later frame.
++    if (!texture_data) {
++        tex->status = TEX_UNINITIALIZED;
++        tex->data = NULL;
++        vgl_error = GL_OUT_OF_MEMORY;
++        return;
++    }
++
++    {
+ 		// Initializing texture data buffer
+ 		if (data) {
+ 			uint8_t *src = (uint8_t *)data;
+@@ -410,8 +464,8 @@ void gpu_alloc_texture(uint32_t w, uint32_t h, SceGxmTextureFormat format, const
+ 						dst = ((uint8_t *)texture_data) + (aligned_w * bpp) * i;
+ 						vgl_fast_memcpy(dst, src, line_size);
+ 						src += line_size;
+-					}
+-				}
++    }
++}
+ 			} else { // Different internal and data formats, we need to go with slower callbacks system
+ 				for (int i = 0; i < h; i++) {
+ 					dst = ((uint8_t *)texture_data) + (aligned_w * bpp) * i;
+@@ -590,8 +644,16 @@ void gpu_alloc_compressed_cube_texture(uint32_t w, uint32_t h, SceGxmTextureForm
+ 				case SCE_GXM_TEXTURE_FORMAT_PVRT4BPP_ABGR:
+ 					vgl_fast_memcpy(mip_data, data, image_size);
+ 					break;
+-				case SCE_GXM_TEXTURE_FORMAT_UBC2_ABGR:
+ 				case SCE_GXM_TEXTURE_FORMAT_UBC3_ABGR:
++					// The GXM transfer path occasionally produced malformed BC3
++					// block ordering for 2048x2048 GameMaker atlases. Use the
++					// deterministic CPU swizzler for BC3; this runs only once at
++					// upload and avoids corrupting every sprite sharing the page.
++					SwizzleTexData128Bpp((uint8_t *)mip_data, (uint8_t *)data,
++						0, 0, ALIGNBLOCK(w, 4), ALIGNBLOCK(h, 4), ALIGNBLOCK(w, 4),
++						ALIGNBLOCK(MIN(aligned_width, aligned_height), 4));
++					break;
++				case SCE_GXM_TEXTURE_FORMAT_UBC2_ABGR:
+ 				case SCE_GXM_TEXTURE_FORMAT_UBC5_GR:
+ 					if (aligned_width == w && aligned_height == h && h <= 2048 && w <= 2048) {
+ #ifdef TEXTURE_UPLOADS_SPEEDHACK
+@@ -701,7 +763,7 @@ void gpu_alloc_compressed_texture(int32_t mip_level, uint32_t w, uint32_t h, Sce
+ 			texture_data = vgl_realloc(tex->data, tex_size);
+ 			if (!texture_data) {
+ 				// Reallocation in the same mspace failed, try manually.
+-				texture_data = gpu_alloc_mapped_for_gpu(tex_size);
++				texture_data = gpu_alloc_mapped_for_texture(tex_size);
+ 				const int old_data_size = gpu_get_compressed_mipchain_size(mip_count, aligned_max_width, aligned_max_height, format);
+ 				vgl_memcpy(texture_data, tex->data, old_data_size);
+ 				gpu_free_texture_data(tex);
+@@ -714,7 +776,7 @@ void gpu_alloc_compressed_texture(int32_t mip_level, uint32_t w, uint32_t h, Sce
+ 		mip_count = mip_level;
+ 		tex_width = w;
+ 		tex_height = h;
+-		texture_data = gpu_alloc_mapped_for_gpu(tex_size);
++		texture_data = gpu_alloc_mapped_for_texture(tex_size);
+ 	}
+ 
+ 	// Initializing texture data buffer
+@@ -734,8 +796,14 @@ void gpu_alloc_compressed_texture(int32_t mip_level, uint32_t w, uint32_t h, Sce
+ 				case SCE_GXM_TEXTURE_FORMAT_PVRT4BPP_ABGR:
+ 					vgl_fast_memcpy(mip_data, data, image_size);
+ 					break;
+-				case SCE_GXM_TEXTURE_FORMAT_UBC2_ABGR:
+ 				case SCE_GXM_TEXTURE_FORMAT_UBC3_ABGR:
++					// See the matching base-level path above. BC3 atlases use a
++					// CPU swizzle so their block layout is stable on real hardware.
++					SwizzleTexData128Bpp((uint8_t *)mip_data, (uint8_t *)data,
++						0, 0, ALIGNBLOCK(w, 4), ALIGNBLOCK(h, 4), ALIGNBLOCK(w, 4),
++						ALIGNBLOCK(MIN(aligned_width, aligned_height), 4));
++					break;
++				case SCE_GXM_TEXTURE_FORMAT_UBC2_ABGR:
+ 				case SCE_GXM_TEXTURE_FORMAT_UBC5_GR:
+ 					if (aligned_width == w && aligned_height == h && h <= 2048 && w <= 2048) {
+ #ifdef TEXTURE_UPLOADS_SPEEDHACK
+diff --git a/source/utils/gpu_utils.h b/source/utils/gpu_utils.h
+index 8abf57b..8dd7c2d 100644
+--- a/source/utils/gpu_utils.h
++++ b/source/utils/gpu_utils.h
+@@ -37,6 +37,10 @@ extern uint32_t vgl_framecount; // Current frame number since application starte
+ // Alloc a generic memblock into sceGxm mapped memory with alignment
+ void *gpu_alloc_mapped_aligned_for_cpu(size_t alignment, size_t size);
+ void *gpu_alloc_mapped_aligned_for_gpu(size_t alignment, size_t size);
++// Compressed game atlases are long-lived and do not need to occupy scarce
++// CDRAM first. Preserve room/surface headroom by distributing them across the
++// mapped RAM and PHY pools while keeping small safety reserves in both.
++void *gpu_alloc_mapped_for_texture(size_t size);
+ 
+ // Alloc a generic memblock into sceGxm mapped memory
+ static inline __attribute__((always_inline)) void *gpu_alloc_mapped_for_gpu(size_t size) {
+diff --git a/source/utils/gxm_utils.c b/source/utils/gxm_utils.c
+index 931655e..70ee6e2 100644
+--- a/source/utils/gxm_utils.c
++++ b/source/utils/gxm_utils.c
+@@ -25,34 +25,42 @@
+ 
+ #define UNIFORM_CIRCULAR_POOL_SIZE (2 * 1024 * 1024)
+ 
++// Shader data lives outside GXM's small default-uniform reservation rings.
++// GXM may reject repeated reservations in a video scene (0x805B000B).
++// This arena never wraps while the GPU can still read its previous contents.
+ void *vgl_def_frag_buf = NULL;
+ void *vgl_def_vert_buf = NULL;
+ static uint8_t *unif_pool = NULL;
+ static uint32_t unif_idx = 0;
+ 
+-void vglSetupUniformCircularPool() {
+-	if (!unif_pool) {
++void vglSetupUniformCircularPool(void) {
++	if (!unif_pool)
+ 		unif_pool = gpu_alloc_mapped_for_cpu(UNIFORM_CIRCULAR_POOL_SIZE);
+-	}
+ }
+ 
+ void *vglReserveUniformCircularPoolBuffer(uint32_t size) {
+-	void *r;
+-	if (unif_idx + size >= UNIFORM_CIRCULAR_POOL_SIZE) {
+-#ifndef SKIP_ERROR_HANDLING
+-		static uint32_t last_frame_swap = 0;
+-		if (last_frame_swap == vgl_framecount) {
+-			vgl_log("%s:%d Circular Uniform Pool outage detected! Consider increasing UNIFORM_CIRCULAR_POOL_SIZE...\n", __FILE__, __LINE__);
+-		}
+-		last_frame_swap = vgl_framecount;
+-#endif
+-		r = unif_pool;
+-		unif_idx = size;
+-	} else {
+-		r = (unif_pool + unif_idx);
+-		unif_idx += size;
++	// Default uniform buffers are 16-byte aligned. Refuse an oversized draw
++	// rather than recycling memory referenced by the current GXM scene.
++	uint32_t aligned_size = (size + 15u) & ~15u;
++	if (!unif_pool || size > UNIFORM_CIRCULAR_POOL_SIZE ||
++	    aligned_size > UNIFORM_CIRCULAR_POOL_SIZE - unif_idx) {
++		vgl_error = GL_OUT_OF_MEMORY;
++		return NULL;
++	}
++	void *result = unif_pool + unif_idx;
++	unif_idx += aligned_size;
++	return result;
++}
++
++void vglUniformPoolFrameBoundary(void) {
++	// Called after scene_end() in vglSwapBuffers. Leave at least half of the
++	// arena free for the next frame; one fence per ~1 MiB of shader updates.
++	if (unif_pool && unif_idx >= UNIFORM_CIRCULAR_POOL_SIZE / 2) {
++		sceGxmFinish(gxm_context);
++		unif_idx = 0;
++		vgl_def_frag_buf = NULL;
++		vgl_def_vert_buf = NULL;
+ 	}
+-	return r;
+ }
+ 
+ #define decode_unif_component_simple(dst_stride, src_type, dst_type) \
+diff --git a/source/utils/gxm_utils.h b/source/utils/gxm_utils.h
+index 18e0a21..85e6b95 100644
+--- a/source/utils/gxm_utils.h
++++ b/source/utils/gxm_utils.h
+@@ -30,6 +30,7 @@ extern SceGxmContext *gxm_context;
+ 
+ void vglSetupUniformCircularPool(void);
+ void *vglReserveUniformCircularPoolBuffer(uint32_t size);
++void vglUniformPoolFrameBoundary(void);
+ 
+ void vglSetUniformData(uint8_t *uniformBuffer, const SceGxmParameterType t, const int offset, const uint32_t count, const uint32_t componentCount, const void *sourceData, const SceGxmParameterType input_type);
+ 
+@@ -43,11 +44,15 @@ static inline __attribute__((always_inline)) void vglRestoreVertexUniformBuffer(
+ }
+ static inline __attribute__((always_inline)) void *vglReserveFragmentUniformBuffer(uint32_t size) {
+ 	vgl_def_frag_buf = vglReserveUniformCircularPoolBuffer(size);
++	if (!vgl_def_frag_buf)
++		return NULL;
+ 	sceGxmSetFragmentDefaultUniformBuffer(gxm_context, vgl_def_frag_buf);
+ 	return vgl_def_frag_buf;
+ }
+ static inline __attribute__((always_inline)) void *vglReserveVertexUniformBuffer(uint32_t size) {
+ 	vgl_def_vert_buf = vglReserveUniformCircularPoolBuffer(size);
++	if (!vgl_def_vert_buf)
++		return NULL;
+ 	sceGxmSetVertexDefaultUniformBuffer(gxm_context, vgl_def_vert_buf);
+ 	return vgl_def_vert_buf;
+ }
+diff --git a/source/vitaGL.h b/source/vitaGL.h
+index eb8571c..d4ae8c1 100644
+--- a/source/vitaGL.h
++++ b/source/vitaGL.h
+@@ -1206,6 +1206,10 @@ void *vglMemalign(uint32_t alignment, uint32_t size);
+ 
+ // Gets the total amount of free memory in a given internal memory pool.
+ size_t vglMemFree(vglMemType type);
++// Waits for GXM and immediately releases objects queued by glDelete*.
++// Intended for large scene transitions that must reclaim memory before the
++// next frame/swap is reached.
++void vglForceGarbageCollection(void);
+ 
+ // Gets the total amount of free and used memory in a given internal memory pool.
+ size_t vglMemTotal(vglMemType type);

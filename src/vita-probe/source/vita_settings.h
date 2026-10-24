@@ -50,6 +50,7 @@ typedef struct {
     bool pvrEnabled;
     bool bc3Enabled;
     int rendererMode;
+    int graphicsBackend; // VitaBackend: 0 = VitaGL, 1 = Native-GXM
     bool modernGlEnabled;
     bool shadersEnabled;
     bool debugDevEnabled;
@@ -61,6 +62,7 @@ typedef struct {
     bool pendingPvrEnabled;
     bool pendingBc3Enabled;
     int pendingRendererMode;
+    int pendingGraphicsBackend;
     bool pendingShadersEnabled;
     int modIndex;
     int pendingModIndex;

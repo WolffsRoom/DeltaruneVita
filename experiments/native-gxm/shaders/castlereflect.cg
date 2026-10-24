@@ -1,0 +1,25 @@
+uniform float4 frag[11];
+uniform float4 gameParams;
+float2 shaderUV(float2 fpos) {
+    float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);
+    return mul(pm,float3(fpos,1.0)).xy/frag[9].xy;
+}
+float shaderMask(float2 fpos) {
+    float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);
+    float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;
+    float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);
+    return mask.x*mask.y;
+}
+// Chapter5 shd_castlereflect: original alpha is saturated from source alpha.
+// The source GLSL reads an uninitialized gl_FragColor.rgb before overwrite;
+// preserve the defined result, including vertical fade and premultiplication.
+float4 main(uniform sampler2D tex:TEXUNIT0,
+    float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {
+    float4 c=tex2D(tex,shaderUV(fpos));
+    float t=saturate((fpos.y-gameParams.y)/max(abs(gameParams.x),0.001)*2.0);
+    float fadedAlpha=0.6*c.a*(1.0-clamp(t,0.65,1.0));
+    float alpha=(c.a>0.00000001?frag[6].a:0.0);
+    float3 tint=frag[6].rgb/max(frag[6].a,0.00001);
+    float3 rgb=tint*c.rgb*fadedAlpha*frag[6].a;
+    return float4(rgb,alpha)*shaderMask(fpos);
+}

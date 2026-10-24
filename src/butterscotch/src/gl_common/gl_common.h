@@ -45,11 +45,16 @@ void GLCommon_surfaceBlit(GLuint* surfaces, int32_t* surfaceWidth, int32_t* surf
 // Returns false on invalid surfaceId.
 // Saves/restores GL_FRAMEBUFFER_BINDING and GL_PACK_ALIGNMENT around the read.
 bool GLCommon_surfaceGetPixels(GLuint* surfaces, int32_t* surfaceWidth, int32_t* surfaceHeight, uint32_t count, int32_t surfaceId, uint8_t* outRGBA);
+// Request an explicit GPU completion barrier for the next surface read. This
+// is only needed by the Chapter 2 MD5 puzzle on Vita; glReadPixels itself is
+// synchronous for ordinary surface consumers.
+void GLCommon_setSurfaceReadFinish(bool enabled);
 
 // ===[ Blend mode translation ]===
 
 // Maps a bm_* factor constant (bm_zero, bm_src_alpha, etc.) to a GL blend factor.
 GLenum GLCommon_blendFactorToGL(int factor);
+int GLCommon_blendFactorFromGL(GLenum factor);
 
 // Maps a bm_* mode constant (bm_normal, bm_add, bm_subtract, ...) to a GL blend equation.
 GLenum GLCommon_blendModeToEquation(int mode);

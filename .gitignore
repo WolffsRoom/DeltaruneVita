@@ -14,12 +14,34 @@
 /artifacts/
 /artifacts/publish-repo/
 /logs/
+/scratch/
+/research/
+/.tmp/
+/.tmp-*/
+/.superpowers/
+/local-test/
+**/__pycache__/
+**/.gradle/
+**/.pytest_cache/
+**/bin/
+**/*.obj
+**/*.bak
+**/*.bak_*
+
+/build_log.txt
+/butterscotch_desktop.log
 **/build/
 **/build-*/
+/experiments/native-gxm/build-*/
+/tools/.pydeps/
+/tools/analysis-temp/
 
 # Local tooling and downloaded binaries
 /third_party/downloads/
-/tools/yoyoloader-builder/
+/tools/*
+!/tools/SetChapter0BuildVersion.csx
+/third_party/vitaGL-nosplash/
+/src/ButterscotchPreprocessor-main/
 
 # Editor and OS files
 .DS_Store

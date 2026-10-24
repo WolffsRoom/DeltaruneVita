@@ -74,6 +74,21 @@ static char* resolveForRead(OverlayFileSystem* ofs, const char* relativePath) {
     if (strncmp(normalized, ofs->bundlePath, strlen(ofs->bundlePath)) == 0) return normalized;
     if (ofs->modPath != nullptr && strncmp(normalized, ofs->modPath, strlen(ofs->modPath)) == 0) return normalized;
 
+    // A translation may contain sample saves. Never let those shadow the
+    // player's live checkpoint (slot 9) or regular DELTARUNE save slots.
+    bool gameSave = strlen(normalized) == 9 &&
+                    strncmp(normalized, "filech", 6) == 0 &&
+                    normalized[6] >= '1' && normalized[6] <= '5' &&
+                    normalized[7] == '_' &&
+                    normalized[8] >= '0' && normalized[8] <= '9';
+    if (gameSave) {
+        char* liveSave = joinPath(ofs->savePath, normalized);
+        if (pathExists(liveSave)) {
+            free(normalized);
+            return liveSave;
+        }
+        free(liveSave);
+    }
     if (ofs->modPath != nullptr) {
         char* modFull = joinPath(ofs->modPath, normalized);
         if (pathExists(modFull)) {

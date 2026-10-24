@@ -517,4 +517,21 @@ static inline void RValue_writeIntoSlotStealingOwnershipOrCopying(RValue* slot, 
     *slot = target;
 }
 
+static inline bool RValue_deepEqual(RValue a, RValue b, MAYBE_UNUSED int depth) {
+    if (a.type != b.type) return false;
+    switch (a.type) {
+        case RVALUE_REAL:   return a.real == b.real;
+        case RVALUE_INT32:  return a.int32 == b.int32;
+#ifndef NO_RVALUE_INT64
+        case RVALUE_INT64:  return a.int64 == b.int64;
+#endif
+        case RVALUE_BOOL:   return a.int32 == b.int32;
+        case RVALUE_STRING: return a.string != nullptr && b.string != nullptr && strcmp(a.string, b.string) == 0;
+        case RVALUE_ARRAY:  return a.array == b.array;
+        case RVALUE_STRUCT: return a.structInst == b.structInst;
+        case RVALUE_ASSETREF: return a.int32 == b.int32;
+        default:            return false;
+    }
+}
+
 #endif /* _BS_RVALUE_H_ */

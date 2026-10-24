@@ -33,6 +33,7 @@ typedef struct Profiler {
     ProfilerFrame frameStack[PROFILER_MAX_DEPTH];
     int frameDepth;
     uint64_t instructionCount;
+    bool sampling;
 } Profiler;
 
 // Allocates and initializes a Profiler. Caller owns the returned pointer.
@@ -51,10 +52,11 @@ void Profiler_exit(Profiler* p);
 char* Profiler_createReport(const Profiler* p, int topN, int framesInWindow);
 // Clears all accumulated per-script timings.
 void Profiler_reset(Profiler* p);
+void Profiler_setSampling(Profiler* p, bool sampling);
 
 // Record a single VM instruction.
 static inline void Profiler_tickInstruction(Profiler* p) {
-    if (p != nullptr) p->instructionCount++;
+    if (p != nullptr && p->sampling) p->instructionCount++;
 }
 
 #endif /* _BS_PROFILER_H_ */

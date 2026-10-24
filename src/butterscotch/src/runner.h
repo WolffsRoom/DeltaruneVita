@@ -89,6 +89,7 @@
 #define OTHER_OUTSIDE_VIEW6  46
 #define OTHER_OUTSIDE_VIEW7  47
 #define OTHER_ASYNC_DIALOG   63
+#define OTHER_ASYNC_VIDEO    70
 #define OTHER_ASYNC_SAVE_LOAD 72
 #define OTHER_ASYNC_SYSTEM   75
 
@@ -228,6 +229,7 @@ typedef struct {
     RuntimeSpriteElement* spriteElement; // owned; nullptr if type != Sprite
     RoomTile* tileElement; // borrowed, points into RoomLayerAssetsData->legacyTiles; nullptr if type != Tile
     RoomLayerTilesData* tilemapData; // borrowed, points into the parsed RoomLayer; nullptr if type != Tilemap
+    uint32_t tilemapFrame;
     int32_t instanceId; // only valid if type == Instance; the instance may have died since, so callers must check liveness
 } RuntimeLayerElement;
 
@@ -626,11 +628,26 @@ struct Runner {
     // Offset between game start time and nowNanos()
     uint64_t gameStartTime;
 
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* Lightweight per-object Step VM CPU profiler; accumulates until GXM
+     * emits 300-frame summary. Never changes event scheduling or cadence. */
+    uint32_t gxmStepProfileKeys[128];
+    uint64_t gxmStepProfileUs[128];
+    uint32_t gxmStepProfileCalls[128];
+    uint64_t gxmStepPhaseUs[3];
+    uint32_t gxmStepPhaseCalls[3];
+    uint64_t gxmStepDispatchUs[3];
+    uint64_t gxmStepLookupSaved;
+#endif
     uint64_t profStepEventsUs;
     uint64_t profStepAlarmsUs;
     uint64_t profStepSpatialUs;
     uint64_t profStepCollisionUs;
     uint64_t profStepOtherUs;
+    uint64_t profDrawMaxUs;
+    uint64_t profSlowEventLastLogNs;
+    uint32_t profSlowEventsSuppressed;
+    int32_t profDrawMaxObject;
     // Last pending-room transition breakdown. Platform frontends can log these
     // without putting filesystem I/O in the portable runner.
     uint64_t profRoomParseUs;
@@ -639,6 +656,38 @@ struct Runner {
     uint64_t profRoomStartEventsUs;
     uint64_t profRoomCleanupUs;
     uint64_t profRoomTotalUs;
+#ifdef PLATFORM_VITA
+    // New room streams stay primed but silent until destination frames have
+    // actually reached the display. The previous immediate release exposed
+    // an audio start/restart whenever texture uploads blocked the first frame.
+    uint8_t vitaAudioTransitionWaitFrames;
+    // Weapon and armour changes are tracked separately. Weapons earn SWORD;
+    // armour earns the chapter-specific ARMOR trophy.
+    uint64_t vitaWeaponFingerprint;
+    uint64_t vitaArmorFingerprint;
+    // A save can populate these arrays a few frames after the runner starts.
+    // Require a stable baseline before treating later changes as equipment
+    // actions, otherwise merely loading a save can award SWORD/ARMOR.
+    uint8_t vitaEquipmentFingerprintStablePolls;
+    bool vitaEquipmentFingerprintInitialized;
+    // Compatibility bridge for translated/legacy data.win files that predate
+    // DELTARUNE's obj_event_manager trophy implementation. Disabled whenever
+    // the native event manager exists, so modern/original data is untouched.
+    bool vitaLegacyTrophyMode;
+    int32_t vitaLegacyCreditsObjectIndex;
+    uint32_t vitaLegacyTrophyMask;
+    int32_t vitaLegacyHpRoomIndex;
+    int32_t vitaLegacyHp[5];
+    uint8_t vitaLegacyHpStableFrames;
+    bool vitaLegacyHpInitialized;
+    int32_t vitaLegacyStrengthFlag65;
+    uint8_t vitaLegacyStrengthStableFrames;
+    bool vitaLegacyStrengthInitialized;
+    // Chapter 2 fixed enemy battle balloons bypass the auto-length text offset.
+    // Cache the object index so the Vita draw-time compatibility hook is O(1).
+    int32_t vitaBattleBubbleObjectIndex;
+    bool vitaRoomTransitionWaiting;
+#endif
 };
 
 const char* Runner_getEventName(int32_t eventType, int32_t eventSubtype);
@@ -646,11 +695,21 @@ void Runner_reset(Runner* runner);
 Runner* Runner_create(DataWin* dataWin, VMContext* vm, Renderer* renderer, FileSystem* fileSystem, AudioSystem* audioSystem);
 void Runner_setGameArgs(Runner* runner, char** argv, int32_t argc);
 void Runner_initFirstRoom(Runner* runner);
+void Runner_setObjectDisabled(Runner* runner, const char* objectName, bool disabled);
+// Enables DELTARUNE's built-in trophy event manager without changing os_type.
+// Returns true when the manager exists in the active game data.
+bool Runner_enableGameTrophies(Runner* runner);
+// Copies the game's unlocked trophy IDs from global.trophies.
+void Runner_getGameTrophies(Runner* runner, bool unlocked[30]);
+// Records a Vita-only compatibility trophy event for legacy translated data.win files.
+void Runner_noteLegacyTrophy(Runner* runner, int32_t id, const char* reason);
 void Runner_step(Runner* runner);
 void Runner_handlePendingRoomChange(Runner* runner);
 void Runner_executeEvent(Runner* runner, Instance* instance, int32_t eventType, int32_t eventSubtype);
 void Runner_executeEventFromObject(Runner* runner, Instance* instance, int32_t startObjectIndex, int32_t eventType, int32_t eventSubtype);
 void Runner_executeEventForAll(Runner* runner, int32_t eventType, int32_t eventSubtype);
+// Publishes GameMaker's async video_start/video_end event through async_load.
+void Runner_dispatchVideoAsync(Runner* runner, const char* type);
 // Sets the "lives" global variable.
 // Used to fire events when the values are equal to or lesser than 0.
 void Runner_setLives(Runner* runner, GMLReal value);
@@ -674,13 +733,17 @@ GMLCamera* Runner_getCameraById(Runner* runner, int32_t id);
 // Resolves the camera assigned to a view, or nullptr if the view index is invalid or has no allocated camera.
 GMLCamera* Runner_getCameraForView(Runner* runner, int32_t viewIndex);
 void Runner_scrollBackgrounds(Runner* runner);
-void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerOffsetX, float layerOffsetY);
+uint32_t Runner_tileAnimationFrame(const Background* tileset, uint64_t timeUs, uint32_t previousFrame);
+uint32_t Runner_tileFrameIndex(const Background* tileset, uint32_t tileIndex, int32_t frame);
+void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerOffsetX, float layerOffsetY, uint32_t frame);
 // Allocates a fresh GML struct and registers it in instancesById and structInstances.
 // refCount starts at 1 (the registry's implicit ref); callers that retain a reference must Instance_structIncRef.
 Instance* Runner_createStruct(Runner* runner);
 Instance* Runner_createInstance(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex);
 Instance* Runner_createInstanceWithDepth(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex, int32_t depth);
 Instance* Runner_createInstanceWithLayer(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex, int32_t layerId);
+Instance* Runner_createInstanceWithDepthVars(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex, int32_t depth, Instance* variables);
+Instance* Runner_createInstanceWithLayerVars(Runner* runner, GMLReal x, GMLReal y, int32_t objectIndex, int32_t layerId, Instance* variables);
 Instance* Runner_copyInstance(Runner* runner, Instance* source, bool performEvent);
 void Runner_destroyInstance(Runner* runner, Instance* inst, bool runDestroyEvent);
 void Runner_cleanupDestroyedInstances(Runner* runner);
@@ -719,6 +782,10 @@ bool Runner_surfaceResetTarget(Runner* runner);
 int32_t Runner_surfaceGetTarget(Runner* runner);
 
 void Runner_dumpState(Runner* runner);
+// DELTARUNE failure controller; unknown/custom flows return -1.
+int32_t Runner_getFailurePhase(Runner* runner, Instance* instance);
+void Runner_shortenRetryFade(Runner* runner, Instance* instance);
+bool Runner_isFailureGivingUp(Runner* runner);
 char* Runner_dumpStateJson(Runner* runner);
 void Runner_free(Runner* runner);
 RuntimeLayer* Runner_findRuntimeLayerByName(Runner* runner, char* name);

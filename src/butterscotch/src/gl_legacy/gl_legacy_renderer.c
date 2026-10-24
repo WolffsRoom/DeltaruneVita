@@ -1,5 +1,6 @@
 #include "gl_legacy_renderer.h"
 #include "image_decoder.h"
+#include "camera_quad.h"
 #include <ctype.h>
 
 #ifdef PLATFORM_VITA
@@ -135,6 +136,8 @@ static bool vitaFloweryBattleMemoryMode = false;
 static bool vitaChapter3TvMemoryMode = false;
 static bool vitaChapter3BoardMinigameMode = false;
 static bool vitaChapter3PerformanceSurfaceMode = false;
+static bool vitaChapter3GreenRoomMode = false;
+static bool vitaChapter5CastleApproachMode = false;
 static bool vitaNativeVideoMemoryMode = false;
 static bool vitaCouchOverworldMemoryMode = false;
 static bool vitaCh2CyberIntroMemoryMode = false;
@@ -1118,6 +1121,41 @@ typedef struct Vita2DVertex {
     GLfloat x, y;
 } Vita2DVertex;
 
+// Fixed-function client arrays do not feed attributes of a glUseProgram
+// shader in VitaGL. The Experimental shaders bind position/UV/colour to
+// 0/1/2, so select the matching generic-array path while one is active.
+static bool vitaCustomShaderActive = false;
+
+static void vitaEnable2DArrays(const Vita2DVertex* vertices) {
+    if (vitaCustomShaderActive) {
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vita2DVertex), &vertices[0].x);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vita2DVertex), &vertices[0].u);
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vita2DVertex), &vertices[0].r);
+    } else {
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glEnableClientState(GL_COLOR_ARRAY);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glTexCoordPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].u);
+        glColorPointer(4, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].r);
+        glVertexPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].x);
+    }
+}
+
+static void vitaDisable2DArrays(void) {
+    if (vitaCustomShaderActive) {
+        glDisableVertexAttribArray(2);
+        glDisableVertexAttribArray(1);
+        glDisableVertexAttribArray(0);
+    } else {
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_COLOR_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    }
+}
+
 // VitaGL's immediate-mode compatibility layer generates a large fixed-function
 // shader at the first glEnd(). Use explicit client arrays on Vita instead. This
 // is the primitive used by the Vita renderer migration; desktop/PS3 keep the
@@ -1125,20 +1163,13 @@ typedef struct Vita2DVertex {
 static void vitaDrawQuad(const Vita2DVertex vertices[4]) {
     static bool firstDraw = true;
     if (firstDraw) vitaRenderLog("VITA_ARRAY=first_draw_begin");
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glTexCoordPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].u);
-    glColorPointer(4, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].r);
-    glVertexPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].x);
+    vitaEnable2DArrays(vertices);
     glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
     if (firstDraw) {
         vitaRenderLog("VITA_ARRAY=first_draw_complete");
         firstDraw = false;
     }
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    vitaDisable2DArrays();
 }
 
 #define VITA_IMMEDIATE_MAX_VERTICES 262144
@@ -1177,16 +1208,9 @@ static void vitaVertex2f(GLfloat x, GLfloat y) {
 }
 
 static void vitaDrawVertexRange(GLenum mode, const Vita2DVertex* vertices, GLsizei count) {
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glTexCoordPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].u);
-    glColorPointer(4, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].r);
-    glVertexPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vertices[0].x);
+    vitaEnable2DArrays(vertices);
     glDrawArrays(mode, 0, count);
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    vitaDisable2DArrays();
 }
 
 static void vitaEnd(void) {
@@ -1208,26 +1232,16 @@ static void vitaEnd(void) {
             indicesInited = true;
         }
 
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glEnableClientState(GL_VERTEX_ARRAY);
-        
         // Draw in chunks of 65536 vertices (16-bit index limit)
         for (GLsizei offset = 0; offset + 3 < vitaImmediateCount; offset += 65536) {
             GLsizei count = vitaImmediateCount - offset;
             if (count > 65536) count = 65536;
             GLsizei quads = count / 4;
             
-            glTexCoordPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vitaImmediateVertices[offset].u);
-            glColorPointer(4, GL_FLOAT, sizeof(Vita2DVertex), &vitaImmediateVertices[offset].r);
-            glVertexPointer(2, GL_FLOAT, sizeof(Vita2DVertex), &vitaImmediateVertices[offset].x);
-            
+            vitaEnable2DArrays(&vitaImmediateVertices[offset]);
             glDrawElements(GL_TRIANGLES, quads * 6, GL_UNSIGNED_SHORT, quadIndices);
+            vitaDisable2DArrays();
         }
-        
-        glDisableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_COLOR_ARRAY);
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     } else if (vitaImmediateMode == GL_TRIANGLES) {
         vitaDrawVertexRange(GL_TRIANGLES, vitaImmediateVertices, vitaImmediateCount);
     }
@@ -1365,6 +1379,34 @@ static void glApplyViewport(GLLegacyRenderer* gl, int32_t x, int32_t y, int32_t 
     gl->base.CPortH = h;
 }
 
+static void glLegacyUpdateShaderMatrices(Renderer* renderer) {
+    GLLegacyRenderer* gl = (GLLegacyRenderer*)renderer;
+    if (renderer->currentShader < 0 || !gl->shaderPrograms ||
+        (uint32_t)renderer->currentShader >= renderer->dataWin->shdr.count) return;
+    GLuint program = gl->shaderPrograms[renderer->currentShader];
+    if (!program) return;
+    GLint matrices = glGetUniformLocation(program,
+#ifdef PLATFORM_VITA
+        "gm_Matrices"
+#else
+        "gm_Matrices[0]"
+#endif
+    );
+    if (matrices >= 0) {
+        Matrix4f m[MATRICES_MAX];
+        memcpy(m, renderer->gmlMatrices, sizeof(m));
+        Matrix4f_flipClipY(&m[MATRIX_PROJECTION]);
+        Matrix4f_flipClipY(&m[MATRIX_WORLD_VIEW_PROJECTION]);
+        glUniformMatrix4fv(matrices, MATRICES_MAX, GL_FALSE, m[0].m);
+    }
+    GLint compact = glGetUniformLocation(program, "u_vitaMVP");
+    if (compact >= 0) {
+        Matrix4f m = renderer->gmlMatrices[MATRIX_WORLD_VIEW_PROJECTION];
+        Matrix4f_flipClipY(&m);
+        glUniformMatrix4fv(compact, 1, GL_FALSE, m.m);
+    }
+}
+
 // camera_apply: swap the active world->clip projection on the current target without touching its viewport.
 static void glApplyProjection(Renderer* renderer, const Matrix4f* viewMatrix, const Matrix4f* projectionMatrix) {
 
@@ -1389,6 +1431,9 @@ static void glApplyProjection(Renderer* renderer, const Matrix4f* viewMatrix, co
     glLoadMatrixf(projection.m);
     glMatrixMode(GL_MODELVIEW);
     glLoadMatrixf(worldView.m);
+    // surface_set_target/reset_target and camera_apply do not call shader_set
+    // again. Both fixed-function and programmable projections must follow them.
+    glLegacyUpdateShaderMatrices(renderer);
 }
 
 // ===[ Vtable Implementations ]===
@@ -1400,6 +1445,7 @@ static void glCompileAllShaders(GLLegacyRenderer* gl);
 #endif
 
 static void glInit(Renderer* renderer, DataWin* dataWin) {
+    renderer->currentShader = -1; // fixed pipeline until shader_set selects a program
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
     renderer->dataWin = dataWin;
 
@@ -1997,6 +2043,14 @@ static uint64_t vitaTextureCacheLimit(void) {
         return 68ULL * 1024ULL * 1024ULL;
     if (g_vitaActiveChapter == 5)
         return (g_vitaPvrEnabled ? 88ULL : 76ULL) * 1024ULL * 1024ULL;
+    // Mansion rooms can create a 1920x480 surface and immediately copy it to
+    // a dynamic sprite.  That transient pair needs about 7 MiB which is not
+    // represented by residentTextureBytes.  The east_teacup -> east_2f_a
+    // trace reached 103 MiB of atlases with only 6.5 MiB left in VitaGL and
+    // crashed during that copy.  Keep a mansion-only reserve; Cyber/Castle
+    // retain the larger working set required by their measured atlases.
+    if (g_vitaActiveChapter == 2 && vitaCh2TexturePolicyRegion == 4)
+        return 92ULL * 1024ULL * 1024ULL;
     // Chapter 2 page 25/26 must use the lossless RGBA4444 path because their
     // mixed character/UI atlases are corrupted by BC3. The mansion 4F trace
     // reaches 90 MiB and then retries one missing 8 MiB page forever under
@@ -2044,7 +2098,13 @@ static uint64_t vitaTextureCacheLimit(void) {
 // in this battle; other rooms retain their established cache behaviour.
 static bool vitaTextureUploadHasPhysicalHeadroom(uint64_t uploadBytes) {
     if (vitaFloweryBattleMemoryMode) {
-        const uint64_t reserve = 12ULL * 1024ULL * 1024ULL;
+        // The v0.77-14 Vita trace kept 12.4-15.9 MiB free while repeatedly
+        // replacing 2 MiB 1024px pages. Requiring a full 12 MiB reserve for
+        // those small uploads reduced the effective cache to about 34 MiB and
+        // caused the tower/decoration atlases to alternate every few frames.
+        // Eight MiB still blocks a risky 8 MiB atlas at that pressure, while
+        // allowing two more 2 MiB battle pages to remain resident.
+        const uint64_t reserve = 8ULL * 1024ULL * 1024ULL;
         return (uint64_t)vglMemFree(VGL_MEM_VRAM) >= uploadBytes + reserve;
     }
     if (vitaChapter3TvMemoryMode) {
@@ -2191,6 +2251,15 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
         // sprites. Preserve a short rolling working set; genuinely stale room
         // pages remain eligible after eight frames.
         uint32_t age = gl->textureFrame - gl->textureLastUsedFrame[i];
+        // Flowery's late phases repeatedly replaced the same 1024px pages
+        // (page 108 alone was evicted 48 times in one capture). Once a page
+        // has paid the synchronous upload cost, keep it stable for one second
+        // so another stale phase page is selected instead. Room transitions
+        // use the explicit trim path and are unaffected.
+        if (vitaFloweryBattleMemoryMode && gl->textureLastEvictedFrame != nullptr &&
+            gl->textureLastEvictedFrame[i] != 0 &&
+            gl->textureFrame - gl->textureLastEvictedFrame[i] <= 30U)
+            continue;
         // Camera visibility belongs to an individual quad, not to its atlas.
         // A single 2048 page can contain distant scenery, the visible player,
         // dialogue and UI simultaneously. Treating the first off-camera quad
@@ -2310,7 +2379,6 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
         // Urgent replacement must actually release its allocation before the
         // new upload. Deferring deletion for four frames kept up to 32 MiB of
         // invisible atlases alive and made the admission check meaningless.
-        glFinish();
         // Urgent eviction used to delete/reuse the GL texture name while
         // previously submitted Vita GXM draws still referenced it. Under the
         // PT-BR atlas pressure this rendered earlier objects with a completely
@@ -2319,7 +2387,6 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
         // queue and do not need this synchronous path.
         glFinish();
         glDeleteTextures(1, &oldTexture);
-        vglForceGarbageCollection();
         vglForceGarbageCollection();
     }
     glGenTextures(1, &gl->glTextures[victim]);
@@ -2871,6 +2938,8 @@ uint32_t GLLegacyRenderer_preloadChapterBattleCore(GLLegacyRenderer* gl) {
         "spr_dodgeheart", "spr_krisb_attackready",
         "spr_susieb_attackready", "spr_ralseib_attackready",
         "spr_krisb_idle", "spr_susieb_idle", "spr_ralseib_idle",
+        "spr_krisb_idle_unarmed", "spr_susieb_idle_unarmed",
+        "spr_susieb_attackready_unarmed", "spr_susieb_attackready_unhappy",
         // First-use hit feedback can live outside the normal battle/UI pages
         // after the data.win atlas rebuild. Without these entries the first
         // successful attack or first player hit still uploads its page during
@@ -3078,6 +3147,8 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
         (strncmp(room->name, "room_town_", sizeof("room_town_") - 1) == 0 ||
          strncmp(room->name, "room_dw_castle_", sizeof("room_dw_castle_") - 1) == 0 ||
          strncmp(room->name, "room_dw_ralsei_castle_", sizeof("room_dw_ralsei_castle_") - 1) == 0);
+    vitaChapter5CastleApproachMode = g_vitaActiveChapter == 5 && room->name != nullptr &&
+        strcmp(room->name, "room_dw_castle_area_1") == 0;
     bool vitaChapter5FloweryBattle = room->name != nullptr &&
         g_vitaActiveChapter == 5 &&
         strcmp(room->name, "room_dw_fcastle_flowery") == 0;
@@ -3085,6 +3156,7 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
     vitaChapter3TvMemoryMode = vitaChapter3TvBoard;
     vitaChapter3BoardMinigameMode = vitaChapter3BoardMinigame;
     vitaChapter3PerformanceSurfaceMode = vitaChapter3PerformanceSurface;
+    vitaChapter3GreenRoomMode = vitaChapter3GreenRoom;
     if (vitaChapter3PerformanceSurface) {
         fprintf(stderr, "CH3_PERF_MODE room=%s rhythm_preload=%d rgba4_surfaces=1\n",
                 room->name, vitaChapter3Rhythm ? 1 : 0);
@@ -3356,6 +3428,15 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
         vitaMarkSpritePagesByName(gl, "spr_dw_three_petals", true);
     }
 
+    if (vitaChapter5CastleApproachMode && gl->textureRoomPreload != nullptr) {
+        // The transformation assigns these actors dynamically. The static
+        // manifest therefore missed them and the first visible frame paid a
+        // measured 318 ms texture upload inside obj_mainchara.
+        vitaMarkSpritePagesByName(gl, "spr_krisd", true);
+        vitaMarkSpritePagesByName(gl, "spr_susied", true);
+        vitaMarkSpritePagesByName(gl, "spr_ralseid", true);
+    }
+
     DataWin* dw = gl->base.dataWin;
     for (uint32_t i = 0; i < room->gameObjectCount; ++i) {
         int32_t objectIndex = room->gameObjects[i].objectDefinition;
@@ -3489,6 +3570,53 @@ uint32_t GLLegacyRenderer_preloadRoomTextureSet(GLLegacyRenderer* gl) {
         loaded += vitaEnsureSpritePagesByName(gl, "spr_petalGold");
         loaded += vitaEnsureSpritePagesByName(gl, "spr_dw_three_petals");
     }
+    if (vitaChapter5CastleApproachMode) {
+        loaded += vitaEnsureSpritePagesByName(gl, "spr_krisd");
+        loaded += vitaEnsureSpritePagesByName(gl, "spr_susied");
+        loaded += vitaEnsureSpritePagesByName(gl, "spr_ralseid");
+    }
+#ifdef PLATFORM_VITA
+    if (g_vitaActiveChapter == 2 && gl->base.runner != nullptr &&
+        gl->base.runner->currentRoom != nullptr &&
+        strcmp(gl->base.runner->currentRoom->name,"room_dw_cyber_maze_queenscreen") == 0) {
+        static const char* intro[] = {
+            "spr_krisb_attackready", "spr_susieb_attackready", "spr_ralseib_attackready",
+            "spr_susieb_idle_unarmed", "spr_susieb_idle", "spr_virovirokun_idle",
+            "spr_virovirokun_hurt", "spr_virovirokun_spared"
+        };
+        for (uint32_t i=0;i<sizeof(intro)/sizeof(intro[0]);i++)
+            loaded += vitaEnsureSpritePagesByName(gl,intro[i]);
+        fprintf(stderr,"CH2_BATTLE_INTRO=room_prewarm loaded=%u\n",loaded);
+    }
+#endif
+    if (vitaChapter3GreenRoomMode) {
+        // Room trimming can discard the chapter-start battle warmup. Refill
+        // its named core behind this room's loading transition, before the
+        // first encounter freezes the weapon-draw animation. Do not pin it.
+        loaded += GLLegacyRenderer_preloadChapterBattleCore(gl);
+        loaded += vitaEnsureSpritePagesByName(gl, "spr_headsusie");
+        loaded += vitaEnsureSpritePagesByName(gl, "spr_headralsei");
+        loaded += vitaEnsureSpritePagesByName(gl, "spr_sparestar");
+        loaded += vitaEnsureSpritePagesByName(gl, "spr_tiredmark");
+        fprintf(stderr, "CH3_GREEN_BATTLE_CORE=room_prewarm loaded=%u\n", loaded);
+    }
+    if (gl->base.runner != nullptr && gl->base.runner->currentRoom != nullptr &&
+        strcmp(gl->base.runner->currentRoom->name, "room_dw_snow_zone_battle") == 0) {
+        // Chapter-start warmup has already been evicted by the time Tenna
+        // starts. Refresh only the initial party/UI pages behind room loading;
+        // never pin the entire boss or its later minigames in VRAM.
+        static const char* const intro[] = {
+            "spr_krisb_attackready", "spr_susieb_attackready", "spr_ralseib_attackready",
+            "spr_krisb_idle", "spr_susieb_idle", "spr_ralseib_idle",
+            "spr_susieb_idle_unarmed", "spr_battlemsg", "spr_battleblcon",
+            "spr_tensionbar", "spr_btact", "spr_btfight"
+        };
+        uint32_t prepared = 0;
+        for (uint32_t i = 0; i < sizeof(intro)/sizeof(intro[0]); i++)
+            prepared += vitaEnsureSpritePagesByName(gl, intro[i]);
+        loaded += prepared;
+        fprintf(stderr, "CH3_TENNA_INTRO=room_prewarm loaded=%u\n", prepared);
+    }
     uint32_t roomLoaded = 0;
     for (uint32_t i = 0; i < gl->originalTexturePageCount; ++i) {
         if (roomLoaded >= preloadLimit) break;
@@ -3545,43 +3673,14 @@ static int vitaClassifyCameraQuad(Renderer* renderer,
         camera->viewHeight <= 0 || fabsf(camera->viewAngle) > 0.01f)
         return 2;
 
-    // Sprite coordinates reach GL after MATRIX_WORLD. Classifying the raw
-    // coordinates culled transformed characters/effects that were actually on
-    // screen, producing apparently missing pixels or whole sprites. Apply the
-    // same world transform before testing the camera rectangle.
-    const Matrix4f* world = &renderer->gmlMatrices[MATRIX_WORLD];
-    float wx, wy;
-    Matrix4f_transformPoint(world, x0, y0, &wx, &wy); x0 = wx; y0 = wy;
-    Matrix4f_transformPoint(world, x1, y1, &wx, &wy); x1 = wx; y1 = wy;
-    Matrix4f_transformPoint(world, x2, y2, &wx, &wy); x2 = wx; y2 = wy;
-    Matrix4f_transformPoint(world, x3, y3, &wx, &wy); x3 = wx; y3 = wy;
-
-    float minX = fminf(fminf(x0, x1), fminf(x2, x3));
-    float maxX = fmaxf(fmaxf(x0, x1), fmaxf(x2, x3));
-    float minY = fminf(fminf(y0, y1), fminf(y2, y3));
-    float maxY = fmaxf(fmaxf(y0, y1), fmaxf(y2, y3));
-    float viewL = camera->viewX;
-    float viewT = camera->viewY;
-    float viewR = viewL + (float)camera->viewWidth;
-    float viewB = viewT + (float)camera->viewHeight;
-
-    if (maxX >= viewL && minX <= viewR && maxY >= viewT && minY <= viewB)
-        return 2;
-
-    // 128 host pixels correspond to roughly 113 world pixels for the usual
-    // 640x480 camera displayed as 726x544. Deriving it from the vertical
-    // letterbox scale also keeps the margin correct for zoomed cameras.
-    GLLegacyRenderer* gl = (GLLegacyRenderer*)renderer;
-    float hostScale = gl->windowH > 0
-        ? (float)gl->windowH / (float)camera->viewHeight
-        : 1.0f;
-    if (hostScale <= 0.01f) hostScale = 1.0f;
-    float margin = 128.0f / hostScale;
-    if (margin < 64.0f) margin = 64.0f;
-    if (margin > 192.0f) margin = 192.0f;
-
-    return (maxX >= viewL - margin && minX <= viewR + margin &&
-            maxY >= viewT - margin && minY <= viewB + margin) ? 1 : 0;
+    // Custom vertex shaders may move otherwise off-screen geometry. Their
+    // output cannot be inferred from camera scalars or a CPU-only matrix.
+    if (renderer->currentShader >= 0) return 2;
+    const float xy[8]={x0,y0,x1,y1,x2,y2,x3,y3};
+    float portW=renderer->CPortW>0 ? renderer->CPortW : 640;
+    float portH=renderer->CPortH>0 ? renderer->CPortH : 480;
+    return CameraQuad_classify(&renderer->gmlMatrices[MATRIX_WORLD_VIEW_PROJECTION],
+                               xy,256.0f/portW,256.0f/portH);
 #else
     (void)renderer; (void)x0; (void)y0; (void)x1; (void)y1;
     (void)x2; (void)y2; (void)x3; (void)y3;
@@ -4227,10 +4326,10 @@ static bool glResolveGlyph(GLLegacyRenderer* gl, DataWin* dw, GlFontState* state
         int32_t tw = gl->textureWidths[pid];
         int32_t th = gl->textureHeights[pid];
 
-        *outU0 = (float) glyphTpag->sourceX / (float) tw;
-        *outV0 = (float) glyphTpag->sourceY / (float) th;
-        *outU1 = (float) (glyphTpag->sourceX + glyphTpag->sourceWidth) / (float) tw;
-        *outV1 = (float) (glyphTpag->sourceY + glyphTpag->sourceHeight) / (float) th;
+        *outU0 = TextUtils_glyphUvStart(glyphTpag->sourceX, tw);
+        *outV0 = TextUtils_glyphUvStart(glyphTpag->sourceY, th);
+        *outU1 = TextUtils_glyphUvEnd(glyphTpag->sourceX, glyphTpag->sourceWidth, tw);
+        *outV1 = TextUtils_glyphUvEnd(glyphTpag->sourceY, glyphTpag->sourceHeight, th);
 
         // Sprite-font glyphs sit at the cell offset. GM 2023.2+ subtracts the sprite origin, pre-2023.2 it cancels.
         // (See GameMaker-HTML5's commit a7c5b909209d5a28602fedfe2031965386a99921)
@@ -4239,10 +4338,12 @@ static bool glResolveGlyph(GLLegacyRenderer* gl, DataWin* dw, GlFontState* state
     } else {
         *outTexId = state->texId;
         *outTpagIdx = state->fontTpagIndex;
-        *outU0 = (float) (state->fontTpag->sourceX + glyph->sourceX) / (float) state->texW;
-        *outV0 = (float) (state->fontTpag->sourceY + glyph->sourceY) / (float) state->texH;
-        *outU1 = (float) (state->fontTpag->sourceX + glyph->sourceX + glyph->sourceWidth) / (float) state->texW;
-        *outV1 = (float) (state->fontTpag->sourceY + glyph->sourceY + glyph->sourceHeight) / (float) state->texH;
+        const int32_t glyphX = state->fontTpag->sourceX + glyph->sourceX;
+        const int32_t glyphY = state->fontTpag->sourceY + glyph->sourceY;
+        *outU0 = TextUtils_glyphUvStart(glyphX, state->texW);
+        *outV0 = TextUtils_glyphUvStart(glyphY, state->texH);
+        *outU1 = TextUtils_glyphUvEnd(glyphX, glyph->sourceWidth, state->texW);
+        *outV1 = TextUtils_glyphUvEnd(glyphY, glyph->sourceHeight, state->texH);
 
         *outLocalX0 = cursorX + glyph->offset;
         *outLocalY0 = cursorY;
@@ -4267,16 +4368,6 @@ static void glDrawText(Renderer* renderer, const char* text, float x, float y, f
     float r = (float) BGR_R(color) / 255.0f;
     float g = (float) BGR_G(color) / 255.0f;
     float b = (float) BGR_B(color) / 255.0f;
-
-    // obj_writer renders battle dialogue one character at a time with fnt_main.
-    // The source atlas and the prepared R444 cache both contain the complete
-    // bottom texel row, but VitaGL can drop that row when the quad edge lands
-    // exactly on the rasterisation boundary.  Repair only black fnt_main text
-    // by drawing that last source row again as a 1 px strip below the normal
-    // glyph.  Keep DELTARUNE's original vspace/layout untouched and never sample
-    // the neighbouring atlas row.
-    const bool repairBattleGlyphBottom = color == 0U && !font->isSpriteFont &&
-        font->name != nullptr && strcmp(font->name, "fnt_main") == 0;
 
     int32_t textLen = (int32_t) strlen(text);
 
@@ -4376,35 +4467,6 @@ static void glDrawText(Renderer* renderer, const char* text, float x, float y, f
                             glVertex2f(px3, py3);
                         glEnd();
 
-                        if (repairBattleGlyphBottom && fontState.texH > 0) {
-                            // Sample the centre of the glyph's actual final texel
-                            // row.  A constant V avoids crossing v1 into the next
-                            // atlas row even with GL_NEAREST precision differences.
-                            const float lastRowV = v1 - 0.5f / (float) fontState.texH;
-                            float sx0, sy0, sx1, sy1, sx2, sy2, sx3, sy3;
-                            Matrix4f_transformPoint(&transform, localX0, localY1, &sx0, &sy0);
-                            Matrix4f_transformPoint(&transform, localX1, localY1, &sx1, &sy1);
-                            Matrix4f_transformPoint(&transform, localX1, localY1 + 1.0f, &sx2, &sy2);
-                            Matrix4f_transformPoint(&transform, localX0, localY1 + 1.0f, &sx3, &sy3);
-
-                            glBegin(GL_QUADS);
-                                glColor4f(r, g, b, alpha);
-                                glTexCoord2f(u0, lastRowV);
-                                glVertex2f(sx0, sy0);
-
-                                glColor4f(r, g, b, alpha);
-                                glTexCoord2f(u1, lastRowV);
-                                glVertex2f(sx1, sy1);
-
-                                glColor4f(r, g, b, alpha);
-                                glTexCoord2f(u1, lastRowV);
-                                glVertex2f(sx2, sy2);
-
-                                glColor4f(r, g, b, alpha);
-                                glTexCoord2f(u0, lastRowV);
-                                glVertex2f(sx3, sy3);
-                            glEnd();
-                        }
                         PS3_PALETTED_END();
 
                         drewSuccessfully = true;
@@ -4765,12 +4827,13 @@ static void glGpuSetBlendMode(Renderer* renderer, int32_t mode) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
     
     gl->currentBlendMode = mode;
-    gl->currentSFactor = GLCommon_blendModeToSFactor(mode);
-    gl->currentDFactor = GLCommon_blendModeToDFactor(mode);
+    gl->currentSFactor = GLCommon_blendFactorFromGL(GLCommon_blendModeToSFactor(mode));
+    gl->currentDFactor = GLCommon_blendFactorFromGL(GLCommon_blendModeToDFactor(mode));
     gl->currentSFactorAlpha = gl->currentSFactor; 
     gl->currentDFactorAlpha = gl->currentDFactor;
     glBlendEquation(GLCommon_blendModeToEquation(mode));
-    glBlendFunc(gl->currentSFactor, gl->currentDFactor);
+    glBlendFunc(GLCommon_blendFactorToGL(gl->currentSFactor),
+                GLCommon_blendFactorToGL(gl->currentDFactor));
 }
 
 static void glGpuSetBlendModeExt(Renderer* renderer, int32_t sfactor, int32_t dfactor, int32_t sfactor_alpha, int32_t dfactor_alpha) {
@@ -4804,22 +4867,10 @@ static void glGpuSetAlphaTestEnable(MAYBE_UNUSED Renderer* renderer, bool enable
 #ifdef PLATFORM_VITA
     GLLegacyRenderer* gl = (GLLegacyRenderer*)renderer;
     gl->alphaTestEnable = enable;
-    // VitaGL's fixed-function alpha test does not discard transparent pixels
-    // for the explicit client-array path. DELTARUNE's fireworks shadow uses
-    // DST_ALPHA blending plus alpha test; without the discard, transparent
-    // texels paint a black rectangle. Its mask opacity and sprite opacity are
-    // identical, so SRC_ALPHA is the equivalent compositing operation and
-    // retains the character silhouette (including antialiased edges).
-    if (enable && gl->currentSFactor == bm_dest_alpha &&
-        gl->currentDFactor == bm_inv_dest_alpha) {
-        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
-                            GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    } else {
-        glBlendFuncSeparate(GLCommon_blendFactorToGL(gl->currentSFactor),
-                            GLCommon_blendFactorToGL(gl->currentDFactor),
-                            GLCommon_blendFactorToGL(gl->currentSFactorAlpha),
-                            GLCommon_blendFactorToGL(gl->currentDFactorAlpha));
-    }
+    // Alpha test discards fragments; it must not change blend factors.
+    // Rhythm notes and Knight attacks write a destination-alpha mask first.
+    // Substituting SRC_ALPHA destroys that independent mask. VitaGL's FFP
+    // shader already implements the discard through alpha_op/ALPHA_CUT_UNIF.
 #endif
     enable ? glEnable(GL_ALPHA_TEST) : glDisable(GL_ALPHA_TEST);
 }
@@ -5247,8 +5298,7 @@ static bool glTextureGetUVs(Renderer* renderer, uint32_t texHandle, float* outUV
     return true;
 }
 
-// Bind a texture into a shader sampler slot. 'slot' is the uniform location
-// returned by glShaderGetSamplerIndex (GameMaker's texture_set_stage path).
+// Bind a texture into the stage returned by glShaderGetSamplerIndex.
 static void glTextureSetStage(Renderer* renderer, int32_t slot, uint32_t texHandle) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
     if (slot < 0 || slot >= 8) return; // up to 8 texture units
@@ -5265,9 +5315,6 @@ static void glTextureSetStage(Renderer* renderer, int32_t slot, uint32_t texHand
         }
     }
 
-#ifndef PLATFORM_VITA
-    glUniform1i(slot, slot);            // desktop legacy keeps the original location-as-stage contract
-#endif
     glActiveTexture(GL_TEXTURE0 + slot);
     if (glid != 0) {
         glEnable(GL_TEXTURE_2D);
@@ -5537,7 +5584,7 @@ static void glCompileAllShaders(GLLegacyRenderer* gl) {
             "void main(){ vec4 t=texture2D(gm_BaseTexture,v_vTexcoord); vec3 y=(t.rgb*v_vColour.rgb)*rgb2yiq; float h=atan(y.b,y.g)+u_Position; float c=sqrt(y.b*y.b+y.g*y.g); gl_FragColor=vec4(vec3(y.r,c*cos(h),c*sin(h))*yiq2rgb,t.a*v_vColour.a); }\n";
         static const char* paletteVertexDesktop =
             "#version 120\n"
-            "attribute vec3 in_Position; attribute vec4 in_Colour; attribute vec2 in_TextureCoord;\n"
+            "#define in_Position gl_Vertex.xyz\n#define in_Colour gl_Color\n#define in_TextureCoord gl_MultiTexCoord0.xy\n"
             "uniform mat4 u_vitaMVP; varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
             "void main(){ gl_Position=u_vitaMVP*vec4(in_Position,1.0); v_vColour=in_Colour; v_vTexcoord=in_TextureCoord; }\n";
         static const char* paletteFragmentDesktop =
@@ -5545,15 +5592,23 @@ static void glCompileAllShaders(GLLegacyRenderer* gl) {
             "uniform sampler2D gm_BaseTexture; uniform sampler2D u_palTexture; uniform vec4 u_Uvs; uniform float u_paletteId; uniform vec2 u_pixelSize;\n"
             "varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
             "void main(){ vec4 src=texture2D(gm_BaseTexture,v_vTexcoord); if(src.a<=0.0){ gl_FragColor=vec4(0.0); return; } vec4 outc=src;"
-            "for(int i=0;i<64;i++){ vec2 p=u_Uvs.xy+vec2(0.0,float(i)*u_pixelSize.y); vec4 key=texture2D(u_palTexture,p);"
+            "for(int i=0;i<256;i++){ vec2 p=u_Uvs.xy+vec2(0.0,float(i)*u_pixelSize.y); if(p.y>=u_Uvs.w)break; vec4 key=texture2D(u_palTexture,p);"
             "if(distance(key,src)<=0.004){ float col=floor(u_paletteId+1.0); vec2 q=vec2(u_Uvs.x+u_pixelSize.x*col,p.y);"
             "outc=mix(texture2D(u_palTexture,q-vec2(u_pixelSize.x,0.0)),texture2D(u_palTexture,q),fract(u_paletteId)); break; }}"
             "gl_FragColor=v_vColour*outc; }\n";
         static const char* compactVertexDesktop =
             "#version 120\n"
-            "attribute vec3 in_Position; attribute vec4 in_Colour; attribute vec2 in_TextureCoord;\n"
+            "#define in_Position gl_Vertex.xyz\n#define in_Colour gl_Color\n#define in_TextureCoord gl_MultiTexCoord0.xy\n"
             "uniform mat4 u_vitaMVP; varying vec2 v_vTexcoord; varying vec4 v_vColour; varying vec2 v_vPosition;\n"
             "void main(){ gl_Position=u_vitaMVP*vec4(in_Position,1.0); v_vColour=in_Colour; v_vTexcoord=in_TextureCoord; v_vPosition=in_Position.xy; }\n";
+        static const char* shadowFragmentDesktop =
+            "#version 120\n"
+            "uniform sampler2D gm_BaseTexture; uniform vec4 shadowCol; varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
+            "void main(){ vec4 c=v_vColour*texture2D(gm_BaseTexture,v_vTexcoord); c.rgb=shadowCol.rgb; if(c.a>0.0)c.a=min(shadowCol.a,c.a); gl_FragColor=c; }\n";
+        static const char* shadowEveningFragmentDesktop =
+            "#version 120\n"
+            "uniform sampler2D gm_BaseTexture; uniform vec4 shadowCol; uniform vec2 pixelw; varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
+            "void main(){ vec4 c=v_vColour*texture2D(gm_BaseTexture,v_vTexcoord); float px=v_vTexcoord.x-pixelw.x*6.0; if(px<pixelw.y||texture2D(gm_BaseTexture,vec2(px,v_vTexcoord.y)).a<=0.0){c.rgb=shadowCol.rgb;if(c.a>0.0)c.a=min(shadowCol.a,c.a);} gl_FragColor=c; }\n";
 #ifdef PLATFORM_VITA
         static const char* hueVertexVita =
             "attribute vec3 in_Position; attribute vec4 in_Colour; attribute vec2 in_TextureCoord;\n"
@@ -5572,7 +5627,7 @@ static void glCompileAllShaders(GLLegacyRenderer* gl) {
             "precision mediump float; uniform sampler2D gm_BaseTexture; uniform sampler2D u_palTexture; uniform vec4 u_Uvs; uniform float u_paletteId; uniform vec2 u_pixelSize;\n"
             "varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
             "void main(){ vec4 src=texture2D(gm_BaseTexture,v_vTexcoord); if(src.a<=0.0){ gl_FragColor=vec4(0.0); return; } vec4 outc=src;"
-            "for(int i=0;i<64;i++){ vec2 p=u_Uvs.xy+vec2(0.0,float(i)*u_pixelSize.y); vec4 key=texture2D(u_palTexture,p);"
+            "for(int i=0;i<256;i++){ vec2 p=u_Uvs.xy+vec2(0.0,float(i)*u_pixelSize.y); if(p.y>=u_Uvs.w)break; vec4 key=texture2D(u_palTexture,p);"
             "if(distance(key,src)<=0.004){ float col=floor(u_paletteId+1.0); vec2 q=vec2(u_Uvs.x+u_pixelSize.x*col,p.y);"
             "outc=mix(texture2D(u_palTexture,q-vec2(u_pixelSize.x,0.0)),texture2D(u_palTexture,q),fract(u_paletteId)); break; }}"
             "gl_FragColor=v_vColour*outc; }\n";
@@ -5584,13 +5639,23 @@ static void glCompileAllShaders(GLLegacyRenderer* gl) {
             "attribute vec3 in_Position; attribute vec4 in_Colour; attribute vec2 in_TextureCoord;\n"
             "uniform mat4 u_vitaMVP; varying vec2 v_vTexcoord; varying vec4 v_vColour; varying vec2 v_vPosition;\n"
             "void main(){ gl_Position=u_vitaMVP*vec4(in_Position,1.0); v_vColour=in_Colour; v_vTexcoord=in_TextureCoord; v_vPosition=in_Position.xy; }\n";
+        static const char* shadowFragmentVita =
+            "precision mediump float; uniform sampler2D gm_BaseTexture; uniform vec4 shadowCol; varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
+            "void main(){ vec4 c=v_vColour*texture2D(gm_BaseTexture,v_vTexcoord); c.rgb=shadowCol.rgb; if(c.a>0.0)c.a=min(shadowCol.a,c.a); gl_FragColor=c; }\n";
+        static const char* shadowEveningFragmentVita =
+            "precision mediump float; uniform sampler2D gm_BaseTexture; uniform vec4 shadowCol; uniform vec2 pixelw; varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
+            "void main(){ vec4 c=v_vColour*texture2D(gm_BaseTexture,v_vTexcoord); float px=v_vTexcoord.x-pixelw.x*6.0; if(px<pixelw.y||texture2D(gm_BaseTexture,vec2(px,v_vTexcoord.y)).a<=0.0){c.rgb=shadowCol.rgb;if(c.a>0.0)c.a=min(shadowCol.a,c.a);} gl_FragColor=c; }\n";
         if (strcmp(shaderName, "shd_hue") == 0) { vsrc=hueVertexVita; fsrc=hueFragmentVita; }
         if (strcmp(shaderName, "shd_pal_swapper") == 0) { vsrc=paletteVertexVita; fsrc=paletteFragmentVita; }
+        if (strcmp(shaderName, "shd_shadowblend") == 0) fsrc=shadowFragmentVita;
+        if (strcmp(shaderName, "shd_shadowblend_evening") == 0) fsrc=shadowEveningFragmentVita;
         if (strcmp(shaderName, "shd_hue") != 0 && strcmp(shaderName, "shd_pal_swapper") != 0)
             vsrc = compactVertexVita;
 #else
         if (strcmp(shaderName, "shd_hue") == 0) { vsrc=hueVertexDesktop; fsrc=hueFragmentDesktop; }
         if (strcmp(shaderName, "shd_pal_swapper") == 0) { vsrc=paletteVertexDesktop; fsrc=paletteFragmentDesktop; }
+        if (strcmp(shaderName, "shd_shadowblend") == 0) fsrc=shadowFragmentDesktop;
+        if (strcmp(shaderName, "shd_shadowblend_evening") == 0) fsrc=shadowEveningFragmentDesktop;
         if (legacyCompactShaderSupported(shaderName) &&
             strcmp(shaderName, "shd_hue") != 0 && strcmp(shaderName, "shd_pal_swapper") != 0)
             vsrc = compactVertexDesktop;
@@ -5757,8 +5822,10 @@ static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex)
     renderer->currentShader = shaderIndex;
     static const DataWin* loggedDataWin = nullptr;
     static bool loggedShaders[1024] = { false };
+    static bool castlePaletteFallbackLogged = false;
     if (loggedDataWin != gl->base.dataWin) {
         memset(loggedShaders, 0, sizeof(loggedShaders));
+        castlePaletteFallbackLogged = false;
         loggedDataWin = gl->base.dataWin;
     }
     if (shaderIndex >= 0 && shaderIndex < (int32_t)(sizeof(loggedShaders) / sizeof(loggedShaders[0])) &&
@@ -5790,11 +5857,42 @@ static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex)
     }
     if (shaderIndex < 0 || (uint32_t)shaderIndex >= gl->base.dataWin->shdr.count ||
         gl->shaderPrograms == nullptr || gl->shaderPrograms[shaderIndex] == 0) {
+#ifdef PLATFORM_VITA
+        vitaCustomShaderActive = false;
+#endif
         glUseProgram(0);
         return;
     }
 
+#ifdef PLATFORM_VITA
+    // The compact palette shader can execute up to 256 dependent texture
+    // reads per pixel. Castle Town interiors apply it over large surfaces;
+    // the captured GXM dump ends in that pass after sustained 60-67 ms GPU
+    // frames. Preserve the shader elsewhere (notably Chapter 3's long quiz
+    // palettes), but use the stable textured fallback in these interiors.
+    const char* activeShaderName = gl->base.dataWin->shdr.shaders[shaderIndex].name;
+    const char* activeRoomName = gl->base.runner != nullptr &&
+        gl->base.runner->currentRoom != nullptr ? gl->base.runner->currentRoom->name : nullptr;
+    extern int g_vitaActiveChapter;
+    if (g_vitaActiveChapter == 5 && activeShaderName != nullptr && activeRoomName != nullptr &&
+        strcmp(activeShaderName, "shd_pal_swapper") == 0 &&
+        (strncmp(activeRoomName, "room_dw_castle_", sizeof("room_dw_castle_") - 1) == 0 ||
+         strncmp(activeRoomName, "room_dw_ralsei_castle_", sizeof("room_dw_ralsei_castle_") - 1) == 0)) {
+        vitaCustomShaderActive = false;
+        glUseProgram(0);
+        if (!castlePaletteFallbackLogged) {
+            vitaLogExperimentalShader(gl, "fallback", (uint32_t)shaderIndex,
+                                      "castle_palette_gpu_budget");
+            castlePaletteFallbackLogged = true;
+        }
+        return;
+    }
+#endif
+
     GLuint program = gl->shaderPrograms[shaderIndex];
+#ifdef PLATFORM_VITA
+    vitaCustomShaderActive = true;
+#endif
     glUseProgram(program);
 
     // GameMaker shaders project every immediate-mode vertex through this
@@ -5874,6 +5972,9 @@ static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex)
 }
 static void glGpuResetShader(Renderer* renderer) {
     renderer->currentShader = -1;
+#ifdef PLATFORM_VITA
+    vitaCustomShaderActive = false;
+#endif
     glUseProgram(0);
     // Disable extra texture stages enabled by texture_set_stage (e.g. pal_swap)
     // so fixed-function pipeline multi-texturing doesn't corrupt subsequent draws.

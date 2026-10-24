@@ -1,0 +1,18 @@
+// Original Deltarune GLSL-ES effect adapted from Experimental-GL / DataWin SHDR.
+// Cg/PSSL GXP fragment uses NanoVG's native paint/scissor contract and
+// packed premultiplied-alpha output. Compiles on PSVita via vitaShaRK.
+uniform float4 frag[11];
+uniform float4 gameParams;
+float4 main(uniform sampler2D tex:TEXUNIT0,
+            float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {
+    float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);
+    float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);
+    float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;
+    float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);
+    float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;
+    float4 sampleColor=tex2D(tex,uv);
+    float4 c=sampleColor*frag[6];
+    float a=c.a>0.0?1.0:0.0;
+    float3 tint=frag[6].rgb/max(frag[6].a,0.00001);
+    return float4(sampleColor.rgb*tint*a,a)*mask.x*mask.y;
+}

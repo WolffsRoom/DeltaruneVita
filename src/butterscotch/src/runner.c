@@ -1,4 +1,7 @@
 #include "runner.h"
+#ifdef PLATFORM_VITA
+#include "vita_room_prefetch.h"
+#endif
 #include "data_win.h"
 #include "instance.h"
 #include "renderer.h"
@@ -492,6 +495,59 @@ static void vitaEnableChapter5CliffSimpleMode(Runner* runner, Instance* instance
 }
 #endif
 
+static RValue failureField(Runner* runner, Instance* instance, const char* name) {
+    ptrdiff_t slot = shgeti(runner->vmContext->varNameMap, name);
+    return slot >= 0 ? Instance_getSelfVar(instance,
+        runner->vmContext->varNameMap[slot].value) : RValue_makeUndefined();
+}
+
+int32_t Runner_getFailurePhase(Runner* runner, Instance* instance) {
+    if (!runner || !instance || !runner->currentRoom ||
+        !runner->currentRoom->name || strcmp(runner->currentRoom->name, "PLACE_FAILURE") != 0 ||
+        instance->destroyed || instance->objectIndex < 0 ||
+        (uint32_t)instance->objectIndex >= runner->dataWin->objt.count)
+        return -1;
+    const char* name = runner->dataWin->objt.objects[instance->objectIndex].name;
+    if (!name || strcmp(name, "DEVICE_FAILURE") != 0) return -1;
+    RValue phase = failureField(runner, instance, "EVENT");
+    return phase.type == RVALUE_UNDEFINED ? -1 : RValue_toInt32(phase);
+}
+
+bool Runner_isFailureGivingUp(Runner* runner) {
+    if (!runner) return false;
+    repeat((int32_t)arrlen(runner->instances), i) {
+        if (Runner_getFailurePhase(runner, runner->instances[i]) == 28) return true;
+    }
+    return false;
+}
+
+void Runner_shortenRetryFade(Runner* runner, Instance* instance) {
+    int phase = Runner_getFailurePhase(runner, instance);
+    if (phase != 7 && phase != 9) return;
+    RValue chapter = failureField(runner, runner->vmContext->globalScopeInstance, "chapter");
+    RValue knight = failureField(runner, instance, "knight_mode");
+    if (chapter.type == RVALUE_UNDEFINED || RValue_toInt32(chapter) < 2 ||
+        RValue_toInt32(chapter) > 5 || knight.type == RVALUE_UNDEFINED || RValue_toBool(knight)) return;
+    // Preserve the GML alarm/event sequence and scr_tempload(), including
+    // inventory, boss flags and checkpoint selection. Only shorten presentation.
+    int limit = phase == 7 ? 10 : 30;
+    if (instance->alarm[4] <= limit) return;
+    if (phase == 9) {
+        RValue white = failureField(runner, instance, "WHITEFADE");
+        RValue speed = failureField(runner, instance, "FADEUP");
+        if (white.type == RVALUE_UNDEFINED || !RValue_toBool(white) ||
+            speed.type == RVALUE_UNDEFINED || RValue_toReal(speed) <= 0) return;
+        if (RValue_toReal(speed) < 1.0 / 30.0)
+            Instance_setSelfVar(instance, shget(runner->vmContext->varNameMap, "FADEUP"),
+                                RValue_makeReal(1.0 / 30.0));
+    }
+    instance->alarm[4] = limit;
+#ifdef PLATFORM_VITA
+    VitaProbe_logLine(phase == 7 ? "RETRY=continue_wait_shortened steps=10" :
+                                  "RETRY=continue_fade_shortened steps=30 checkpoint=original_gml");
+#endif
+}
+
 // Executes an already-resolved event handler (see findEventCodeIdAndOwner) and verified codeId >= 0.
 static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int32_t eventType, int32_t eventSubtype, int32_t codeId, int32_t ownerObjectIndex) {
     if (isEventBlockedByPendingRoom(runner, instance, eventType))
@@ -518,6 +574,30 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         if (objectName != nullptr && strcmp(objectName, "obj_time") == 0)
             return;
     }
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* The GXM renderer cannot yet bind shd_lut's second sampler, so the
+     * obj_lutshader event runs a full application_surface GPU/CPU roundtrip
+     * without ever applying the LUT. Especially in Chapter5 this produced
+     * 912 sprite_create_from_surface synchronizations and 500 surface
+     * retirements. On GXM only, omit the visually neutral, unsupported LUT
+     * controller passes. All unrelated Draw, Step, shaders and actors run. */
+    if ((g_vitaActiveChapter==3 || g_vitaActiveChapter==5) &&
+        (eventType==EVENT_STEP || eventType==EVENT_DRAW) &&
+        instance->objectIndex>=0 &&
+        (uint32_t)instance->objectIndex<runner->dataWin->objt.count){
+        const char*obj=runner->dataWin->objt.objects[instance->objectIndex].name;
+        if(obj && strcmp(obj,"obj_lutshader")==0){
+            /* Native shd_lut now supports its auxiliary sampler. Keep all
+             * original LUT scripts on GXM when the GXP was compiled; retain
+             * the old cheap fallback if shader program 14 is unavailable. */
+            if(g_vitaActiveChapter!=5 ||
+               !runner->renderer ||
+               !runner->renderer->vtable->shaderIsCompiled ||
+               !runner->renderer->vtable->shaderIsCompiled(runner->renderer,14))
+                return;
+        }
+    }
+#endif
     if (g_vitaActiveChapter == 3 &&
         (eventType == EVENT_STEP || eventType == EVENT_DRAW) &&
         instance->objectIndex >= 0 &&
@@ -574,7 +654,7 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         }
     }
 
-    if (g_vitaActiveChapter == 5 && g_vitaModernGlActive &&
+    if (g_vitaActiveChapter == 5 &&
         eventType == EVENT_DRAW && eventSubtype == DRAW_BEGIN &&
         instance->objectIndex >= 0 &&
         (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
@@ -589,7 +669,7 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
                 if (Renderer_surfaceExists(runner->renderer, (int32_t)RValue_toReal(surf))) {
                     static unsigned int lastReflectionReuseLog = 0;
                     if (runner->frameCount - lastReflectionReuseLog >= 120U) {
-                        VitaProbe_logLine("CH5_CASTLEREFLECT_REUSE=10hz");
+                        VitaProbe_logLine("CH5_CASTLEREFLECT_REUSE=10hz backend=all");
                         lastReflectionReuseLog = runner->frameCount;
                     }
                     return;
@@ -621,6 +701,22 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
     int32_t savedEventSubtype = vm->currentEventSubtype;
     int32_t savedEventObjectIndex = vm->currentEventObjectIndex;
     bool savedActionRelativeFlag = vm->actionRelativeFlag;
+    Instance* savedBoardScreenOwner = vm->boardScreenOwner;
+    bool savedBoardScreenReuse = vm->boardScreenReuse;
+    vm->boardScreenOwner = nullptr;
+    vm->boardScreenReuse = false;
+    // Keep this opt-in on desktop so local replay exercises the Vita path.
+#ifdef PLATFORM_VITA
+    bool boardCacheEnabled = g_vitaActiveChapter == 3;
+#else
+    bool boardCacheEnabled = getenv("BS_TEST_BOARD_SCREEN_CACHE") != nullptr;
+#endif
+    if (boardCacheEnabled && eventType == EVENT_DRAW && eventSubtype == DRAW_NORMAL &&
+        runner->currentRoom && runner->currentRoom->name &&
+        strcmp(runner->currentRoom->name, "room_dw_puzzlecloset_2") == 0 &&
+        instance->objectIndex >= 0 && (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
+        strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "obj_board_screen") == 0)
+        vm->boardScreenOwner = instance;
 
     vm->actionRelativeFlag = false;
     vm->currentEventType = eventType;
@@ -644,10 +740,19 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
     }
 #endif
 
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* Profiling every event adds multiple clock reads per VM call. Sample
+     * detailed object timings every eighth frame; script execution,
+     * camera and GameMaker ordering remain untouched. */
+    const bool gxmSampleEventTiming = (runner->frameCount & 7U) == 0U;
+    uint64_t ev_start = gxmSampleEventTiming ? nowNanos() : 0;
+#else
     uint64_t ev_start = nowNanos();
+#endif
 #if IS_WAD17_OR_HIGHER_ENABLED
     bool nativeDraw = eventType == EVENT_DRAW && eventSubtype == DRAW_NORMAL &&
-                      VMBuiltins_tryGardenLightDraw(vm, instance, codeId);
+                      (VMBuiltins_tryCullTVPanel(vm, instance, codeId) ||
+                       VMBuiltins_tryGardenLightDraw(vm, instance, codeId));
 #ifdef PLATFORM_VITA
     if (!nativeDraw && g_vitaActiveChapter == 5 && eventType == EVENT_DRAW &&
         eventSubtype == DRAW_NORMAL)
@@ -657,11 +762,66 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
 #else
     executeCode(runner, instance, codeId);
 #endif
+#ifdef NATIVE_GXM_PROBE_VERSION
+    extern int g_vitaActiveChapter;
+    /* Chapter0 lives on ux0: as an external GameMaker data.win. Older
+     * installed versions and translation overrides may retain v0.71,
+     * even when VPK and prepared PC data.win are v0.78. Fix the actual
+     * displayed GameMaker variable immediately after Create, without
+     * mutating/redistributing the user's original data.win. */
+    if(g_vitaActiveChapter==0 && eventType==EVENT_CREATE &&
+       instance->objectIndex>=0 &&
+       (uint32_t)instance->objectIndex<runner->dataWin->objt.count){
+        const char*name=runner->dataWin->objt.objects[instance->objectIndex].name;
+        if(name && strcmp(name,"obj_ui_version")==0){
+            int32_t vid=VM_getOrAllocateVarID(vm,"_version_text");
+            if(vid>=0)Instance_setSelfVar(instance,vid,
+                RValue_makeOwnedString(safeStrdup("DELTARUNE VITA v0.78")));
+        }
+    }
+#endif
 #ifdef PLATFORM_VITA
     vitaEnableChapter5CliffSimpleMode(runner, instance, eventType);
 #endif
+#if defined(PLATFORM_VITA) || defined(_WIN32)
+    if (eventType == EVENT_STEP && eventSubtype == STEP_NORMAL
+#ifndef PLATFORM_VITA
+        && getenv("BS_TEST_RETRY") != nullptr
+#endif
+    ) Runner_shortenRetryFade(runner, instance);
+#endif
+#ifdef NATIVE_GXM_PROBE_VERSION
+    uint64_t ev_end = gxmSampleEventTiming ? nowNanos() : 0;
+    uint64_t dur = gxmSampleEventTiming ? (ev_end-ev_start)/1000 : 0;
+#else
     uint64_t ev_end = nowNanos();
-    uint64_t dur = (ev_end - ev_start) / 1000;
+    uint64_t dur = (ev_end-ev_start)/1000;
+#endif
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* Record Begin, Normal AND End Step. Previous measurements included
+     * all three phases in events_us, but step_hotspot counted only Normal:
+     * it misleadingly attributed 0.6 ms of the full 23 ms VM cost.
+     * Composite key preserves object and Step phase; no disk I/O. */
+    if(gxmSampleEventTiming && eventType==EVENT_STEP &&
+       (eventSubtype==STEP_BEGIN||eventSubtype==STEP_NORMAL||
+        eventSubtype==STEP_END) && instance->objectIndex>=0){
+        unsigned phase=eventSubtype==STEP_BEGIN?0u:
+                       eventSubtype==STEP_NORMAL?1u:2u;
+        runner->gxmStepPhaseUs[phase]+=dur*8u;
+        runner->gxmStepPhaseCalls[phase]+=8u;
+        uint32_t key=(((uint32_t)instance->objectIndex+1u)<<2)|phase;
+        uint32_t slot=key&127u;
+        for(unsigned probe=0;probe<128;probe++,slot=(slot+1u)&127u){
+            if(runner->gxmStepProfileKeys[slot]==0||
+               runner->gxmStepProfileKeys[slot]==key){
+                runner->gxmStepProfileKeys[slot]=key;
+                runner->gxmStepProfileUs[slot]+=dur*8u;
+                runner->gxmStepProfileCalls[slot]+=8u;
+                break;
+            }
+        }
+    }
+#endif
     if (eventType == EVENT_DRAW && dur > runner->profDrawMaxUs) {
         runner->profDrawMaxUs = dur;
         runner->profDrawMaxObject = instance->objectIndex;
@@ -683,6 +843,8 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
     vm->currentEventSubtype = savedEventSubtype;
     vm->currentEventObjectIndex = savedEventObjectIndex;
     vm->actionRelativeFlag = savedActionRelativeFlag;
+    vm->boardScreenOwner = savedBoardScreenOwner;
+    vm->boardScreenReuse = savedBoardScreenReuse;
 }
 
 void Runner_executeEventFromObject(Runner* runner, Instance* instance, int32_t startObjectIndex, int32_t eventType, int32_t eventSubtype) {
@@ -778,9 +940,33 @@ void Runner_executeEventForAll(Runner* runner, int32_t eventType, int32_t eventS
         runner->eventDispatchInstances = scratch; // arrsetlen may have realloced
 
         int32_t snapshotCount = (int32_t) arrlen(scratch);
+#ifdef NATIVE_GXM_PROBE_VERSION
+        /* Step snapshots are grouped by exact object. Resolve the inherited
+         * event code once for the bucket instead of resolving the same
+         * event slot + parent hierarchy for every one of its instances.
+         * The bucket snapshot and original event order are untouched.
+         * If instance_change happens during dispatch, objectIndex differs
+         * and we immediately resolve its new object instead. */
+        int32_t cachedObject = -2,cachedCode = -1,cachedOwner = -1;
+#endif
         repeat(snapshotCount, i) {
             Instance* inst = scratch[i];
             if (!inst->active) continue;
+#ifdef NATIVE_GXM_PROBE_VERSION
+            if(eventType==EVENT_STEP){
+                int32_t obj=inst->objectIndex;
+                if(obj!=cachedObject){
+                    cachedObject=obj;
+                    cachedCode=ResolvedEventTable_lookup(
+                        table,obj,slot,&cachedOwner);
+                }else{
+                    runner->gxmStepLookupSaved++;
+                }
+                if(cachedCode>=0)Runner_executeResolvedEvent(
+                     runner,inst,eventType,eventSubtype,cachedCode,cachedOwner);
+                continue;
+            }
+#endif
             Runner_executeEvent(runner, inst, eventType, eventSubtype);
         }
         return;
@@ -1292,6 +1478,12 @@ void Runner_draw(Runner* runner) {
             // Filter inactive/invisible instances at draw time so the cache doesn't need invalidation when those flags toggle.
             if (!inst->active || !inst->visible) continue;
 #ifdef PLATFORM_VITA
+            if (inst->objectIndex >= 0 &&
+                (uint32_t)inst->objectIndex < runner->dataWin->objt.count) {
+                const char* drawObjectName = runner->dataWin->objt.objects[inst->objectIndex].name;
+                extern void VitaBorders_noteTransitionObject(const char* objectName);
+                VitaBorders_noteTransitionObject(drawObjectName);
+            }
             if (g_vitaActiveChapter == 3 && inst->objectIndex >= 0 &&
                 (uint32_t)inst->objectIndex < runner->dataWin->objt.count) {
                 extern void VitaBorders_noteVisibleAsset(const char* assetName);
@@ -1629,6 +1821,9 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, bool debugSh
                 }
 #endif
 
+                // Target selection uses viewCurrent to choose the surface camera.
+                // Select this view before binding, including the first draw/clear.
+                runner->viewCurrent = (int32_t) vi;
                 Runner_surfaceSetTarget(runner, view->surfaceId);
 
                 if (runner->drawBackgroundColor)
@@ -3983,6 +4178,9 @@ void Runner_handlePendingRoomChange(Runner* runner) {
     runner->profRoomTotalUs = 0;
     // Handle game restart
     if (runner->pendingRoom == ROOM_RESTARTGAME) {
+#ifdef PLATFORM_VITA
+        VitaRoomPrefetch_cancel();
+#endif
         // See you soon!
         // Free the currently-loaded non-eager room before reset so lazyLoadRooms stays steady-state.
         if (runner->dataWin->lazyLoadRooms && runner->currentRoom != nullptr && !runner->currentRoom->eagerlyLoaded) {
@@ -4004,6 +4202,15 @@ void Runner_handlePendingRoomChange(Runner* runner) {
 
     // Handle room transition
     if (runner->pendingRoom >= 0) {
+#ifdef PLATFORM_VITA
+        if ((uint32_t)runner->pendingRoom < runner->dataWin->room.count &&
+            !runner->dataWin->room.rooms[runner->pendingRoom].payloadLoaded &&
+            !VitaRoomPrefetch_prepare(runner->pendingRoom)) {
+            runner->vitaRoomTransitionWaiting = true;
+            return;
+        }
+        runner->vitaRoomTransitionWaiting = false;
+#endif
         uint64_t roomChangeBegin = nowNanos();
         int32_t oldRoomIndex = runner->currentRoomIndex;
         Room* oldRoom = runner->currentRoom;
@@ -4212,6 +4419,14 @@ void Runner_handlePendingRoomChange(Runner* runner) {
             (strstr(newRoomName, "dw_castle") || strstr(newRoomName, "dw_ralsei")) ? 3 : 0;
         bool vitaSharedCh2AreaTransition = g_vitaActiveChapter == 2 &&
             oldCh2Region != 0 && oldCh2Region == newCh2Region;
+        // Mansion rooms occasionally build a 1920x480 surface and a dynamic
+        // sprite from it during Create.  Neither allocation is part of the
+        // atlas counter.  Retaining the generic 104 MiB regional cache left
+        // 6.5 MiB free before east_2f_a and the temporary pair exhausted the
+        // VitaGL pool.  Start internal Mansion doors at 88 MiB, then allow the
+        // regional cache to settle at its separate 92 MiB runtime ceiling.
+        bool vitaSharedCh2MansionTransition = vitaSharedCh2AreaTransition &&
+            newCh2Region == 2;
         bool vitaCh2HeavyCyberDestination = g_vitaActiveChapter == 2 &&
             (strcmp(newRoomName, "room_dw_cyber_teacup_final") == 0 ||
              strcmp(newRoomName, "room_dw_cyber_rollercoaster") == 0 ||
@@ -4298,6 +4513,7 @@ void Runner_handlePendingRoomChange(Runner* runner) {
              vitaCh2DynamicAssetDestination ? 84ULL :
              vitaCh2HeavyCyberDestination ? 68ULL :
              vitaCh2HeavyCastleDestination ? 76ULL :
+             vitaSharedCh2MansionTransition ? 88ULL :
              vitaSharedCh2AreaTransition ? 104ULL : 80ULL) :
             (vitaSharedTransition ?
             (g_vitaActiveChapter == 5 ?
@@ -4318,7 +4534,7 @@ void Runner_handlePendingRoomChange(Runner* runner) {
         GLLegacyRenderer_trimTextureCacheForRoomChange(
             (GLLegacyRenderer*)runner->renderer,
             vitaTrimMiB * 1024ULL * 1024ULL,
-            g_vitaActiveChapter == 2 ? false : !vitaSharedTransition);
+            g_vitaActiveChapter == 2 ? vitaSharedCh2MansionTransition : !vitaSharedTransition);
         GLLegacyRenderer_collectRetiredTexturesForRoomChange(
             (GLLegacyRenderer*)runner->renderer);
         uint32_t vitaPreloadedPages = GLLegacyRenderer_preloadRoomTextureSet(
@@ -4932,6 +5148,12 @@ void Runner_step(Runner* runner) {
     runner->profStepSpatialUs = 0;
     runner->profStepCollisionUs = 0;
     runner->profStepOtherUs = 0;
+#ifdef PLATFORM_VITA
+    if (runner->pendingRoom >= 0 && runner->vitaRoomTransitionWaiting) {
+        Runner_handlePendingRoomChange(runner);
+        if (runner->pendingRoom >= 0) return;
+    }
+#endif
     // The snapshot arena is stack-like and every push must be matched with a pop within the same frame. Assert that invariant at the top of each step: a non-zero length here means some site below pushed without popping, and we want a loud failure with the offending length so we can find it instead of silently leaking until the next frame.
     requireMessageFormatted(__FILE__, __LINE__, arrlen(runner->instanceSnapshots) == 0, "instanceSnapshots arena was not fully popped at end of previous frame (length=%td)", arrlen(runner->instanceSnapshots));
 
@@ -5010,6 +5232,9 @@ void Runner_step(Runner* runner) {
     Runner_executeEventForAll(runner, EVENT_STEP, STEP_BEGIN);
     uint64_t t2 = nowNanos();
     runner->profStepEventsUs += (t2 - t1) / 1000;
+#ifdef NATIVE_GXM_PROBE_VERSION
+    runner->gxmStepDispatchUs[0]+=(t2 - t1)/1000;
+#endif
 
     // Process alarms. Outer loop is over alarm slots (matching the native runner's HandleAlarm), and for each slot we walk only the objects in the event table's bySlot range and only those objects' exact instance buckets. Idle instances are further skipped via activeAlarmMask.
     repeat(GML_ALARM_COUNT, alarmIdx) {
@@ -5111,6 +5336,9 @@ void Runner_step(Runner* runner) {
     Runner_executeEventForAll(runner, EVENT_STEP, STEP_NORMAL);
     uint64_t t5 = nowNanos();
     runner->profStepEventsUs += (t5 - t4) / 1000;
+#ifdef NATIVE_GXM_PROBE_VERSION
+    runner->gxmStepDispatchUs[1]+=(t5 - t4)/1000;
+#endif
 
     // Apply motion: friction, gravity, then x += hspeed, y += vspeed
     int32_t motionCount = (int32_t) arrlen(runner->instances);
@@ -5261,6 +5489,9 @@ void Runner_step(Runner* runner) {
     Runner_executeEventForAll(runner, EVENT_STEP, STEP_END);
     uint64_t t7 = nowNanos();
     runner->profStepEventsUs += (t7 - t6) / 1000;
+#ifdef NATIVE_GXM_PROBE_VERSION
+    runner->gxmStepDispatchUs[2]+=(t7 - t6)/1000;
+#endif
 
 #ifdef PLATFORM_VITA
     vitaCityMiceSoftlockGuard(runner);

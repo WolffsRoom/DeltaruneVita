@@ -65,6 +65,6 @@ typedef struct WAVFile_t {
 
 // Parse the header of WAV file and return WAVFile structure with header and
 // pointer to data
-WAVFile WAV_ParseFileData(uint8_t const* data);
+WAVFile WAV_ParseFileData(uint8_t const* data, size_t size);
 
 #endif

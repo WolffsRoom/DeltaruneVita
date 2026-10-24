@@ -1,0 +1,35 @@
+// SHDR shd_shoujo translated from Deltarune chapter5 GLSL.
+uniform float4 frag[11];
+uniform float4 gameParams; // x: time, y: appSurfWidth
+float4 main(uniform sampler2D tex:TEXUNIT0,
+            uniform sampler2D texGradient:TEXUNIT1,
+            uniform sampler2D texBubble:TEXUNIT2,
+            uniform sampler2D texStars:TEXUNIT3,
+            float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {
+    float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);
+    float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);
+    float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;
+    float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);
+    float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;
+    float4 base=tex2D(tex,uv);
+    float width=max(gameParams.y,1.0);
+    float tm=gameParams.x;
+    float x=fpos.x,y=fpos.y;
+    float gradPos=frac(x/width+tm);
+    float2 gradCoord=float2(gradPos,0.0);
+    float3 col=tex2D(texGradient,gradCoord).rgb;
+    float blend=frac(x/(width/128.0));
+    col=lerp(col,tex2D(texGradient,gradCoord+float2(0.5/128.0,0.0)).rgb,blend);
+    col+=abs(-1.0+frac(x/width)*2.0)*0.5;
+    float2 uv1=frac(float2(x/width*4.0+tm*1.25,
+                            y/width*4.0+tm*1.20));
+    float2 uv2=frac(float2(x/width*4.0+tm*2.65,
+                            y/width*4.0+tm*2.60));
+    float2 star=frac(float2(x/width*4.0+tm*1.95,
+                             y/width*4.0+tm*1.90));
+    col+=tex2D(texBubble,uv1).rgb;
+    col+=tex2D(texBubble,uv2).rgb*0.15;
+    col+=tex2D(texStars,star).rgb;
+    float a=base.a*frag[6].a;
+    return float4(col*frag[6].rgb*base.a,a)*mask.x*mask.y;
+}

@@ -9,9 +9,19 @@ RUNNER_C = (ROOT / "src/butterscotch/src/runner.c").read_text(encoding="utf-8")
 LEGACY_H = (ROOT / "src/butterscotch/src/gl_legacy/gl_legacy_renderer.h").read_text(encoding="utf-8")
 LEGACY_C = (ROOT / "src/butterscotch/src/gl_legacy/gl_legacy_renderer.c").read_text(encoding="utf-8")
 
+require_gpu_guard = [
+    '"castle_palette_gpu_budget"',
+    'strcmp(activeShaderName, "shd_pal_swapper") == 0',
+    'strncmp(activeRoomName, "room_dw_castle_"',
+]
+
 
 def require(text: str, source: str, message: str) -> None:
     assert text in source, message
+
+
+for guard in require_gpu_guard:
+    require(guard, LEGACY_C, "Castle Town palette GPU guard is missing")
 
 
 # The new value is appended so existing INI numeric state and old builds keep
@@ -76,5 +86,33 @@ require('vitaLogExperimentalShader(gl, "fallback"', LEGACY_C,
         "unsupported or failed shaders must log a bounded fallback")
 require('vitaLogExperimentalShader(gl, "active"', LEGACY_C,
         "experimental activation must be logged on state transition")
+
+# Town shadows are common, tiny shaders.  Keep dedicated Vita programs instead
+# of feeding the generated GameMaker fragment preamble to ShaRK; that path may
+# report a linked program while producing no shadow pixels on hardware.
+require("shadowFragmentVita", LEGACY_C,
+        "Experimental-GL needs a compact Vita fragment for town shadows")
+require("shadowEveningFragmentVita", LEGACY_C,
+        "Experimental-GL needs the evening shadow edge program")
+require('strcmp(shaderName, "shd_shadowblend") == 0', LEGACY_C,
+        "the compact town shadow program must be selected by resource name")
+require('strcmp(shaderName, "shd_shadowblend_evening") == 0', LEGACY_C,
+        "the compact evening shadow program must be selected by resource name")
+require("uniform vec4 shadowCol", LEGACY_C,
+        "town shadow colour/alpha contract must be preserved")
+require("uniform vec2 pixelw", LEGACY_C,
+        "evening shadow edge contract must be preserved")
+require("vitaCustomShaderActive", LEGACY_C,
+        "Vita draw bridge must distinguish programmable shaders from FFP")
+require("glEnableVertexAttribArray(0)", LEGACY_C,
+        "Experimental shaders must receive the position attribute")
+require("glVertexAttribPointer(1, 2", LEGACY_C,
+        "Experimental shaders must receive texture coordinates")
+require("glVertexAttribPointer(2, 4", LEGACY_C,
+        "Experimental shaders must receive vertex colour")
+require("vitaCustomShaderActive = true;", LEGACY_C,
+        "activating a compiled shader must switch the Vita vertex bridge")
+require("vitaCustomShaderActive = false;", LEGACY_C,
+        "shader reset/fallback must restore the Legacy vertex bridge")
 
 print("Experimental-GL settings contract: PASS")

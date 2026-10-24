@@ -1,0 +1,60 @@
+#include "../../vita-probe/source/vita_video_draw_gl.h"
+
+static int testVideoGL(Renderer* r) {
+    const char* vs = "#version 120\nattribute vec2 position; attribute vec2 uv; varying vec2 v; void main(){v=uv;gl_Position=vec4(position,0,1);}";
+    const char* fs = "#version 120\nuniform sampler2D tex; varying vec2 v; void main(){gl_FragColor=texture2D(tex,v);}";
+    GLuint vert = glCreateShader(GL_VERTEX_SHADER), frag = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(vert, 1, &vs, NULL); glCompileShader(vert);
+    glShaderSource(frag, 1, &fs, NULL); glCompileShader(frag);
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vert); glAttachShader(program, frag);
+    glBindAttribLocation(program, 0, "position"); glBindAttribLocation(program, 1, "uv");
+    glLinkProgram(program);
+    GLint linked = 0; glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    if (!linked) return EXIT_FAILURE;
+    glUseProgram(program); glUniform1i(glGetUniformLocation(program, "tex"), 0);
+    int surface = r->vtable->createSurface(r, 8, 8);
+    r->vtable->setRenderTarget(r, surface, false);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE);
+    glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
+    // VitaGL accepts client arrays; desktop compatibility GL requires VAO 0.
+    if (glBindVertexArray) glBindVertexArray(0);
+    GLuint textures[2]; glGenTextures(2, textures);
+    const unsigned char movie[] = {255,0,0,255, 255,0,0,255, 0,0,255,255, 0,0,255,255};
+    const unsigned char border[] = {0,255,0,255};
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, textures[0]);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,2,2,0,GL_RGBA,GL_UNSIGNED_BYTE,movie);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, textures[1]);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,1,1,0,GL_RGBA,GL_UNSIGNED_BYTE,border);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glDisable(GL_TEXTURE_2D);
+    GLuint buffer; glGenBuffers(1, &buffer); glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    float original[24] = {0}; glBufferData(GL_ARRAY_BUFFER,sizeof(original),original,GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0); glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,16,(void*)0);
+    glEnableVertexAttribArray(1); glVertexAttribPointer(1,4,GL_UNSIGNED_BYTE,GL_TRUE,16,(void*)12);
+    glEnable(GL_BLEND); glUseProgram(0); glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, textures[1]);
+    VitaVideo_drawGL(textures[0],program,false,0,0,8,8);
+    unsigned char pixel[4]; glReadPixels(4,7,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+    bool pixelsOK = pixel[0]==0 && pixel[1]==0 && pixel[2]==255;
+    fprintf(stderr,"VIDEO_GML_PIXEL=%u,%u,%u error=%u\n",pixel[0],pixel[1],pixel[2],glGetError());
+    GLint value=0; glGetIntegerv(GL_ACTIVE_TEXTURE,&value);
+    bool stateOK = value==GL_TEXTURE1 && glIsEnabled(GL_BLEND);
+    glGetIntegerv(GL_CURRENT_PROGRAM,&value); stateOK &= value==0;
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING,&value); stateOK &= value==(GLint)buffer;
+    glGetVertexAttribiv(0,GL_VERTEX_ATTRIB_ARRAY_ENABLED,&value); stateOK &= value!=0;
+    glGetVertexAttribiv(0,GL_VERTEX_ATTRIB_ARRAY_SIZE,&value); stateOK &= value==3;
+    glGetVertexAttribiv(1,GL_VERTEX_ATTRIB_ARRAY_TYPE,&value); stateOK &= value==GL_UNSIGNED_BYTE;
+    void* pointer=NULL; glGetVertexAttribPointerv(1,GL_VERTEX_ATTRIB_ARRAY_POINTER,&pointer); stateOK &= pointer==(void*)12;
+    glActiveTexture(GL_TEXTURE0); glGetIntegerv(GL_TEXTURE_BINDING_2D,&value);
+    stateOK &= value==(GLint)textures[1] && !glIsEnabled(GL_TEXTURE_2D);
+    VitaVideo_drawGL(textures[0],program,true,0,0,8,8);
+    glReadPixels(4,7,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+    pixelsOK &= pixel[0]==255 && pixel[1]==0 && pixel[2]==0;
+    fprintf(stderr,"VIDEO_INTRO_PIXEL=%u,%u,%u error=%u\n",pixel[0],pixel[1],pixel[2],glGetError());
+    fprintf(stderr,"VIDEO_GL_PIXELS=%s VIDEO_GL_STATE=%s\n",pixelsOK?"pass":"FAIL",stateOK?"pass":"FAIL");
+    return pixelsOK && stateOK ? EXIT_SUCCESS : EXIT_FAILURE;
+}

@@ -5,7 +5,7 @@ estáveis** do projeto: os pontos que scripts, build e runtime usam para se comu
 que não devem mudar sem atualizar todos os consumidores. Trate como o "contrato" entre as partes
 do pipeline descrito em [arquitetura.md](arquitetura.md).
 
-## Patchers (não são scripts PowerShell — ver detalhes na tabela de scripts abaixo e em CLAUDE.md)
+## Patchers (não são scripts PowerShell — ver detalhes na tabela de scripts abaixo)
 
 Três formas de gerar `VitaFiles/deltarune`, todas fonte em `artifacts/Patcher/Build_Patch/`
 (desktop + Seam's) ou na branch `gh-pages` (Web), compiladas via `Build_Patcher.bat`:

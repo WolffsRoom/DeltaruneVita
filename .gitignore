@@ -51,3 +51,7 @@ Thumbs.db
 *.psp2dmp
 butterscotch-probe.log
 libc++_shared.so
+
+# Local AI agent notes (kept out of the public repo)
+/CLAUDE.md
+/.claude/

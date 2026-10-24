@@ -341,7 +341,7 @@ concluir um item do backlog, registre-o aqui com a versão/data e remova-o de l�
   próprias.** Não era bug de código — `app_dir()` já resolve para a pasta do `.exe` em execução
   (nunca um diretório acima), confirmado via simulação direta. O problema era o `.exe` ter sido
   movido para uma subpasta sem levar `SteamFiles`/`VitaFiles` junto (ficavam pra trás na pasta
-  compartilhada criada pelo `Build_Patcher.bat`). Documentado em CLAUDE.md com a dica de usar
+  compartilhada criada pelo `Build_Patcher.bat`). Documentado nas notas internas do projeto com a dica de usar
   `mklink /J` para não duplicar a instalação Steam por pasta.
 - **`jszip.min.js` vendorizado** em `assets/jszip.min.js` na branch `gh-pages` (era carregado via CDN
   `cdnjs.cloudflare.com`) — remove uma dependência externa do Web Patcher e do Seam's Patcher.
@@ -390,7 +390,7 @@ desenvolvimento disponível, ou passar a registrar cada versão aqui a partir de
   Loader/SoLoader, abordagem abandonada no início do projeto.
 - Conteúdo técnico de `detalhamento_projeto.txt` e `pipeline_build_tecnico.txt` (raiz) incorporado a
   `docs/arquitetura.md`; os `.txt` originais foram removidos para evitar duplicação.
-- Criado `CLAUDE.md` na raiz como visão geral e convenções do projeto para assistência por IA.
+- Criadas notas internas com visão geral e convenções do projeto.
 
 ## v0.74-5 — 2026-09-14
 Struct opcional aplicada antes de Create: corrigido abort reproduzido na grama. Reserva PHYCONT do Chapter 5 alinhada ao Chapter 3 para vídeo. Validação no Vita pendente; FPS, lojas e GPU crash não declarados corrigidos. Ver [análise](modern-gl-v074-5-fixes.md).

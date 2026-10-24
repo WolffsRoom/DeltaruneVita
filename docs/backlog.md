@@ -31,7 +31,7 @@ concluídos vão para [changelog.md](changelog.md).
 - [ ] Atualizar `README.md` — a tabela de "Recent Changelog" para em v0.52, mas o build atual está
       em v0.63 (`PORT_BUILD_VERSION` em `playable_main.c`). Preencher o changelog real do intervalo
       v0.53–v0.63 (ver [changelog.md](changelog.md)).
-  Nota: manter README e CLAUDE.md sincronizados quanto à versão atual publicada.
+  Nota: manter o README sincronizado quanto à versão atual publicada.
 
 ## Legado (baixa prioridade)
 

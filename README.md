@@ -1,6 +1,7 @@
 <p align="center">
   <a href="#">
-    <img src="Assets/LogoDeltaruneVita.png" alt="Logo Deltarune PSVita Edition" width="500">
+    <img  width="500" alt="LogoDeltaruneVita" src="https://github.com/user-attachments/assets/0f25636f-3ef7-4fde-ae01-6cc775ce9d9e" alt="Logo Deltarune PSVita Edition" width="500"/>
+
   </a>
 </p>
 <p align="center">

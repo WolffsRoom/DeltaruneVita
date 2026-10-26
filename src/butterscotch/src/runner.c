@@ -553,7 +553,14 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
     if (isEventBlockedByPendingRoom(runner, instance, eventType))
         return;
 
-#ifdef PLATFORM_VITA
+/* Native GXM builds this file without PLATFORM_VITA (it has no VitaGL), but
+ * the per-room DELTARUNE rules below only use the Runner and the Renderer
+ * vtable. Enable them there too: they include the Spanish obj_time Post Draw
+ * skip whose absence left Native GXM on a black screen. */
+#if defined(PLATFORM_VITA) || defined(NATIVE_GXM_PROBE_VERSION)
+    extern bool g_vitaModernGlActive;
+    extern bool g_vitaExperimentalGlActive;
+    extern void VitaProbe_logLine(const char* text);
     // The legacy renderer cannot apply Chapter 5's shader_replace_simple LUT.
     // Executing obj_lutshader nevertheless copied the full 640x480
     // application surface to another FBO and back every frame. Skip that
@@ -659,7 +666,10 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         instance->objectIndex >= 0 &&
         (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
         runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
-        strcmp(runner->currentRoom->name, "room_dw_fcastle_flowery") == 0) {
+        (strcmp(runner->currentRoom->name, "room_dw_fcastle_flowery") == 0 ||
+         // The save room before the final battle draws the same reflection
+         // pass; Native GXM measured 25 ms of GPU wait per frame there.
+         strcmp(runner->currentRoom->name, "room_dw_fcastle_final_save") == 0)) {
         const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
         if (objectName != nullptr && strcmp(objectName, "obj_castlereflect_manager") == 0 &&
             runner->renderer != nullptr && (runner->frameCount % 3U) != 0U) {
@@ -683,8 +693,10 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         (uint32_t)instance->objectIndex < runner->dataWin->objt.count) {
         const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
         if (objectName != nullptr) {
+#ifndef NATIVE_GXM_PROBE_VERSION
             if (!g_vitaModernGlActive && strcmp(objectName, "obj_lutshader") == 0)
                 return;
+#endif
             // The original pass is expensive and was previously suppressed in
             // every Legacy-GL run.  The compact shd_shadowblend programs now
             // make it valid when the user explicitly enables shaders; keeping
@@ -2044,6 +2056,19 @@ static void initRoom(Runner* runner, int32_t roomIndex) {
     require(roomIndex >= 0 && dataWin->room.count > (uint32_t) roomIndex);
 
     Room* room = &dataWin->room.rooms[roomIndex];
+
+#ifdef PLATFORM_VITA
+    // Chapter 5 defines global.opti_mode only in obj_parallax_cliffs. A save
+    // loaded past the cliffs left it undefined, so obj_flowery_towery skipped
+    // its final tower draw. Seed the value the cliffs room assigns.
+    if (g_vitaActiveChapter == 5 && runner->vmContext != nullptr &&
+        runner->vmContext->globalScopeInstance != nullptr) {
+        int32_t optiId = shget(runner->vmContext->varNameMap, "opti_mode");
+        if (optiId >= 0 &&
+            Instance_getSelfVar(runner->vmContext->globalScopeInstance, optiId).type == RVALUE_UNDEFINED)
+            Instance_setSelfVar(runner->vmContext->globalScopeInstance, optiId, RValue_makeReal(1));
+    }
+#endif
 
     // Lazy-room load: if the payload wasn't loaded, read it from the data.win file now before anything touches the room's game objects/tiles/layers.
     if (!room->payloadLoaded) {

@@ -9,6 +9,7 @@
 #include "nanovg_gxm_native.h"
 extern void nvgxmSetColorWriteMask(NVGcontext *ctx,unsigned mask);
 #include "image/image_decoder.h"
+#include "text_utils.h"
 #include "vita_border_rules.h"
 #include "vita_gpu_rules.h"
 #include "native_bc3_swizzle.h"
@@ -21,10 +22,16 @@ extern void nvgxmSetColorWriteMask(NVGcontext *ctx,unsigned mask);
 #include <stddef.h>
 #define BS_MAX_SURFACES 48
 #define BS_MAX_EDGE 2048
+/* GXM render targets accept up to 4096 per side; Chapter 5 creates a
+ * 2080x120 strip surface, which the atlas limit above refused every frame. */
+#define BS_MAX_SURFACE_EDGE 4096
 #define BS_SNAPSHOT_POOL_CAP 16
 #define BS_SNAPSHOT_POOL_MAX_BYTES (5u*1024u*1024u)
 typedef struct {int image,w,h;} BSGxmSnapshotEntry;
+typedef struct {float x,y,u,v,alpha;uint32_t color;} BSGxmVertex;
 #define BS_PI 3.14159265358979323846f
+/* Last blocking renderer operation, read by the main.c stall watchdog. */
+volatile const char* g_gxmRenderStage=NULL;
 
 typedef struct {
     int live, w, h, image;
@@ -72,8 +79,10 @@ typedef struct {
     unsigned alphaTestChanges, alphaTestRefChanges;
     int writeR, writeG, writeB, writeA;
     int primitiveType, primitiveStarted;
-    float vertexX[4], vertexY[4];
-    int vertexCount;
+    /* draw_primitive_* / vertex_submit vertices (any count, colour, UV). */
+    BSGxmVertex *primVerts;
+    unsigned primCount, primCap;
+    int primImage, primW, primH;
     unsigned long draws, missing, targetSwitches, worldDraws, snapshotCount, maskFallbacks;
     unsigned long offscreenCulls, spriteFontGlyphs;
     uint64_t tileIterationsAvoided, tiledCalls, tileIterationsExecuted;
@@ -82,6 +91,8 @@ typedef struct {
     int decodedPage,decodedW,decodedH;
     uint8_t* decodedRgba;
     unsigned long pageDecodes,itemUploads;
+    unsigned long cacheHits,cacheAbsent,cacheRejected;
+    uint64_t pageLoadUs;
     int viewX,viewY,viewW,viewH,portX,portY,portW,portH;
     float viewAngle;
     int guiW,guiH,guiX,guiY,guiPortW,guiPortH;
@@ -111,6 +122,17 @@ static void bs_trace(const char* message) {
     sceIoClose(fd);
 }
 static int bs_alpha_uniform_visible(BSGxmRenderer* b,float alpha);
+/* GML-reachable states the native path cannot reproduce yet: log each kind
+ * once and skip the operation instead of aborting the game. */
+static void bs_soft_unsupported(const char* what) {
+    static const char* seen[32];
+    static unsigned seenCount=0;
+    for(unsigned i=0;i<seenCount;i++)if(seen[i]==what)return;
+    if(seenCount<32)seen[seenCount++]=what;
+    char line[140];
+    snprintf(line,sizeof(line),"NATIVE_GXM=runner_renderer skipped=%s",what);
+    bs_trace(line);
+}
 static int bs_valid(BSGxmRenderer* b) { return b && b->vg != NULL; }
 static void bs_snapshot_sync(BSGxmRenderer* b,int cpuWait);
 void BSContractRenderer_bind(Renderer* r, NVGcontext* vg) { if(r) BR(r)->vg=vg; }
@@ -125,6 +147,203 @@ static void bs_require_renderer(BSGxmRenderer* b,const char* call) {
  * config, language overlays, or font alpha: that reintroduces format
  * mismatches and memory spikes. Render targets are separate and retain
  * the format GXM requires for framebuffer writes. */
+
+/* Prepared lossless pages written by the VitaGL texture preparer
+ * (gl_legacy_renderer.c: <chapter root>/texture-cache/page_NNN.r444).
+ * They hold GL_UNSIGNED_SHORT_4_4_4_4 (0xRGBA), which is GXM layout 0, so a
+ * valid page uploads without decoding the PNG/QOI atlas. Header, size or
+ * dimension mismatches fall back to data.win. */
+typedef struct {
+    uint32_t magic,sourceSize,sourceOffset,width,height;
+} BSGxmCacheHeader;
+#define BS_CACHE_MAGIC 0x31435456U /* VTC1 */
+#define BS_CACHE_CH3_MAGIC 0x35435456U /* VTC5 */
+static int bs_cache_chapter(const DataWin* dw) {
+    const char* m=dw&&dw->lazyLoadFilePath?strstr(dw->lazyLoadFilePath,"chapter"):NULL;
+    return m&&m[7]>='0'&&m[7]<='5'?m[7]-'0':0;
+}
+/* Same language-to-folder mapping as vitaTextureLangFolder, so both
+ * backends read one cache. */
+static const char* bs_cache_lang(const DataWin* dw) {
+    const char* p=dw?dw->lazyLoadFilePath:NULL;
+    if(!p)return NULL;
+    static const char* const map[][2]={
+        {"mods/Lang/Portuguese-BR/","Portuguese-BR"},{"mods/Lang/Spanish/","Spanish"},
+        {"mods/Lang/Italian/","Italian"},{"mods/Lang/Turkish/","Turkish"},
+        {"mods/Lang/German/","German"},{"mods/Lang/Russian/","Russkiy"},
+        {"mods/Lang/Russkiy/","Russkiy"},{"mods/Lang/French/","French"}
+    };
+    for(unsigned i=0;i<sizeof(map)/sizeof(map[0]);i++)
+        if(strstr(p,map[i][0]))return map[i][1];
+    return NULL;
+}
+static uint16_t* bs_load_cached_page(BSGxmRenderer* b,const DataWin* dw,
+                                     uint32_t page,int* w,int* h) {
+    /* gxm-r444-cache.txt containing 0 forces the data.win decode path, so
+     * a hardware A/B test does not need another build. */
+    static int cacheEnabled=-1;
+    if(cacheEnabled<0){
+        cacheEnabled=1;
+        FILE*f=fopen("ux0:data/deltarune/deltarunevita/gxm-r444-cache.txt","rb");
+        if(f){cacheEnabled=fgetc(f)!='0';fclose(f);}
+        bs_trace(cacheEnabled?"NATIVE_GXM=r444_cache enabled=1":
+                              "NATIVE_GXM=r444_cache enabled=0 source=gxm-r444-cache.txt");
+    }
+    if(!cacheEnabled)return NULL;
+    const Texture* t=&dw->txtr.textures[page];
+    const char* lang=bs_cache_lang(dw);
+    char path[256];
+    if(lang)snprintf(path,sizeof(path),
+        "ux0:data/deltarune/deltarunevita/mods/Lang/%s/chapter%d/texture-cache/page_%03u.r444",
+        lang,bs_cache_chapter(dw),page);
+    else snprintf(path,sizeof(path),
+        "ux0:data/deltarune/deltarunevita/chapter%d/texture-cache/page_%03u.r444",
+        bs_cache_chapter(dw),page);
+    SceUID fd=sceIoOpen(path,SCE_O_RDONLY,0);
+    if(fd<0){b->cacheAbsent++;return NULL;}
+    BSGxmCacheHeader hd;
+    uint32_t magic=bs_cache_chapter(dw)==3?BS_CACHE_CH3_MAGIC:BS_CACHE_MAGIC;
+    int got=sceIoRead(fd,&hd,sizeof(hd));
+    SceOff end=sceIoLseek(fd,0,SCE_SEEK_END);
+    size_t bytes=(size_t)hd.width*(size_t)hd.height*sizeof(uint16_t);
+    if(got!=(int)sizeof(hd)||hd.magic!=magic||
+       hd.sourceSize!=t->blobSize||hd.sourceOffset!=t->blobOffset||
+       hd.width==0||hd.height==0||hd.width>BS_MAX_EDGE||hd.height>BS_MAX_EDGE||
+       (t->textureWidth>0&&hd.width!=(uint32_t)t->textureWidth)||
+       (t->textureHeight>0&&hd.height!=(uint32_t)t->textureHeight)||
+       end!=(SceOff)(sizeof(hd)+bytes)||
+       sceIoLseek(fd,sizeof(hd),SCE_SEEK_SET)!=(SceOff)sizeof(hd)){
+        sceIoClose(fd);b->cacheRejected++;return NULL;
+    }
+    uint16_t* packed=(uint16_t*)malloc(bytes);
+    if(!packed||sceIoRead(fd,packed,(unsigned)bytes)!=(int)bytes){
+        free(packed);sceIoClose(fd);b->cacheRejected++;return NULL;
+    }
+    sceIoClose(fd);
+    int layout=gxmRGBA4444Layout();
+    if(layout!=0){
+        for(size_t i=0;i<bytes/2;i++){
+            uint16_t v=packed[i];
+            packed[i]=gxmRGBA4444PackVariant((uint8_t)((v>>12&15)<<4),
+                (uint8_t)((v>>8&15)<<4),(uint8_t)((v>>4&15)<<4),
+                (uint8_t)((v&15)<<4),layout);
+        }
+    }
+    *w=(int)hd.width;*h=(int)hd.height;
+    return packed;
+}
+
+/* ---- texture-cache generator (same files as gl_legacy_renderer.c) ---- */
+#define BS_CACHE_COMPLETE_MAGIC 0x32435456U     /* VTC2 */
+#define BS_CACHE_CH3_COMPLETE_MAGIC 0x36435456U /* VTC6 */
+static void bs_cache_dir(const DataWin* dw,char* out,size_t cap){
+    const char* lang=bs_cache_lang(dw);
+    if(lang)snprintf(out,cap,"ux0:data/deltarune/deltarunevita/mods/Lang/%s/chapter%d/texture-cache",
+                     lang,bs_cache_chapter(dw));
+    else snprintf(out,cap,"ux0:data/deltarune/deltarunevita/chapter%d/texture-cache",
+                  bs_cache_chapter(dw));
+}
+static int bs_cache_page_valid(const DataWin* dw,uint32_t page,const char* dir){
+    const Texture* t=&dw->txtr.textures[page];
+    char path[300];
+    snprintf(path,sizeof(path),"%s/page_%03u.r444",dir,page);
+    SceUID fd=sceIoOpen(path,SCE_O_RDONLY,0);
+    if(fd<0)return 0;
+    BSGxmCacheHeader hd;
+    int got=sceIoRead(fd,&hd,sizeof(hd));
+    SceOff end=sceIoLseek(fd,0,SCE_SEEK_END);
+    sceIoClose(fd);
+    uint32_t magic=bs_cache_chapter(dw)==3?BS_CACHE_CH3_MAGIC:BS_CACHE_MAGIC;
+    return got==(int)sizeof(hd)&&hd.magic==magic&&hd.sourceSize==t->blobSize&&
+           hd.sourceOffset==t->blobOffset&&hd.width>0&&hd.height>0&&
+           end==(SceOff)(sizeof(hd)+(size_t)hd.width*hd.height*2u);
+}
+static int bs_cache_marked_complete(const DataWin* dw,const char* dir){
+    char path[300];
+    snprintf(path,sizeof(path),"%s/complete.vtc",dir);
+    SceUID fd=sceIoOpen(path,SCE_O_RDONLY,0);
+    if(fd<0)return 0;
+    uint32_t marker[2]={0,0};
+    int got=sceIoRead(fd,marker,sizeof(marker));
+    sceIoClose(fd);
+    uint32_t magic=bs_cache_chapter(dw)==3?BS_CACHE_CH3_COMPLETE_MAGIC:BS_CACHE_COMPLETE_MAGIC;
+    return got==(int)sizeof(marker)&&marker[0]==magic&&marker[1]==dw->txtr.count;
+}
+unsigned BSContractRenderer_textureCacheMissing(Renderer* r){
+    DataWin* dw=r?r->dataWin:NULL;
+    if(!dw||!dw->txtr.count)return 0;
+    char dir[240];
+    bs_cache_dir(dw,dir,sizeof(dir));
+    if(bs_cache_marked_complete(dw,dir))return 0;
+    unsigned missing=0;
+    for(uint32_t i=0;i<dw->txtr.count;i++){
+        const Texture* t=&dw->txtr.textures[i];
+        if(t->blobOffset==0||t->blobSize==0)continue;
+        if(!bs_cache_page_valid(dw,i,dir))missing++;
+    }
+    return missing;
+}
+unsigned BSContractRenderer_generateTextureCache(Renderer* r,
+    void (*progress)(unsigned done,unsigned total,void* user),void* user){
+    DataWin* dw=r?r->dataWin:NULL;
+    if(!dw||!dw->txtr.count)return 0;
+    char dir[240];
+    bs_cache_dir(dw,dir,sizeof(dir));
+    sceIoMkdir(dir,0777);
+    uint32_t magic=bs_cache_chapter(dw)==3?BS_CACHE_CH3_MAGIC:BS_CACHE_MAGIC;
+    bool gm2022_5=DataWin_isVersionAtLeast(dw,2022,5,0,0);
+    unsigned written=0,failed=0;
+    for(uint32_t page=0;page<dw->txtr.count;page++){
+        Texture* t=&dw->txtr.textures[page];
+        if(t->blobOffset!=0&&t->blobSize!=0&&!bs_cache_page_valid(dw,page,dir)){
+            DataWin_loadTxtrIfNeeded(dw,page);
+            int w=0,h=0;
+            uint8_t* rgba=t->blobData?ImageDecoder_decodeToRgba(t->blobData,t->blobSize,
+                                                               gm2022_5,&w,&h):NULL;
+            if(!t->mapped){free(t->blobData);t->blobData=NULL;}
+            if(rgba&&w>0&&h>0&&w<=4096&&h<=4096){
+                size_t count=(size_t)w*(size_t)h;
+                uint16_t* packed=(uint16_t*)rgba; /* in place: 2 bytes behind 4 */
+                for(size_t i=0;i<count;i++){
+                    const uint8_t* src=&rgba[i*4];
+                    uint16_t a4=src[3]==0?0:(uint16_t)((src[3]+15u)>>4);
+                    if(a4>15u)a4=15u;
+                    packed[i]=(uint16_t)(((uint16_t)(src[0]>>4)<<12)|
+                                         ((uint16_t)(src[1]>>4)<<8)|
+                                         ((uint16_t)(src[2]>>4)<<4)|a4);
+                }
+                char path[300];
+                snprintf(path,sizeof(path),"%s/page_%03u.r444",dir,page);
+                SceUID fd=sceIoOpen(path,SCE_O_WRONLY|SCE_O_CREAT|SCE_O_TRUNC,0666);
+                if(fd>=0){
+                    BSGxmCacheHeader hd={magic,t->blobSize,t->blobOffset,(uint32_t)w,(uint32_t)h};
+                    int ok=sceIoWrite(fd,&hd,sizeof(hd))==(int)sizeof(hd)&&
+                           sceIoWrite(fd,packed,(SceSize)(count*2u))==(int)(count*2u);
+                    sceIoClose(fd);
+                    if(ok)written++;else{sceIoRemove(path);failed++;}
+                }else failed++;
+            }else failed++;
+            free(rgba);
+        }
+        if(progress)progress(page+1,dw->txtr.count,user);
+    }
+    if(!failed){
+        char path[300];
+        snprintf(path,sizeof(path),"%s/complete.vtc",dir);
+        SceUID fd=sceIoOpen(path,SCE_O_WRONLY|SCE_O_CREAT|SCE_O_TRUNC,0666);
+        if(fd>=0){
+            uint32_t marker[2]={bs_cache_chapter(dw)==3?BS_CACHE_CH3_COMPLETE_MAGIC:
+                                BS_CACHE_COMPLETE_MAGIC,dw->txtr.count};
+            sceIoWrite(fd,marker,sizeof(marker));
+            sceIoClose(fd);
+        }
+    }
+    char line[140];
+    snprintf(line,sizeof(line),"NATIVE_GXM=texture_cache_generated written=%u failed=%u pages=%u",
+             written,failed,dw->txtr.count);
+    bs_trace(line);
+    return written;
+}
 static int bs_upload_page(BSGxmRenderer* b,int tpag) {
     DataWin*dw=b->base.dataWin;
     if(!dw||tpag<0||(unsigned)tpag>=b->originalTpagCount)return 0;
@@ -139,13 +358,24 @@ static int bs_upload_page(BSGxmRenderer* b,int tpag) {
     }
     int w=0,h=0,image=0;
     size_t size=0;
-    DataWin_loadTxtrIfNeeded(dw,(uint32_t)page);
-    Texture*src=&dw->txtr.textures[page];
-    if(!src->blobData||!src->blobSize)return 0;
-    uint8_t*rgba=ImageDecoder_decodeToRgba(src->blobData,src->blobSize,
-        DataWin_isVersionAtLeast(dw,2022,5,0,0),&w,&h);
-    if(!rgba||w<=0||h<=0||w>BS_MAX_EDGE||h>BS_MAX_EDGE){
-        free(rgba);return 0;
+    uint64_t loadStartUs=sceKernelGetProcessTimeWide();
+    g_gxmRenderStage="texture_cache_read";
+    uint16_t*cached=bs_load_cached_page(b,dw,(uint32_t)page,&w,&h);
+    uint8_t*rgba=NULL;
+    if(!cached){
+        g_gxmRenderStage="texture_decode";
+        DataWin_loadTxtrIfNeeded(dw,(uint32_t)page);
+        Texture*src=&dw->txtr.textures[page];
+        if(!src->blobData||!src->blobSize){g_gxmRenderStage=NULL;return 0;}
+        rgba=ImageDecoder_decodeToRgba(src->blobData,src->blobSize,
+            DataWin_isVersionAtLeast(dw,2022,5,0,0),&w,&h);
+        /* Match the GL renderers: the compressed blob is re-read from
+         * data.win after an eviction instead of staying in RAM for the
+         * whole chapter. */
+        if(!src->mapped){free(src->blobData);src->blobData=NULL;}
+        if(!rgba||w<=0||h<=0||w>BS_MAX_EDGE||h>BS_MAX_EDGE){
+            free(rgba);g_gxmRenderStage=NULL;return 0;
+        }
     }
     /* Print the layout on the FIRST uploaded page: Chapter0 can draw its
      * entire opening using texture pages other than page 0. */
@@ -157,15 +387,27 @@ static int bs_upload_page(BSGxmRenderer* b,int tpag) {
              gxmRGBA4444Layout(),page);
         bs_trace(status);
     }
-    image=gxmRGBA4444Upload(b->vg,w,h,NVG_IMAGE_NEAREST|NVG_IMAGE_LPDDR,rgba);
-    free(rgba);
+    g_gxmRenderStage="texture_upload";
+    const int fromCache=cached!=NULL;
+    if(cached){
+        image=nvgCreateImageRGBA(b->vg,w,h,
+            NVG_IMAGE_NEAREST|NVG_IMAGE_LPDDR|NVG_IMAGE_RGBA4444,
+            (const uint8_t*)cached);
+        free(cached);
+        if(image>0)b->cacheHits++;
+    }else{
+        image=gxmRGBA4444Upload(b->vg,w,h,NVG_IMAGE_NEAREST|NVG_IMAGE_LPDDR,rgba);
+        free(rgba);
+    }
+    g_gxmRenderStage=NULL;
+    b->pageLoadUs+=sceKernelGetProcessTimeWide()-loadStartUs;
     if(image<=0){
         bs_trace("NATIVE_GXM=texture_rgba4444_upload_failed no_rgba8888_fallback");
         return 0;
     }
     size=(size_t)w*(size_t)h*2;
     b->rgba4Loads++;
-    b->pageDecodes++;
+    if(!fromCache)b->pageDecodes++;
     if(page==0){
         char line[150];snprintf(line,sizeof(line),
            "NATIVE_GXM=texture_format rgba4444_native layout=%d "
@@ -186,6 +428,73 @@ static int bs_ensure_image(BSGxmRenderer*b,int tpag) {
     if(!bs_valid(b)||!b->base.dataWin||tpag<0||(unsigned)tpag>=b->imageCount)return 0;
     if((unsigned)tpag>=b->originalTpagCount)return b->images[tpag];
     return bs_upload_page(b,tpag);
+}
+static unsigned bs_prepare_sprite_pages(BSGxmRenderer*b,const char*name) {
+    DataWin*dw=b->base.dataWin;
+    unsigned loaded=0;
+    for(uint32_t i=0;i<dw->sprt.count;i++){
+        const Sprite*spr=&dw->sprt.sprites[i];
+        if(!spr->present||!spr->name||strcmp(spr->name,name)!=0)continue;
+        for(uint32_t f=0;f<spr->textureCount;f++){
+            int32_t tpag=spr->tpagIndices?spr->tpagIndices[f]:-1;
+            if(tpag<0||(uint32_t)tpag>=b->originalTpagCount)continue;
+            int page=dw->tpag.items[tpag].texturePageId;
+            int wasLoaded=page>=0&&(unsigned)page<b->pageCount&&b->pageImages[page]>0;
+            if(bs_ensure_image(b,tpag)>0&&!wasLoaded)loaded++;
+        }
+        break;
+    }
+    return loaded;
+}
+/* Defined in native_borders.inc. */
+static int bs_border_global(Runner* runner,const char* name,int def);
+static Instance* bs_border_first_object(Runner* runner,const char* name);
+/* Called once after a room change, before the new room's first Step.
+ * Mirrors Legacy-GL's CH3_TENNA_INTRO preparation: load only the party/UI
+ * pages the battle draws on its first frames, never the whole boss. */
+void BSContractRenderer_roomEntered(Renderer*r) {
+    BSGxmRenderer*b=BR(r);
+    if(!bs_valid(b)||!b->base.dataWin||!r->runner||!r->runner->currentRoom)return;
+    extern int g_vitaActiveChapter;
+    const char*room=r->runner->currentRoom->name;
+    if(g_vitaActiveChapter==5&&r->runner->vmContext&&
+       r->runner->vmContext->globalScopeInstance){
+        /* Chapter 5 defines global.opti_mode only in obj_parallax_cliffs; a
+         * save loaded past the cliffs left it undefined and
+         * obj_flowery_towery then skipped its final draw (invisible tower).
+         * Seed the value the cliffs room assigns. runner.c does the same for
+         * the VitaGL build, whose Vita runner code GXM does not compile. */
+        int32_t optiId=shget(r->runner->vmContext->varNameMap,"opti_mode");
+        if(optiId>=0&&Instance_getSelfVar(r->runner->vmContext->globalScopeInstance,
+                                          optiId).type==RVALUE_UNDEFINED)
+            Instance_setSelfVar(r->runner->vmContext->globalScopeInstance,optiId,
+                                RValue_makeReal(1));
+    }
+    if(g_vitaActiveChapter==5&&room&&strncmp(room,"room_dw_fcastle",15)==0){
+        /* The Flowey tower draws nothing when global.opti_mode is 3 and
+         * skips its shaders below 1; record the state the room starts in. */
+        char line[160];
+        snprintf(line,sizeof(line),
+          "NATIVE_GXM=ch5_room_state room=%.60s opti_mode=%d tower=%d",
+          room,bs_border_global(r->runner,"opti_mode",-99),
+          bs_border_first_object(r->runner,"obj_flowery_towery")!=NULL);
+        bs_trace(line);
+    }
+    if(g_vitaActiveChapter!=3||!room||strcmp(room,"room_dw_snow_zone_battle")!=0)return;
+    static const char* const intro[]={
+        "spr_krisb_attackready","spr_susieb_attackready","spr_ralseib_attackready",
+        "spr_krisb_idle","spr_susieb_idle","spr_ralseib_idle",
+        "spr_susieb_idle_unarmed","spr_battlemsg","spr_battleblcon",
+        "spr_tensionbar","spr_btact","spr_btfight"
+    };
+    uint64_t start=sceKernelGetProcessTimeWide();
+    unsigned loaded=0;
+    for(unsigned i=0;i<sizeof(intro)/sizeof(intro[0]);i++)
+        loaded+=bs_prepare_sprite_pages(b,intro[i]);
+    char line[140];
+    snprintf(line,sizeof(line),"NATIVE_GXM=ch3_tenna_intro room_prewarm loaded=%u elapsed_ms=%llu",
+             loaded,(unsigned long long)((sceKernelGetProcessTimeWide()-start)/1000u));
+    bs_trace(line);
 }
 void BSContractRenderer_getDevMetrics(Renderer*r,
                             uint64_t*residentBytes,uint32_t*evictions) {
@@ -214,10 +523,12 @@ void BSContractRenderer_cacheMaintenance(Renderer*r) {
         }
         if(victim<0)break;
         if(!synchronized){
-            sceGxmFinish(gxmGetWindow()->context);
+            {g_gxmRenderStage="gpu_finish";sceGxmFinish(gxmGetWindow()->context);g_gxmRenderStage=NULL;}
             synchronized=1;
         }
-        nvgDeleteImage(b->vg,b->pageImages[victim]);
+        /* Fenced above and called after present: nothing in flight or
+         * queued still samples this page, so reclaim it now. */
+        nvgxmDeleteImageFenced(b->vg,b->pageImages[victim]);
         b->pageImages[victim]=0;
         b->residentBytes-=b->pageBytes[victim];b->pageBytes[victim]=0;
         b->cacheEvictions++;
@@ -244,7 +555,8 @@ void BSContractRenderer_devRoomJumpPrepare(Renderer*r) {
     unsigned removed=0;
     for(unsigned i=0;i<b->pageCount;i++){
         if(b->pageImages[i]<=0)continue;
-        nvgDeleteImage(b->vg,b->pageImages[i]);
+        /* Caller fenced the GPU after present (main.c dev_room_jump). */
+        nvgxmDeleteImageFenced(b->vg,b->pageImages[i]);
         b->pageImages[i]=0;
         if(b->residentBytes>=b->pageBytes[i])
             b->residentBytes-=b->pageBytes[i];
@@ -431,7 +743,7 @@ static void bs_release_retired(BSGxmRenderer*b){
 static void bs_snapshot_pool_collect(BSGxmRenderer*b){
     for(unsigned i=0;i<b->snapshotRetiredCount;i++){
         BSGxmSnapshotEntry e=b->snapshotRetired[i];
-        size_t bytes=(size_t)e.w*e.h*2u;
+        size_t bytes=(size_t)e.w*e.h*4u;
         if(b->snapshotPoolCount<BS_SNAPSHOT_POOL_CAP &&
            bytes<=BS_SNAPSHOT_POOL_MAX_BYTES-b->snapshotPoolBytes){
             b->snapshotPool[b->snapshotPoolCount++]=e;
@@ -448,7 +760,7 @@ static int bs_snapshot_pool_take(BSGxmRenderer*b,int w,int h){
         BSGxmSnapshotEntry e=b->snapshotPool[i];
         if(e.w==w&&e.h==h){
             b->snapshotPool[i]=b->snapshotPool[--b->snapshotPoolCount];
-            b->snapshotPoolBytes-=(size_t)w*h*2u;
+            b->snapshotPoolBytes-=(size_t)w*h*4u;
             b->snapshotReuses++;
             return e.image;
         }
@@ -478,7 +790,7 @@ void BSContractRenderer_collectRetired(Renderer*r){
     /* After nvgEndFrame/gxmEndFrame and display queue submit, ensure no
      * in-flight draw can still reference a retired sampler or framebuffer. */
     NVGXMwindow*win=gxmGetWindow();
-    if(win)sceGxmFinish(win->context);
+    if(win){g_gxmRenderStage="gpu_finish";sceGxmFinish(win->context);g_gxmRenderStage=NULL;}
     bs_release_retired(b);
     bs_snapshot_pool_collect(b);
     if(n){
@@ -505,7 +817,7 @@ static void bs_destroy_surface(BSGxmRenderer* b,int id) {
 }
 static int bs_create_surface_slot(BSGxmRenderer* b,int id,int w,int h) {
     if (id<0 || id>=BS_MAX_SURFACES || w<1 || h<1 ||
-        w>BS_MAX_EDGE || h>BS_MAX_EDGE) return 0;
+        w>BS_MAX_SURFACE_EDGE || h>BS_MAX_SURFACE_EDGE) return 0;
     BSGxmSurface *s=&b->surfaces[id];
     NVGXMtexture *t=gxmCreateTexture(w,h,SCE_GXM_TEXTURE_FORMAT_U8U8U8U8_ABGR,NULL);
     if (!t) return 0;
@@ -635,6 +947,7 @@ static void bs_destroy(Renderer* r) {
             if(b->images && b->images[i]>0) nvgDeleteImage(b->vg,b->images[i]);
         for(int i=0;i<BS_MAX_SURFACES;i++) if(b->surfaces[i].live)bs_destroy_surface(b,i);
     }
+    free(b->primVerts);
     free(b->decodedRgba);free(b->images);free(b->width);free(b->height);
     free(b->pageImages);free(b->pageWidth);free(b->pageHeight);
     free(b->pageBytes);free(b->pageLastUsed);free(b);
@@ -655,6 +968,31 @@ static void bs_beginFrame(Renderer* r,int32_t gw,int32_t gh,int32_t ww,int32_t w
 
 static void bs_endFrameInit(Renderer* r) {
     BSGxmRenderer *b=BR(r);b->worldDraws=b->draws;
+    /* GameMaker blits application_surface without blending, so its alpha
+     * never darkens the picture. The precompiled NanoVG image program always
+     * multiplies RGB by the sampled alpha, so make the finished world surface
+     * opaque first: an alpha-only write of 1 keeps every RGB byte. The
+     * Chapter 3 green room clears its wall's alpha as a dest-alpha mask,
+     * which otherwise turned the animated wall black. */
+    if(r->runner&&r->runner->appSurfaceAutoDraw&&r->runner->appSurfaceEnabled&&
+       r->runner->usingAppSurface&&bs_surface_valid(b,r->runner->applicationSurfaceId)){
+        BSGxmSurface*s=bs_surface(b,r->runner->applicationSurfaceId);
+        if(b->activeTarget!=r->runner->applicationSurfaceId)
+            bs_switch_target(b,r->runner->applicationSurfaceId);
+        if(b->viewActive||b->guiActive){
+            nvgRestore(b->vg);b->viewActive=b->guiActive=0;
+        }
+        nvgSave(b->vg);
+        nvgResetTransform(b->vg);nvgResetScissor(b->vg);
+        nvgxmSetBlendEquation(b->vg,SCE_GXM_BLEND_FUNC_ADD,SCE_GXM_BLEND_FUNC_ADD);
+        nvgGlobalCompositeBlendFunc(b->vg,NVG_ONE,NVG_ZERO);
+        nvgxmSetColorWriteMask(b->vg,8u);
+        nvgBeginPath(b->vg);nvgRect(b->vg,0,0,(float)s->w,(float)s->h);
+        nvgFillColor(b->vg,nvgRGBA(255,255,255,255));nvgFill(b->vg);
+        nvgxmSetColorWriteMask(b->vg,(b->writeR?1u:0u)|(b->writeG?2u:0u)|
+                                     (b->writeB?4u:0u)|(b->writeA?8u:0u));
+        nvgRestore(b->vg);
+    }
     if(b->activeTarget>=0)bs_switch_target(b,-1);
     bs_native_border_draw(b);
 }
@@ -683,6 +1021,18 @@ static void bs_endFrameEnd(Renderer* r) {
         nvgGlobalCompositeOperation(b->vg,NVG_SOURCE_OVER);
         nvgBeginPath(b->vg);nvgRect(b->vg,destX,destY,w,h);
         nvgFillColor(b->vg,nvgRGB(0,0,0));nvgFill(b->vg);
+        /* Sharp Bilinear screen filter: linear sampling for the final
+         * upscale only (vita_settings: g_vitaTextureLinearFilter). */
+        {
+            extern int g_vitaTextureLinearFilter;
+            NVGXMtexture*handle=nvgxmImageHandle(b->vg,s->image);
+            if(handle){
+                SceGxmTextureFilter f=g_vitaTextureLinearFilter?
+                    SCE_GXM_TEXTURE_FILTER_LINEAR:SCE_GXM_TEXTURE_FILTER_POINT;
+                sceGxmTextureSetMinFilter(&handle->tex,f);
+                sceGxmTextureSetMagFilter(&handle->tex,f);
+            }
+        }
         bs_image_rect(b,s->image,s->w,s->h,0,0,s->w,s->h,
                       destX,destY,w,h,1);
         nvgRestore(b->vg);
@@ -716,7 +1066,7 @@ static void bs_applyProjection(Renderer* r,const Matrix4f* view,const Matrix4f* 
 static void bs_beginGUI(Renderer* r,int32_t gw,int32_t gh,int32_t x,int32_t y,
                         int32_t w,int32_t h,int32_t target) {
     BSGxmRenderer* b=BR(r);
-    if(b->guiActive)bs_unsupported("beginGUI_nested");
+    if(b->guiActive){bs_soft_unsupported("beginGUI_nested");nvgRestore(b->vg);b->guiActive=0;}
     if(target!=b->activeTarget)bs_switch_target(b,target);
     b->guiW=gw;b->guiH=gh;b->guiX=x;b->guiY=y;
     b->guiPortW=w;b->guiPortH=h;
@@ -862,11 +1212,13 @@ static void bs_drawTriangle(Renderer* r,float x1,float y1,float x2,float y2,floa
         int choose=0;int scores[3]={d12,d23,d13};
         float lengths[3]={e12,e23,e13};
         for(int j=1;j<3;j++)
-            if(lengths[j]>1e-8f && (lengths[choose]<=1e-8f ||
+            if(lengths[j]>=1.0f && (lengths[choose]<1.0f ||
                                    scores[j]>scores[choose]))choose=j;
         if(choose==1){ax=x2;ay=y2;bx=x3;by=y3;ca=c2;cb=c3;}
         else if(choose==2){ax=x1;ay=y1;bx=x3;by=y3;ca=c1;cb=c3;}
-        if(lengths[choose]<=1e-8f || !isfinite(lengths[choose])){
+        /* A gradient edge shorter than one pixel gives NanoVG extreme
+         * gradient coefficients: the GPU shaded those slivers black. */
+        if(lengths[choose]<1.0f || !isfinite(lengths[choose])){
             /* Collapsed gradient edge: use center color rather than
              * feeding invalid shader coefficients to the GPU. */
             if(outline){nvgStrokeColor(b->vg,bs_col(c1,a));nvgStroke(b->vg);}
@@ -901,11 +1253,27 @@ static void bs_clearScreen(Renderer* r,uint32_t color,float alpha) {
 static void bs_flush(Renderer* r) { (void)r; /* NanoVG submits on nvgEndFrame. */ }
 
 /* Native render target surfaces: GXM framebuffer uses the image memory as color target. */
+static void bs_surface_create_failed(int w,int h,const char*why) {
+    /* A missing surface hides whole layers (the Chapter 5 Flowey tower), so
+     * make every refusal visible, throttled. */
+    static unsigned failures=0;
+    if(++failures>24&&(failures%64)!=0)return;
+    char line[140];
+    snprintf(line,sizeof(line),
+        "NATIVE_GXM=surface_create_failed size=%dx%d reason=%s count=%u",
+        w,h,why,failures);
+    bs_trace(line);
+}
 static int32_t bs_createSurface(Renderer* r,int32_t w,int32_t h) {
     BSGxmRenderer* b=BR(r);bs_require_renderer(b,"createSurface_unbound");
     for(int id=0;id<BS_MAX_SURFACES;id++){
-        if(!b->surfaces[id].live)return bs_create_surface_slot(b,id,w,h)?id:-1;
+        if(!b->surfaces[id].live){
+            if(bs_create_surface_slot(b,id,w,h))return id;
+            bs_surface_create_failed(w,h,"gpu_alloc");
+            return -1;
+        }
     }
+    bs_surface_create_failed(w,h,"no_free_slot");
     return -1;
 }
 static bool bs_surfaceExists(Renderer* r,int32_t id){
@@ -980,7 +1348,7 @@ static void bs_drawSurface(Renderer* r,int32_t id,int32_t sx,int32_t sy,
 #endif
     BSGxmSurface* s=bs_surface(b,id);
     if(!s)return;
-    if(b->activeTarget==id)bs_unsupported("drawSurface_feedback");
+    if(b->activeTarget==id){bs_soft_unsupported("drawSurface_feedback");return;}
     nvgSave(b->vg);nvgTranslate(b->vg,x,y);nvgRotate(b->vg,-angle*BS_PI/180);
     bs_image_tinted(b,s->image,s->w,s->h,sx,sy,sw,sh,
                     0,0,sw*xs,sh*ys,tint,a);
@@ -1043,9 +1411,9 @@ static void bs_surfaceCopy(Renderer* r,int32_t dest,int32_t dx,int32_t dy,
                           int32_t src,int32_t sx,int32_t sy,int32_t sw,int32_t sh,bool part) {
     BSGxmRenderer* b=BR(r);
     if(!bs_surface_valid(b,dest)||!bs_surface_valid(b,src))return;
-    if(dest==src)bs_unsupported("surfaceCopy_self");
+    if(dest==src){bs_soft_unsupported("surfaceCopy_self");return;}
     int prev=b->activeTarget;
-    if(prev==src)bs_unsupported("surfaceCopy_active_source");
+    if(prev==src){bs_soft_unsupported("surfaceCopy_active_source");return;}
     bs_switch_target(b,dest);
     if(!part){sx=0;sy=0;sw=b->surfaces[src].w;sh=b->surfaces[src].h;}
     bs_image_rect(b,b->surfaces[src].image,b->surfaces[src].w,b->surfaces[src].h,
@@ -1063,7 +1431,7 @@ static void bs_snapshot_sync(BSGxmRenderer *b,int cpuWait) {
     gxmEndFrame();
     /* Snapshot copies use a producer fragment sync object; do not block
      * the CPU on the entire GXM context. Readback callers still wait. */
-    if(cpuWait)sceGxmFinish(gxmGetWindow()->context);
+    if(cpuWait){g_gxmRenderStage="gpu_finish";sceGxmFinish(gxmGetWindow()->context);g_gxmRenderStage=NULL;}
     int w=DISPLAY_WIDTH,h=DISPLAY_HEIGHT;
     if(b->activeTarget>=0){
         BSGxmSurface *s=bs_surface(b,b->activeTarget);
@@ -1151,7 +1519,11 @@ static int32_t bs_createSpriteFromSurface(Renderer* r,int32_t id,int32_t x,int32
            (unsigned long)b->snapshotCount);
         bs_trace(msg);
     }
-    /* Native GXM transfer engine: RGB8 render-target -> RGBA4444 sprite.
+    /* Snapshots are RGBA8888 (U8U8U8U8_ABGR), the render target's own
+     * layout: the transfer engine has no RGBA-ordered 4444 format, and
+     * U4U4U4U4_ABGR texels sampled by the U4U4U4U4_RGBA image swapped
+     * channels (pink text in the Chapter 0 shrink transition).
+     * Native GXM transfer engine: render target -> sprite.
      * The GPU performs the copy and channel conversion without mapping the
      * framebuffer as CPU pixels, which is critical for room112's 3 snapshots
      * every frame. Handle failures with the original CPU path; never return
@@ -1159,8 +1531,7 @@ static int32_t bs_createSpriteFromSurface(Renderer* r,int32_t id,int32_t x,int32
      * completion on physical hardware before the transfer reads this target.
      * Packed destination is zero-initialized so POT padding remains clear. */
     int img=bs_snapshot_pool_take(b,tw,th);
-    if(!img)img=nvgCreateImageRGBA(b->vg,tw,th,
-                              NVG_IMAGE_RGBA4444|NVG_IMAGE_NEAREST,NULL);
+    if(!img)img=nvgCreateImageRGBA(b->vg,tw,th,NVG_IMAGE_NEAREST,NULL);
     int copied=0,transferStatus=-1;
     if(img>0){
         NVGXMtexture *dst=nvgxmImageHandle(b->vg,img);
@@ -1171,9 +1542,9 @@ static int32_t bs_createSpriteFromSurface(Renderer* r,int32_t id,int32_t x,int32
                SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR,
                SCE_GXM_TRANSFER_LINEAR,src->texture->data,
                (uint32_t)x,(uint32_t)y,(int32_t)(((src->w+7)&~7)*4),
-               SCE_GXM_TRANSFER_FORMAT_U4U4U4U4_ABGR,
+               SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR,
                SCE_GXM_TRANSFER_LINEAR,dst->data,
-               0,0,(int32_t)(((tw+7)&~7)*2),
+               0,0,(int32_t)(((tw+7)&~7)*4),
                src->fb ? src->fb->gxm_color_surfaces[
                    src->fb->gxm_back_buffer_index].sync_object : NULL,
                SCE_GXM_TRANSFER_FRAGMENT_SYNC,NULL);
@@ -1186,7 +1557,7 @@ static int32_t bs_createSpriteFromSurface(Renderer* r,int32_t id,int32_t x,int32
     if(!copied){
         /* Transfer setup failed: fall back to completed producer GPU writes
          * before CPU memcpy. Never read unretired GXM pixels. */
-        sceGxmFinish(gxmGetWindow()->context);
+        {g_gxmRenderStage="gpu_finish";sceGxmFinish(gxmGetWindow()->context);g_gxmRenderStage=NULL;}
         if(img>0){nvgDeleteImage(b->vg,img);img=0;}
         uint8_t *rgba=(uint8_t*)calloc((size_t)tw*th,4);
         if(!rgba)return -1;
@@ -1196,7 +1567,7 @@ static int32_t bs_createSpriteFromSurface(Renderer* r,int32_t id,int32_t x,int32
                    src->texture->data+((size_t)(y+row)*pitch+(size_t)x*4),
                    (size_t)w*4);
         }
-        img=gxmRGBA4444Upload(b->vg,tw,th,NVG_IMAGE_NEAREST,rgba);
+        img=nvgCreateImageRGBA(b->vg,tw,th,NVG_IMAGE_NEAREST,rgba);
         free(rgba);
     }
     if(img<=0)return -1;
@@ -1434,7 +1805,7 @@ static int bs_factor(int f){
         case bm_dest_color:return NVG_DST_COLOR;
         case bm_inv_dest_color:return NVG_ONE_MINUS_DST_COLOR;
         case bm_src_alpha_sat:return NVG_SRC_ALPHA_SATURATE;
-        default:bs_unsupported("blend_factor");
+        default:bs_soft_unsupported("blend_factor");return NVG_ONE;
     }
 }
 static void bs_gpuSetBlendModeExt(Renderer* r,int32_t sr,int32_t dr,int32_t sa,int32_t da) {
@@ -1536,6 +1907,8 @@ static int bs_native_shader_tag(Renderer*r,int32_t id) {
     if(!strcmp(shader->name,"shd_lut"))return 11;
     if(!strcmp(shader->name,"shd_castlereflect"))return 12;
     if(!strcmp(shader->name,"shd_castlereflect_layerblend"))return 13;
+    /* Chapter 3 board camera: grayscale except the sand palette. */
+    if(!strcmp(shader->name,"shd_grayscalesand"))return 14;
     return 0;
 }
 static void bs_gpuSetShader(Renderer*r,int32_t id){
@@ -1567,9 +1940,9 @@ static void bs_gpuSetShader(Renderer*r,int32_t id){
     if(shaderTag){
         const float*uniforms=(id>=0&&id<256)?b->shaderValues[id]:NULL;
         nvgxmSetRuntimeShaderParams(b->vg,uniforms);
-        if(shaderTag==13)
+        if(shaderTag==13||shaderTag==14)
             nvgxmSetRuntimeShaderVectors(b->vg,b->shaderVectors[id]);
-        static int logged[14]={0};
+        static int logged[15]={0};
         if(logged[shaderTag]++<8){
             char message[165];snprintf(message,sizeof(message),
              "NATIVE_GXM=shader_effect id=%d gxp=%.72s mode=runtime",
@@ -1618,6 +1991,7 @@ static const char* bs_native_shader_uniform(int tag){
     if(tag==10)return "time";
     if(tag==11)return "strength";
     if(tag==12)return "shadowheight";
+    if(tag==14)return "sandcol";
     return NULL;
 }
 static int32_t bs_shaderGetUniform(Renderer*r,int32_t id,char*name){
@@ -1629,6 +2003,12 @@ static int32_t bs_shaderGetUniform(Renderer*r,int32_t id,char*name){
     if(expected&&strcmp(name,expected)==0)return ((id+1)<<4)|1;
     if(tag==10 && strcmp(name,"appSurfWidth")==0)return ((id+1)<<4)|2;
     if(tag==12 && strcmp(name,"pos_y")==0)return ((id+1)<<4)|2;
+    if(tag==14){
+        if(strcmp(name,"sand1")==0)return ((id+1)<<4)|3;
+        if(strcmp(name,"sand2")==0)return ((id+1)<<4)|4;
+        if(strcmp(name,"sand3")==0)return ((id+1)<<4)|5;
+        if(strcmp(name,"sand4")==0)return ((id+1)<<4)|6;
+    }
     if(tag==13){
         if(strcmp(name,"u_object_surface_uvs")==0)return ((id+1)<<4)|3;
         if(strcmp(name,"u_tile_surface_uvs")==0)return ((id+1)<<4)|4;
@@ -1674,7 +2054,7 @@ static void bs_shader_uniform_write(Renderer*r,int32_t handle,
             bs_trace(trace);
         }
     }
-    if(tag==13 && slot>=3 &&slot<=6){
+    if((tag==13||tag==14) && slot>=3 &&slot<=6){
         if(count>4)count=4;
         for(unsigned i=0;i<count;i++)
             if(isfinite(values[i]))b->shaderVectors[asset][(slot-3)*4+i]=values[i];
@@ -1713,7 +2093,7 @@ static void bs_setMatrix(Renderer*r,int32_t type,Matrix4f matrix){
     if(type<0 || type>=MATRICES_MAX) return;
     r->gmlMatrices[type]=matrix;
     if(type==MATRIX_VIEW || type==MATRIX_PROJECTION)
-        bs_unsupported("custom_matrix_transform");
+        bs_soft_unsupported("custom_matrix_transform");
 }
 
 /* Font sprites are rasterized by the original GameMaker font atlas + glyph metrics. */
@@ -1763,7 +2143,14 @@ static void bs_text(Renderer *r,const char* text,float x,float y,float xs,float 
     extern int g_vitaActiveChapter;
     if(g_vitaActiveChapter==0 &&
        strncmp(text,"DELTARUNE VITA v0.",18)==0){
-        text="DELTARUNE VITA v0.78";
+        /* Base version of this build ("v0.79" from "v0.79-1"). */
+        static char label[48];
+        if(!label[0]){
+            const char*v=NATIVE_GXM_PROBE_VERSION;
+            size_t n=strcspn(v,"-");
+            snprintf(label,sizeof(label),"DELTARUNE VITA %.*s",(int)n,v);
+        }
+        text=label;
     }
     Font* f=&dw->font.fonts[index];
     if(!f->present)return;
@@ -1785,17 +2172,25 @@ static void bs_text(Renderer *r,const char* text,float x,float y,float xs,float 
         img=bs_ensure_image(b,f->tpagIndex);
         if(!img){b->missing++;return;}
     }
-    float rowHeight=f->maxGlyphHeight?f->maxGlyphHeight:(float)f->emSize;
-    float totalHeight=rowHeight;
-    for(const char *p=text;*p;p++)if(*p=='\n')totalHeight+=rowHeight+separation;
-    if(r->drawValign==1)y-=totalHeight*ys*.5f;
-    else if(r->drawValign==2)y-=totalHeight*ys;
+    /* Same line layout as the GL renderers (gl_legacy_renderer.c
+     * glDrawText): draw_text_ext's separation REPLACES the line stride, \r\n
+     * is one break, the font scale applies, and lines start above the
+     * baseline by ascenderOffset. Adding separation to the glyph height
+     * pushed the next line far below in translated menus. */
+    const float fontScaleX=f->scaleX!=0.0f?f->scaleX:1.0f;
+    const float fontScaleY=f->scaleY!=0.0f?f->scaleY:1.0f;
+    const int32_t textLen=(int32_t)strlen(text);
+    float rowHeight=separation<0.0f?TextUtils_lineStride(f):separation/fontScaleY;
+    float totalHeight=(float)TextUtils_countLines(text,textLen)*rowHeight;
     nvgSave(b->vg);nvgTranslate(b->vg,x,y);nvgRotate(b->vg,-angle*BS_PI/180);
-    nvgScale(b->vg,xs,ys);
-    const char *line=text;float cy=0;
+    nvgScale(b->vg,xs*fontScaleX,ys*fontScaleY);
+    if(r->drawValign==1)nvgTranslate(b->vg,0,-totalHeight*.5f);
+    else if(r->drawValign==2)nvgTranslate(b->vg,0,-totalHeight);
+    const float cyStart=-(float)f->ascenderOffset;
+    const char *line=text;float cy=cyStart;
     while(*line){
-        const char *end=strchr(line,'\n');
-        if(!end)end=line+strlen(line);
+        const char *end=line;
+        while(*end&&!TextUtils_isNewlineChar(*end))end++;
         float lineW=0;
         const char *p=line;
         while(p<end){int ch=bs_utf8(&p);FontGlyph*g=bs_glyph(f,(unsigned)ch);
@@ -1807,7 +2202,7 @@ static void bs_text(Renderer *r,const char* text,float x,float y,float xs,float 
             int ch=bs_utf8(&p);FontGlyph*g=bs_glyph(f,(unsigned)ch);
             if(!g){cx+=f->emSize*.35f;continue;}
             float u=lineW>0?(cx-lineStart+g->shift*.5f)/lineW:0;
-            float v=totalHeight>0?(cy+g->sourceHeight*.5f)/totalHeight:0;
+            float v=totalHeight>0?(cy-cyStart+g->sourceHeight*.5f)/totalHeight:0;
             uint32_t tint=gradient?bs_gradient_color(color,c2,c3,c4,u,v):color;
             if(g->sourceWidth&&g->sourceHeight) {
                 if(spriteFont) {
@@ -1845,7 +2240,8 @@ static void bs_text(Renderer *r,const char* text,float x,float y,float xs,float 
             cx+=g->shift;
         }
         if(!*end)break;
-        line=end+1;cy+=rowHeight+separation;
+        line=text+TextUtils_skipNewline(text,(int32_t)(end-text),textLen);
+        cy+=rowHeight;
     }
     nvgRestore(b->vg);
 }
@@ -1934,37 +2330,171 @@ static void bs_drawTile(Renderer*r,RoomTile* tile,float ox,float oy){
           0,tile->x+ox,tile->y+oy,tile->color,tile->alpha);
     }
 }
+/* GameMaker primitives and vertex buffers, decomposed into triangles.
+ * Untextured triangles keep their three vertex colours through the native
+ * gradient path. A textured triangle maps UV to screen with the exact affine
+ * transform of its three vertices (an affine map is exact for a triangle),
+ * tinted by the average vertex colour. Lines and points keep vertex colours.
+ * Unsupported shapes used to abort the process (C2-12828-1 in the Chapter 3
+ * videogame minigame: primitive_vertex_color). */
+static void bs_prim_push(BSGxmRenderer*b,float x,float y,uint32_t color,
+                         float alpha,float u,float v){
+    if(b->primCount>=b->primCap){
+        unsigned cap=b->primCap?b->primCap*2u:256u;
+        if(cap>1u<<20)return;
+        BSGxmVertex*grown=(BSGxmVertex*)realloc(b->primVerts,cap*sizeof(BSGxmVertex));
+        if(!grown)return;
+        b->primVerts=grown;b->primCap=cap;
+    }
+    b->primVerts[b->primCount++]=(BSGxmVertex){x,y,u,v,alpha,color&0xFFFFFFu};
+}
+static uint32_t bs_avg_color3(uint32_t a,uint32_t b,uint32_t c){
+    unsigned r=((a&255u)+(b&255u)+(c&255u))/3u;
+    unsigned g=(((a>>8)&255u)+((b>>8)&255u)+((c>>8)&255u))/3u;
+    unsigned bl=(((a>>16)&255u)+((b>>16)&255u)+((c>>16)&255u))/3u;
+    return r|(g<<8)|(bl<<16);
+}
+static void bs_prim_triangle(Renderer*r,const BSGxmVertex*v0,const BSGxmVertex*v1,
+                             const BSGxmVertex*v2){
+    BSGxmRenderer*b=BR(r);
+    float alpha=(v0->alpha+v1->alpha+v2->alpha)/3.0f;
+    if(b->primImage<=0){
+        bs_drawTriangle(r,v0->x,v0->y,v1->x,v1->y,v2->x,v2->y,
+                        v0->color,v1->color,v2->color,alpha,false);
+        return;
+    }
+    if(alpha<=0||!bs_alpha_uniform_visible(b,alpha))return;
+    float du1=v1->u-v0->u,dv1=v1->v-v0->v,du2=v2->u-v0->u,dv2=v2->v-v0->v;
+    float det=du1*dv2-du2*dv1;
+    uint32_t tint=bs_avg_color3(v0->color,v1->color,v2->color);
+    if(!isfinite(det)||fabsf(det)<1e-12f){
+        /* Degenerate UVs sample one texel; keep the geometry visible. */
+        bs_drawTriangle(r,v0->x,v0->y,v1->x,v1->y,v2->x,v2->y,tint,tint,tint,alpha,false);
+        return;
+    }
+    float dx1=v1->x-v0->x,dx2=v2->x-v0->x,dy1=v1->y-v0->y,dy2=v2->y-v0->y;
+    NVGpaint paint=nvgImagePattern(b->vg,0,0,1,1,0,b->primImage,1.0f);
+    paint.xform[0]=(dx1*dv2-dx2*dv1)/det;
+    paint.xform[1]=(dy1*dv2-dy2*dv1)/det;
+    paint.xform[2]=(dx2*du1-dx1*du2)/det;
+    paint.xform[3]=(dy2*du1-dy1*du2)/det;
+    paint.xform[4]=v0->x-paint.xform[0]*v0->u-paint.xform[2]*v0->v;
+    paint.xform[5]=v0->y-paint.xform[1]*v0->u-paint.xform[3]*v0->v;
+    paint.extent[0]=paint.extent[1]=1.0f;
+    paint.innerColor=paint.outerColor=bs_col(tint,alpha);
+    nvgBeginPath(b->vg);
+    nvgMoveTo(b->vg,v0->x,v0->y);nvgLineTo(b->vg,v1->x,v1->y);
+    nvgLineTo(b->vg,v2->x,v2->y);nvgClosePath(b->vg);
+    nvgFillPaint(b->vg,paint);nvgFill(b->vg);
+    b->draws++;
+}
+static void bs_prim_flush(Renderer*r,int32_t type){
+    BSGxmRenderer*b=BR(r);
+    const BSGxmVertex*v=b->primVerts;
+    unsigned n=b->primCount;
+    switch(type){
+    case PRIMITIVE_POINTS:
+        for(unsigned i=0;i<n;i++)
+            bs_drawRectangle(r,v[i].x,v[i].y,v[i].x+1,v[i].y+1,v[i].color,v[i].alpha,false);
+        break;
+    case PRIMITIVE_LINES:
+        for(unsigned i=0;i+1<n;i+=2)
+            bs_drawLineColor(r,v[i].x,v[i].y,v[i+1].x,v[i+1].y,1,
+                             v[i].color,v[i+1].color,(v[i].alpha+v[i+1].alpha)*.5f);
+        break;
+    case PRIMITIVE_LINE_STRIP:
+        for(unsigned i=0;i+1<n;i++)
+            bs_drawLineColor(r,v[i].x,v[i].y,v[i+1].x,v[i+1].y,1,
+                             v[i].color,v[i+1].color,(v[i].alpha+v[i+1].alpha)*.5f);
+        break;
+    case PRIMITIVE_TRIANGLES:
+        for(unsigned i=0;i+2<n;i+=3)bs_prim_triangle(r,&v[i],&v[i+1],&v[i+2]);
+        break;
+    case PRIMITIVE_TRIANGLE_STRIP:
+        for(unsigned i=0;i+2<n;i++)bs_prim_triangle(r,&v[i],&v[i+1],&v[i+2]);
+        break;
+    case PRIMITIVE_TRIANGLE_FAN:
+        for(unsigned i=1;i+1<n;i++)bs_prim_triangle(r,&v[0],&v[i],&v[i+1]);
+        break;
+    default:{
+        static unsigned logged=0;
+        if(logged++<8){
+            char line[100];
+            snprintf(line,sizeof(line),"NATIVE_GXM=primitive_unknown type=%d vertices=%u",
+                     (int)type,n);
+            bs_trace(line);
+        }
+    }}
+    b->primCount=0;
+}
+static void bs_prim_bind_texture(BSGxmRenderer*b,int32_t texture){
+    b->primImage=0;b->primW=b->primH=0;
+    if(texture==-1)return;
+    int image=0,w=0,h=0;
+    if(bs_resolve_texture(b,(uint32_t)texture,&image,&w,&h)&&image>0){
+        b->primImage=image;b->primW=w;b->primH=h;
+    }
+}
 static void bs_primitiveBegin(Renderer*r,int32_t type){
     BSGxmRenderer*b=BR(r);
-    b->primitiveType=type;b->primitiveStarted=1;b->vertexCount=0;
+    b->primitiveType=type;b->primitiveStarted=1;b->primCount=0;
+    b->primImage=0;
 }
 static void bs_primitiveBeginTexture(Renderer*r,int32_t type,int32_t texture){
-    (void)texture;bs_primitiveBegin(r,type);
-    bs_unsupported("primitiveBeginTexture_uv");
+    bs_primitiveBegin(r,type);
+    bs_prim_bind_texture(BR(r),texture);
 }
 static void bs_drawVertex(Renderer*r,float x,float y,float z,uint32_t color,
                           float alpha,float u,float v){
     BSGxmRenderer*b=BR(r);
-    (void)z;(void)u;(void)v;
-    if(!b->primitiveStarted)bs_unsupported("vertex_outside_primitive");
-    if(color!=0xFFFFFFu || alpha!=1.0f)bs_unsupported("primitive_vertex_color");
-    if(b->vertexCount>=4)bs_unsupported("primitive_vertex_count");
-    b->vertexX[b->vertexCount]=x;b->vertexY[b->vertexCount]=y;b->vertexCount++;
+    (void)z;
+    if(!b->primitiveStarted)return;
+    bs_prim_push(b,x,y,color,alpha,u,v);
 }
 static void bs_primitiveEnd(Renderer*r){
     BSGxmRenderer*b=BR(r);
-    if(b->primitiveType==PRIMITIVE_LINES && b->vertexCount==2)
-        bs_drawLine(r,b->vertexX[0],b->vertexY[0],b->vertexX[1],b->vertexY[1],1,0xFFFFFFu,1);
-    else if(b->primitiveType==PRIMITIVE_TRIANGLES&&b->vertexCount==3)
-        bs_drawTriangle(r,b->vertexX[0],b->vertexY[0],b->vertexX[1],b->vertexY[1],
-                        b->vertexX[2],b->vertexY[2],0xFFFFFFu,0xFFFFFFu,0xFFFFFFu,1,false);
-    else if(b->vertexCount!=0)bs_unsupported("primitiveEnd_complex");
-    b->primitiveStarted=0;b->vertexCount=0;
+    if(b->primitiveStarted)bs_prim_flush(r,b->primitiveType);
+    b->primitiveStarted=0;b->primCount=0;b->primImage=0;
 }
+static float bs_vb_float(const uint8_t*p){float f;memcpy(&f,p,sizeof(f));return f;}
 static void bs_drawVertexBuffer(Renderer*r,VertexBuffer*buff,int32_t prim,
   int32_t tex,int32_t offset,int32_t count){
-    (void)r;(void)buff;(void)prim;(void)tex;(void)offset;(void)count;
-    bs_unsupported("vertex_buffer");
+    BSGxmRenderer*b=BR(r);
+    if(!buff||!buff->format||!buff->data||buff->format->stride==0)return;
+    const VertexFormat*fmt=buff->format;
+    int pos=-1,col=-1,uv=-1;
+    for(int i=0;i<fmt->numElements;i++){
+        const VertexElement*e=&fmt->elements[i];
+        if(e->usage==VERTEX_USAGE_POSITION&&pos<0)pos=i;
+        else if(e->usage==VERTEX_USAGE_COLOR&&col<0)col=i;
+        else if(e->usage==VERTEX_USAGE_TEXCOORD&&uv<0)uv=i;
+    }
+    if(pos<0)return;
+    int32_t total=(int32_t)(buff->size/fmt->stride);
+    if(offset<0)offset=0;
+    if(offset>total)offset=total;
+    if(count<0||count>total-offset)count=total-offset;
+    b->primCount=0;
+    if(uv>=0)bs_prim_bind_texture(b,tex);else b->primImage=0;
+    for(int32_t i=offset;i<offset+count;i++){
+        const uint8_t*vx=buff->data+(size_t)i*fmt->stride;
+        const VertexElement*pe=&fmt->elements[pos];
+        float x=bs_vb_float(vx+pe->offset),y=bs_vb_float(vx+pe->offset+4);
+        uint32_t color=0xFFFFFFu;float alpha=1.0f;
+        if(col>=0){
+            const uint8_t*c=vx+fmt->elements[col].offset;
+            color=(uint32_t)c[0]|((uint32_t)c[1]<<8)|((uint32_t)c[2]<<16);
+            alpha=c[3]/255.0f;
+        }
+        float u=0,v=0;
+        if(uv>=0){
+            const uint8_t*t=vx+fmt->elements[uv].offset;
+            u=bs_vb_float(t);v=bs_vb_float(t+4);
+        }
+        bs_prim_push(b,x,y,color,alpha,u,v);
+    }
+    bs_prim_flush(r,prim);
+    b->primImage=0;
 }
 static float bs_quad_orient(float ax,float ay,float bx,float by,float cx,float cy){
     return (bx-ax)*(cy-ay)-(by-ay)*(cx-ax);
@@ -2039,6 +2569,9 @@ static void bs_drawSpritePos(Renderer*r,int32_t idx,float x1,float y1,float x2,f
     b->draws++;
 }
 
+unsigned long BSContractRenderer_lastFrameDraws(Renderer* r) {
+    return r?BR(r)->draws:0;
+}
 void BSContractRenderer_frameStart(Renderer* r) { BSGxmRenderer *b=BR(r); b->frameIsActive=1; b->activeTarget=-1; b->viewActive=b->guiActive=0; }
 
 void BSContractRenderer_metrics(Renderer *r, char *out, unsigned cap) {
@@ -2052,7 +2585,7 @@ void BSContractRenderer_metrics(Renderer *r, char *out, unsigned cap) {
         if(b->images[i]>0)++loaded;
     for(int i=0;i<BS_MAX_SURFACES;i++)if(b->surfaces[i].live)++liveSurfaces;
     snprintf(out,cap,
-      "NATIVE_GXM=render_metrics room=%d app=%d app_valid=%d app_size=%dx%d active_target=%d world_draws=%lu total_draws=%lu missing=%lu tex_loaded=%u surfaces=%u dynamic=%u snapshots=%lu switches=%lu pages_decoded=%lu items_uploaded=%lu partial_masks=%lu alpha_test=%d alpha_ref=%u alpha_changes=%u cache_mib=%llu peak_mib=%llu bc3=%u rgba4444=%u rgba8888=%u evictions=%u fog_calls=%u shader_fallback=%u offscreen_culls=%lu spritefont_glyphs=%lu tile_skipped=%llu tile_drawn=%llu tiled_calls=%llu retire_pending=%u retire_total=%u shader_uniform_writes=%u",
+      "NATIVE_GXM=render_metrics room=%d app=%d app_valid=%d app_size=%dx%d active_target=%d world_draws=%lu total_draws=%lu missing=%lu tex_loaded=%u surfaces=%u dynamic=%u snapshots=%lu switches=%lu pages_decoded=%lu items_uploaded=%lu partial_masks=%lu alpha_test=%d alpha_ref=%u alpha_changes=%u cache_mib=%llu peak_mib=%llu bc3=%u rgba4444=%u rgba8888=%u evictions=%u fog_calls=%u shader_fallback=%u offscreen_culls=%lu spritefont_glyphs=%lu tile_skipped=%llu tile_drawn=%llu tiled_calls=%llu retire_pending=%u retire_total=%u shader_uniform_writes=%u r444_cache_hits=%lu r444_cache_absent=%lu r444_cache_rejected=%lu page_load_ms=%llu",
       r->runner?r->runner->currentRoomIndex:-1,
       appId,app!=NULL,app?app->w:0,app?app->h:0,b->activeTarget,
       b->worldDraws,b->draws,b->missing,loaded,
@@ -2066,5 +2599,7 @@ void BSContractRenderer_metrics(Renderer *r, char *out, unsigned cap) {
        (unsigned long long)b->tileIterationsAvoided,
        (unsigned long long)b->tileIterationsExecuted,
        (unsigned long long)b->tiledCalls,
-       b->retiredCount,b->retiredTotal,b->shaderUniformWrites);
+       b->retiredCount,b->retiredTotal,b->shaderUniformWrites,
+       b->cacheHits,b->cacheAbsent,b->cacheRejected,
+       (unsigned long long)(b->pageLoadUs/1000u));
 }

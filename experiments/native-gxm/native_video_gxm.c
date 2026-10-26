@@ -225,7 +225,12 @@ int VitaVideo_open(const char*path){
     init.memoryReplacement.deallocate=avCpuFree;
     init.memoryReplacement.allocateTexture=avGpuAlloc;
     init.memoryReplacement.deallocateTexture=avGpuFree;
-    init.basePriority=0xA0;init.numOutputVideoFrameBuffers=2;init.autoStart=1;
+    init.basePriority=0xA0;init.autoStart=1;
+    /* VitaGL's validated cold-boot setup (vita_video.c VIDEO_BUFFERS): with
+     * only two buffers the decoder rewrote the frame the GPU was still
+     * sampling, so parts of the 960x544 intro flickered. Chapter videos keep
+     * the two-buffer producer/consumer setup, as on VitaGL. */
+    init.numOutputVideoFrameBuffers=strstr(source,"first_load")?5:2;
     player=sceAvPlayerInit(&init);
     if(!validPlayer(player)){
         avLog("player_init_failed",(int)player);

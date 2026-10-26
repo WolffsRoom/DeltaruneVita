@@ -1,5 +1,118 @@
 # Changelog
 
+## v0.79-1 — unificação VitaGL + Native GXM (pre-release)
+
+- Une a linha pública VitaGL com o trabalho Native GXM das builds v0.78-12 a
+  v0.78-16 (detalhes abaixo). Notas em inglês: `docs/releases/v0.79.md`.
+- GXM: o `texture-cache` `.r444` é gerado uma vez por capítulo/idioma, com a
+  tela de geração (rótulos e barra de progresso do VitaGL), quando ainda não
+  existe; `complete.vtc` marca o cache como completo.
+- GXM: filtro de tela selecionável em Gráficos, máscaras de colisão com o
+  inspetor de objetos (toque, L + direcional, log em `devlogs/chapter N/objetos`),
+  captura do Debug DEV em `devlogs/chapter N/<seq>_<sala>_<data>.log`,
+  analógico esquerdo para andar e saída de "Desistir" no Game Over, como no VitaGL.
+- GXM: a `application_surface` fica opaca antes de ser exibida (o GameMaker
+  ignora o alpha dela). Corrige a parede preta do green room do Chapter 3.
+- GXM: o rótulo do Chapter 0 usa a versão-base da build.
+- GXM: regras por sala do runner (Espanhol, torre do Flowey, reflexos, LUT)
+  passam a ser compiladas também no GXM; shader nativo `shd_grayscalesand`
+  (câmera do tabuleiro do Chapter 3); botões de PlayStation; regras de borda
+  do VitaGL; `global.opti_mode` semeado no Chapter 5; troféus nativos (NP).
+- Bandeira francesa do seletor de idiomas convertida de PNG de paleta 4 bits
+  para RGB.
+
+## v0.78-15 — Native GXM: minigame do Chapter 3, green room e Chapter 5 (teste)
+
+- O crash C2-12828-1 ao abrir o minigame de videogame do Chapter 3 era um
+  `abort()` proposital em `draw_vertex_colour` (`primitive_vertex_color`). As
+  primitivas do GXM agora aceitam qualquer quantidade de vértices, cor por
+  vértice, textura (mapeamento afim exato por triângulo) e
+  listas/strips/fans de triângulos, linhas e pontos. `vertex_submit` usa o
+  mesmo caminho.
+- Estados que o GML alcança e o GXM ainda não reproduz (matriz de
+  view/projeção, desenhar uma surface nela mesma, cópia de/para o alvo ativo,
+  fator de blend desconhecido, GUI aninhada) passam a ser registrados uma vez
+  (`NATIVE_GXM=runner_renderer skipped=`) e ignorados, em vez de abortar.
+- Fundo preto no green room: a `application_surface` agora é composta sem
+  que o alpha escureça a imagem, como no blit do GameMaker/VitaGL. A sala zera
+  o alpha da parede para usar como máscara.
+- Chapter 5: surfaces de até 4096 px por lado (antes 2048 px, o limite dos
+  atlas). Uma surface de 2080x120 era recusada a cada quadro. O reflexo do
+  castelo é atualizado a 10 Hz também em `room_dw_fcastle_final_save`, a sala
+  que ficava em 4 FPS após carregar o save.
+- Filtros de tela (scanlines, dithering, VHS e Sharp Bilinear) e a ligação dos
+  troféus do jogo com o arquivo local e a notificação interna agora funcionam
+  no GXM. Os troféus do sistema (NP) continuam só no VitaGL.
+- A entrada de sala também é detectada quando a troca acontece dentro do Step.
+  No Chapter 5 o log registra `opti_mode` e a presença da torre (`ch5_room_state`).
+
+## v0.78-14 — Native GXM: GPU crashes em trocas de sala e correções visuais (teste)
+
+- A v0.78-13 ainda tinha GPU crash ao entrar no green room (Cap. 3) e no
+  Cybercampo (Cap. 2), e também depois de uma troca de cenário na batalha
+  final do Cap. 5. O Cap. 2 travou sem nenhuma variante de blend nova, então o
+  blend não é a causa comum.
+- Causa 1: o NanoVG-GXM só libera uma imagem apagada depois de quatro
+  `renderFlush`, mas cada troca de surface faz um flush. Uma borda ou atlas
+  trocado na entrada da sala era liberado enquanto cenas de um ou dois quadros
+  antes ainda o amostravam. A coleta agora roda uma vez por quadro
+  apresentado (`nvgxmCollectGarbage`). As evicções que já esperam a GPU
+  liberam a memória na hora.
+- Causa 2: o heap de 256 MiB da v0.78-12 tirava 128 MiB das texturas e
+  surfaces do GXM, que ficam fora do heap. Restavam 9 MiB livres na batalha
+  final do Cap. 5, onde a torre não aparecia. O heap volta aos 128 MiB padrão
+  do SDK; o parser lê os chunks em streaming quando falta memória. A pilha de
+  4 MiB continua.
+- Fonte rosa na transição do Chapter 0: a cópia de surface por GPU gravava
+  4444 em ordem ABGR numa imagem 4444 RGBA. Os snapshots agora são RGBA8888,
+  no mesmo layout do render target.
+- Texto: o espaçamento de `draw_text_ext` substitui a altura da linha, em vez
+  de se somar a ela, e `\r\n` conta como uma quebra só. A escala e o
+  `ascenderOffset` da fonte seguem o renderer GL. Isso corrige a linha muito
+  abaixo na primeira tela do Chapter 0 PT-BR.
+- O vídeo de abertura usa cinco buffers de saída, a configuração já validada no
+  VitaGL. Com dois, o decoder reescrevia o quadro que a GPU ainda lia.
+- Falhas ao criar surfaces passam a ser registradas
+  (`NATIVE_GXM=surface_create_failed`).
+
+## v0.78-13 — Native GXM: green room do Chapter 3 (teste)
+
+- A v0.78-12 teve GPU crash ao carregar um save em `room_dw_green_room`. O
+  dump mostra a CPU esperando a GPU durante o Draw de
+  `obj_dw_green_room_bg_fx`. Esse Draw grava só o alpha com o blend desligado
+  e depois usa `bm_dest_alpha`/`bm_inv_dest_alpha`, um estado que o GXM nunca
+  tinha executado no Chapter 3.
+- Quando a máscara de escrita é só o alpha, só RGB ou nenhum canal, o GXM
+  agora usa a máscara completa com fatores ZERO/ONE nos canais protegidos.
+  O resultado na tela é idêntico e não depende mais de um programa de
+  fragmento mascarado.
+- Cada variante de blend criada é registrada (`NATIVE_GXM=blend_variant`),
+  com os fatores e o resultado do shader patcher.
+- `gxm-r444-cache.txt` com `0` desliga o cache r444 sem precisar recompilar,
+  para teste A/B no Vita.
+
+## v0.78-12 — Native GXM: cache r444, memória e travamentos (teste)
+
+- O GXM passa a usar a mesma pilha da thread principal (4 MiB) e o mesmo heap
+  (256 MiB) do VitaGL. A VM executa cada chamada GML de forma recursiva, e o
+  GXM rodava com o padrão do SDK. Hipótese principal do congelamento na entrada
+  da batalha do Tenna (Cap. 3) na v0.78-11; ainda falta confirmar no Vita.
+- Atlas carregados do `texture-cache/page_NNN.r444` preparado pelo VitaGL,
+  incluindo o cache das traduções. O PNG/QOI do `data.win` fica só como
+  reserva, e o blob comprimido é liberado da RAM após o upload, como nos
+  renderers GL. Novos campos `r444_cache_*` e `page_load_ms` em
+  `render_metrics`.
+- Watchdog em outra thread: se nenhum quadro terminar em 3, 10 ou 30 s, grava
+  `NATIVE_GXM=watchdog` com a etapa do loop, a operação de GPU ou textura em
+  curso, a sala, o script GML e a profundidade de chamadas.
+- Telemetria `NATIVE_GXM=memory` (RAM, CDRAM, phycont, heap e blobs de
+  textura), `room_enter`/`room_first_frame` em cada troca de sala e
+  `draw_detail` com a divisão do tempo de desenho.
+- Pré-carga limitada dos sprites de grupo/UI ao entrar em
+  `room_dw_snow_zone_battle`, igual ao Legacy-GL.
+- Cabeçalho de sessão do GXM no `butterscotch-probe.log` e após a rotação do
+  `native-gxm-probe.log`, para não misturar linhas de builds diferentes.
+
 ## v0.78-3 — abertura compatível com SceAvPlayer
 
 - O novo vídeo havia sido exportado em HEVC/H.265 1920×1080 com uma terceira

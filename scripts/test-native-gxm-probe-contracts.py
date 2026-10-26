@@ -39,7 +39,7 @@ assert 'b->activeTarget=-1;b->draws=b->missing' not in impl
 assert 'NATIVE_GXM=render_metrics' in impl and 'BSContractRenderer_metrics(' in source
 assert 'bs_snapshot_sync(b,0);' in impl and 'bs_snapshot_sync(b,1);' in impl
 assert 'DataWin_allocSpriteSlot(dw,b->originalSpriteCount)' in impl
-assert 'gxmRGBA4444Upload(b->vg,tw,th,NVG_IMAGE_NEAREST,rgba)' in impl
+assert 'nvgCreateImageRGBA(b->vg,tw,th,NVG_IMAGE_NEAREST,rgba)' in impl
 assert 'bs_grow_tpag_cache(b,tid+1)' in impl
 assert 'bs_deleteSprite(Renderer* r,int32_t id)' in impl
 assert 'createSpriteFromSurface_dynamic_tpag' not in impl
@@ -232,8 +232,8 @@ assert 'SceGxmBlendFunc colorFunc;' in native
 assert 'SceGxmBlendFunc alphaFunc;' in native
 assert 'blend.colorFunc=gxm->drawColorEquation;' in native
 assert 'blend.alphaFunc=gxm->drawAlphaEquation;' in native
-assert 'info.colorFunc=blend->colorFunc;' in native
-assert 'info.alphaFunc=blend->alphaFunc;' in native
+assert 'info.colorFunc=eff.colorFunc;' in native
+assert 'info.alphaFunc=eff.alphaFunc;' in native
 assert native.count('gxmnvg__blendCompositeOperation(gxm,compositeOperation)')==3
 assert 'gxm->drawColorEquation=SCE_GXM_BLEND_FUNC_ADD;' in native
 assert 'gxm->drawAlphaEquation=SCE_GXM_BLEND_FUNC_ADD;' in native
@@ -322,7 +322,7 @@ assert 'NATIVE_GXM=shader_effect id=%d' in impl
 assert 'int nvgxmEnableRuntimeShaders(' in native
 assert 'SceGxmProgram*compiled=shark_compile_shader_extended' in native
 assert 'sceGxmShaderPatcherRegisterProgram(gxm->shader_patcher' in native
-assert 'GXMNVGshader runtime_shader[13];' in native
+assert 'GXMNVGshader runtime_shader[14];' in native
 assert 'gxm->runtime_shader[k].prog.frag' in native
 assert 'ret->shaderTag=(unsigned)gxm->drawShaderTag;' in native
 assert 'gxm->activeShaderTag=(int)call->shaderTag;' in native
@@ -400,7 +400,7 @@ assert 'BSContractRenderer_getDevMetrics(bs.renderer,&memory,&evictions)' in sou
 assert 'void BSContractRenderer_getDevMetrics(' in impl
 print('GXM48 DEV GPU memory and eviction counters show native renderer values: PASS')
 
-assert 'if(lengths[choose]<=1e-8f || !isfinite(lengths[choose]))' in impl
+assert 'if(lengths[choose]<1.0f || !isfinite(lengths[choose]))' in impl
 assert 'if(!outline && ((x2-x1)*(y3-y1)-(y2-y1)*(x3-x1))==0.0f)return;' in impl
 print('GXM48 triangle NaN/degenerate native GXM visual artifact guard: PASS')
 
@@ -423,9 +423,9 @@ print('GXM48 Ch5 Castle Town: GPU-fenced surface retirement, multi-scene targets
 
 # GXM48 Experimental-GL native GXP shader adapter: per-program uniform handles,
 # per-draw packet snapshot, compile isolation, optical effects and settings.
-assert 'GXMNVGshader runtime_shader[13];' in native
+assert 'GXMNVGshader runtime_shader[14];' in native
 assert 'runtimeShaderMask' in native
-assert 'for(int k=0;k<13;k++)' in native
+assert 'for(int k=0;k<14;k++)' in native
 assert 'if(!successes)' in native
 assert 'nvgxmSetRuntimeShaderParams(' in native
 assert 'memcpy(ret->shaderParams,gxm->drawShaderParams' in native
@@ -485,10 +485,10 @@ assert 'runner->gxmStepProfileUs[slot]+=dur*8u;' in runner
 print('GXM48 quad visualization lab + object-level Step CPU hotspots: PASS')
 
 # GXM48 Ch5 native fixes; shaders, realtime LUT screen copies, solid background and Chapter0.
-assert 'runtime_shader[13];' in native
+assert 'runtime_shader[14];' in native
 assert 'case 8:return shadowblend;' in native
 assert 'case 9:return forcecolour;' in native
-assert 'gxm->activeShaderTag<=13' in native
+assert 'gxm->activeShaderTag<=14' in native
 assert '(gxm->activeShaderTag<=5||gxm->activeShaderTag>=8)' in native
 assert 'shd_shadowblend' in impl
 assert 'shd_forcecolour' in impl
@@ -550,7 +550,7 @@ assert 'DLTAGXM48' in cmake
 print('GXM48 5 translated GXP effects preserve premultiplied RGB and single alpha: PASS')
 
 # Native extra sampler contracts: two Chapter5 GLSL-ES shaders.
-assert 'runtime_shader[13];' in native
+assert 'runtime_shader[14];' in native
 assert 'case 10:return shoujo;' in native
 assert 'case 11:return lut;' in native
 assert 'nvgxmSetRuntimeSamplerImage(NVGcontext*ctx,int stage,int imageId)' in native
@@ -575,7 +575,7 @@ assert 'DLTAGXM48' in cmake
 print('GXM48 shoujo 4-sampler GXP and LUT 2-sampler GXP, per-draw stage+uniforms and resumed LUT passes: PASS')
 
 # GXM48 Castle Town reflection shaders preserve GML uniforms per draw call.
-assert 'runtime_shader[13];' in native
+assert 'runtime_shader[14];' in native
 assert 'case 12:return castlereflect;' in native
 assert 'case 13:return castlereflect_layerblend;' in native
 assert 'float shaderVectors[16];' in native
@@ -660,7 +660,7 @@ assert '((uint16_t)(b>>4)<<4)' in rgba4
 assert '(uint16_t)(a>>4)' in rgba4
 assert 'flags|NVG_IMAGE_RGBA4444' in rgba4
 assert 'gxmRGBA4444Upload(b->vg,w,h,NVG_IMAGE_NEAREST|NVG_IMAGE_LPDDR,rgba)' in impl
-assert 'gxmRGBA4444Upload(b->vg,tw,th,NVG_IMAGE_NEAREST,rgba)' in impl
+assert 'nvgCreateImageRGBA(b->vg,tw,th,NVG_IMAGE_NEAREST,rgba)' in impl
 assert 'gxmRGBA4444Upload(b->vg,w,h,NVG_IMAGE_NEAREST,rgba)' in border
 assert 'gxmRGBA4444Upload(g_nativeSettingsVG,' in ui
 assert 'NATIVE_GXM=texture_format enforced_rgba4444_all_atlases' in impl
@@ -697,16 +697,16 @@ print('GXM48 hardware alpha/red swap, emulator layout, version label: PASS')
 # GXM48 32-bit surface -> native 16-bit GPU transfer path and per-chapter pack.
 assert 'sceGxmTransferCopy(' in impl
 assert 'SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR' in impl
-assert 'SCE_GXM_TRANSFER_FORMAT_U4U4U4U4_ABGR' in impl
+assert 'SCE_GXM_TRANSFER_FORMAT_U4U4U4U4_ABGR' not in impl and impl.count('SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR')>=2
 assert 'sceGxmTransferFinish();' in impl
 assert 'snapshot_transfer mode=%s' in impl
-assert 'if(!copied)' in impl and 'gxmRGBA4444Upload(b->vg,tw,th,NVG_IMAGE_NEAREST,rgba)' in impl
+assert 'if(!copied)' in impl and 'nvgCreateImageRGBA(b->vg,tw,th,NVG_IMAGE_NEAREST,rgba)' in impl
 assert 'gxm-color-layout-ch%d.txt' in fmt
 assert 'DLTAGXM48' in cmake
 print('GXM48 per-chapter rgba4444 and GPU sprite snapshot transfer with CPU fallback PASS')
 
 assert 'bs_snapshot_sync(b,0);' in impl
-assert 'if(cpuWait)sceGxmFinish(gxmGetWindow()->context);' in impl
+assert 'if(cpuWait){g_gxmRenderStage="gpu_finish";sceGxmFinish(gxmGetWindow()->context);' in impl
 assert 'SCE_GXM_TRANSFER_FRAGMENT_SYNC' in impl
 assert 'src->fb->gxm_back_buffer_index].sync_object' in impl
 assert 'snapshot_timing gpu_avg_us=' in impl
@@ -729,3 +729,60 @@ assert 'b->imageCount=capacity;' in impl
 assert 'dynamicCreateTotal' in impl
 assert 'DLTAGXM48' in cmake
 print('GXM48 dynamic TPAG >23859 support; full sprite allocation and throttled logs PASS')
+
+main_src = (root / 'experiments/native-gxm/main.c').read_text(encoding='utf-8')
+assert 'unsigned int sceUserMainThreadStackSize = 4 * 1024 * 1024;' in main_src
+assert 'int _newlib_heap_size_user = 128 * 1024 * 1024;' in main_src
+print('v0.78 GXM 4 MiB main stack and 128 MiB heap PASS')
+
+upload = impl.split('static int bs_upload_page(',1)[1].split('static int bs_ensure_image(',1)[0]
+assert 'bs_load_cached_page(b,dw,(uint32_t)page,&w,&h)' in upload
+assert 'if(!src->mapped){free(src->blobData);src->blobData=NULL;}' in upload
+assert 'NVG_IMAGE_NEAREST|NVG_IMAGE_LPDDR|NVG_IMAGE_RGBA4444' in upload
+assert '0x35435456U /* VTC5 */' in impl and 'texture-cache/page_%03u.r444' in impl
+assert 'r444_cache_hits=%lu' in impl
+print('v0.78 GXM r444 texture-cache upload and blob release PASS')
+
+assert 'GXM_Watchdog' in main_src and 'NATIVE_GXM=watchdog stall_ms=' in main_src
+assert 'g_gxmMainStage="runner_step";' in main_src and 'g_gxmMainStage="swap";' in main_src
+assert 'NATIVE_GXM=memory phase=%s' in main_src and 'NATIVE_GXM=room_enter' in main_src
+assert 'BSContractRenderer_roomEntered(bs.renderer);' in main_src
+assert 'room_dw_snow_zone_battle' in impl and 'ch3_tenna_intro room_prewarm' in impl
+assert 'PROBE_LOG=new_session BACKEND=native-gxm' in main_src
+print('v0.78 GXM watchdog, memory telemetry, Tenna prewarm and session headers PASS')
+
+nvg_native = (root / 'experiments/native-gxm/nanovg_gxm_native.h').read_text(encoding='utf-8')
+variant = nvg_native.split('static SceGxmFragmentProgram* gxmnvg__variantProgram(', 1)[1].split('static void gxmnvg__setUniforms(', 1)[0]
+assert 'eff.srcRGB=SCE_GXM_BLEND_FACTOR_ZERO;eff.dstRGB=SCE_GXM_BLEND_FACTOR_ONE;' in variant
+assert 'eff.srcAlpha=SCE_GXM_BLEND_FACTOR_ZERO;eff.dstAlpha=SCE_GXM_BLEND_FACTOR_ONE;' in variant
+assert 'NATIVE_GXM=blend_variant' in variant and 'void nvgxm_log_hook(const char *line) { log_line(line); }' in main_src
+assert 'gxm-r444-cache.txt' in impl
+print('v0.78 GXM full-mask blend translation, variant log and r444 A/B switch PASS')
+
+flush = nvg_native.split('static void gxmnvg__renderFlush(void *uptr) {',1)[1].split('static int gxmnvg__maxVertCount(',1)[0]
+assert 'gxmnvg__garbageCollector(gxm);' not in flush
+assert 'void nvgxmCollectGarbage(NVGcontext *ctx) {' in nvg_native
+assert any('nvgxmCollectGarbage(vg);' in part[:60] and 'g_gxmMainStage' not in part[:60]
+           for part in main_src.split('gxmSwapBuffer();')[1:])
+assert main_src.count('nvgxmCollectGarbage(vg);') >= 3
+assert 'nvgxmDeleteImageFenced(b->vg,b->pageImages[victim]);' in impl
+print('v0.78 GXM texture GC per presented frame, fenced eviction PASS')
+
+text = impl.split('static void bs_text(Renderer *r,',1)[1].split('static void bs_drawText(',1)[0]
+assert 'separation<0.0f?TextUtils_lineStride(f):separation/fontScaleY' in text
+assert 'rowHeight+separation' not in text and 'TextUtils_skipNewline(' in text
+video = (root / 'experiments/native-gxm/native_video_gxm.c').read_text(encoding='utf-8')
+assert 'init.numOutputVideoFrameBuffers=strstr(source,"first_load")?5:2;' in video
+assert 'NATIVE_GXM=surface_create_failed' in impl
+print('v0.78 GXM text line stride, intro video buffers, surface failure log PASS')
+
+impl = (root / 'experiments/native-gxm/bs_renderer_impl.inc').read_text(encoding='utf-8')
+main_src = (root / 'experiments/native-gxm/main.c').read_text(encoding='utf-8')
+assert 'bs_unsupported("primitive_vertex_color")' not in impl and 'bs_unsupported("vertex_buffer")' not in impl
+assert 'static void bs_prim_triangle(' in impl and 'case PRIMITIVE_TRIANGLE_FAN:' in impl
+assert 'bs_soft_unsupported("custom_matrix_transform")' in impl
+assert 'nvgxmSetColorWriteMask(b->vg,8u);' in impl
+assert '#define BS_MAX_SURFACE_EDGE 4096' in impl
+assert 'static void draw_screen_filter(' in main_src and 'sync_game_trophies(&settings,bs.runner,gameFrames);' in main_src
+print('v0.78 GXM primitives, soft fallbacks, app-surface composite, filters and trophies PASS')
+

@@ -10,7 +10,9 @@
 #include <psp2/system_param.h>
 #include <string.h>
 #include <stdio.h>
+#ifndef VITA_TROPHIES_HOST_PRESENT
 #include <vitaGL.h>
+#endif
 
 // --- Diagnostic trophy logging (v0.70-36) ------------------------------------
 // Writes directly to the probe log with open/append/close (immediate flush), so
@@ -58,8 +60,21 @@ int sceNpTrophySetupDialogGetResult(SceNpTrophySetupDialogResultDiag* result);
 // vitaGL internal flag: vglSwapBuffers(GL_TRUE) only drives sceCommonDialogUpdate
 // when this is GL_TRUE (set GL_FALSE only when a dedicated cdialog pool is
 // reserved via cdlg_pool_size>0 in vglInit). Logged for diagnosis.
+#ifdef VITA_TROPHIES_HOST_PRESENT
+/* Native GXM supplies the frame (and the common-dialog update) itself. */
+extern void VitaTrophies_hostPresent(int commonDialog);
+static const int vgl_has_cdlg_support = 1;
+static void trophyPresentFrame(bool commonDialog) {
+    VitaTrophies_hostPresent(commonDialog ? 1 : 0);
+}
+#else
 extern GLboolean vgl_has_cdlg_support;
 extern void VitaProbe_pumpLoadingScreen(void);
+static void trophyPresentFrame(bool commonDialog) {
+    VitaProbe_pumpLoadingScreen();
+    vglSwapBuffers(commonDialog ? GL_TRUE : GL_FALSE);
+}
+#endif
 
 static int trophyContext = -1;
 static SceNpTrophyUnlockState unlockState;
@@ -243,8 +258,7 @@ bool VitaTrophies_init(void) {
     // the common dialog runs. Without a settled display the dialog can stay in
     // RUNNING forever (nothing valid to composite onto / present).
     for (int w = 0; w < 8; ++w) {
-        VitaProbe_pumpLoadingScreen();
-        vglSwapBuffers(GL_FALSE);
+        trophyPresentFrame(false);
     }
     trophyLogMsg("TROPHY=warmup_frames_done");
 
@@ -267,8 +281,7 @@ bool VitaTrophies_init(void) {
             // Keep the chapter Loading frame behind the native trophy setup
             // dialog. Previously this loop cleared both buffers to black for
             // up to a minute before data.win parsing even began.
-            VitaProbe_pumpLoadingScreen();
-            vglSwapBuffers(GL_TRUE);
+            trophyPresentFrame(true);
             if (++guard > 3600) {  // ~60-120s cap so a stuck dialog logs a clear TIMEOUT
                 trophyLogMsg("TROPHY=dialog_loop_TIMEOUT_breaking");
                 break;

@@ -55,7 +55,24 @@ static void bs_native_border_draw(BSGxmRenderer* b){
  if(!b||!b->vg||!b->base.runner||g_nativeBorderMode==0)return;
  Runner* runner=b->base.runner;
  const char* room=runner->currentRoom?runner->currentRoom->name:NULL;
- if(!room||VitaBorderRules_isMenuRoom(room))return;
+ /* Same gating as the VitaGL border path (vita_borders.c roomBorder):
+  * nothing before the chapter menu has been reached (startup, failsafe,
+  * logo, legend, title), nothing on menus, and no art on Game Over /
+  * failure / black-fade rooms, whose surround must stay black. */
+ static int chapterMenuSeen=0,gameplayBorders=0;
+ if(!room||g_vitaActiveChapter<=0)return;
+ if(VitaBorderRules_isMenuRoom(room)){
+  if(strstr(room,"PLACE_MENU")!=NULL){chapterMenuSeen=1;gameplayBorders=0;}
+  return;
+ }
+ if(strncmp(room,"room_gameover",13)==0||strcmp(room,"PLACE_FAILURE")==0||
+    strcmp(room,"room_dw_castle_area_1")==0||
+    (g_vitaActiveChapter==3&&strcmp(room,"room_ed")==0)||
+    (g_vitaActiveChapter==4&&strcmp(room,"room_cc_fountain")==0))return;
+ if(!gameplayBorders){
+  if(!chapterMenuSeen)return;
+  gameplayBorders=1;
+ }
  if(g_nativeBorderMode==2){
   nvgBeginPath(b->vg);
   nvgRect(b->vg,113,0,4,DISPLAY_HEIGHT);

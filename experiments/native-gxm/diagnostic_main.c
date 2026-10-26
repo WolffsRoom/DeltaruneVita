@@ -117,7 +117,7 @@ static void screen(NVGXMwindow* win,NVGcontext* vg,
         digit(vg,i,119+i*138,375,4);
     }
     rectangle(vg,70,475,(float)completed/6*820,12,nvgRGB(54,178,94));
-    nvgEndFrame(vg);gxmEndFrame();gxmSwapBuffer();
+    nvgEndFrame(vg);gxmEndFrame();gxmSwapBuffer();nvgxmCollectGarbage(vg);
 }
 static uint32_t le32(const unsigned char* p) {
     return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
@@ -361,7 +361,7 @@ static int audit_one(int chapter,NVGXMwindow* win,NVGcontext* vg,AuditState*stat
             nvgFillPaint(vg,nvgImagePattern(vg,360,88,200,200,0,rgba4,1));
             nvgFill(vg);
         }
-        nvgEndFrame(vg);gxmEndFrame();gxmSwapBuffer();
+        nvgEndFrame(vg);gxmEndFrame();gxmSwapBuffer();nvgxmCollectGarbage(vg);
         sceGxmFinish(win->context);
         if(pvr.gpuImage)nvgDeleteImage(vg,(int)pvr.gpuImage);
         if(rgba4>0)nvgDeleteImage(vg,rgba4);

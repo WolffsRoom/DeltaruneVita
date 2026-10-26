@@ -1807,7 +1807,7 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         const char* graphicsApi = s->pendingGraphicsBackend == VITA_BACKEND_GXM ?
             "Native-GXM" : "VitaGL";
         const char* values[6] = {"RGBA4444 (fixed)", sync,
-            "Unavailable", s->pendingShadersEnabled?"Native GXP":"Off",
+            screenFilter, s->pendingShadersEnabled?"Native GXP":"Off",
             graphicsApi, "Native GXM"};
         drawCenteredText(r, settingsText(s, "GRAPHICS SETTINGS", "CONFIGURAÇÕES GRÁFICAS", "AJUSTES GRÁFICOS"), 480, 112, 1.4f, 0x00FFFF);
         for (int i = 0; i < 6; ++i) {

@@ -32,6 +32,11 @@
 #include "base64.h"
 #include "gettime.h"
 
+#if defined(NATIVE_GXM_PROBE_VERSION) && !defined(PLATFORM_VITA)
+/* Native GXM: renderer-agnostic surface rules shared with the VitaGL build. */
+#include "vita_gpu_rules.h"
+extern int g_vitaActiveChapter;
+#endif
 #ifdef PLATFORM_VITA
 #include "audio/openal/al_audio_system.h"
 #include "vita_gpu_rules.h"
@@ -11475,7 +11480,7 @@ static RValue builtin_surface_set_target(VMContext* ctx, RValue* args, MAYBE_UNU
         ctx->vitaSuppressSurfaceDraw = true;
         return RValue_makeReal(1.0);
     }
-#ifdef PLATFORM_VITA
+#if defined(PLATFORM_VITA) || defined(NATIVE_GXM_PROBE_VERSION)
     if (ctx->currentInstance != nullptr) {
         int32_t objectIndex = ctx->currentInstance->objectIndex;
         if (objectIndex >= 0 && (uint32_t)objectIndex < ctx->dataWin->objt.count) {
@@ -11714,7 +11719,7 @@ static RValue builtin_draw_surface_part_ext(VMContext* ctx, RValue* args, MAYBE_
     uint32_t color = (uint32_t) RValue_toInt32(args[9]);
     float alpha = (float) RValue_toReal(args[10]);
     Runner* runner = ctx->runner;
-#ifdef PLATFORM_VITA
+#if defined(PLATFORM_VITA) || defined(NATIVE_GXM_PROBE_VERSION)
     if (g_vitaActiveChapter == 5 && ctx->currentInstance != nullptr &&
         runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
         strcmp(runner->currentRoom->name, "room_dw_fcastle_flowery") == 0 &&

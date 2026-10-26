@@ -40,6 +40,15 @@ NVGcontext *nvgCreateGXM(SceGxmContext *context, SceGxmShaderPatcher *shader_pat
 
 void nvgDeleteGXM(NVGcontext *ctx);
 void nvgxmSetColorWriteMask(NVGcontext *ctx,unsigned mask);
+/* Deleted images stay mapped until DISPLAY_BUFFER_COUNT+1 frames have been
+ * presented: call once per presented frame, after the display-queue swap. */
+void nvgxmCollectGarbage(NVGcontext *ctx);
+/* Frees an image's GPU memory at once. Only after sceGxmFinish and with no
+ * pending NanoVG call that references the image. */
+void nvgxmDeleteImageFenced(NVGcontext *ctx,int image);
+/* Draws recorded while set sample the image as premultiplied (RGB is not
+ * multiplied by its alpha). Read when a fill is recorded, not at flush. */
+void nvgxmSetImagePremultiplied(NVGcontext *ctx,int image,int premultiplied);
 void nvgxmSetBlendEquation(NVGcontext *ctx,
                            SceGxmBlendFunc colorFunc,SceGxmBlendFunc alphaFunc);
 /* GXM20 opt-in runtime GXP: 0=fixed, 1=grayscale, 2=invert.
@@ -218,7 +227,7 @@ struct GXMNVGcontext {
     GXMNVGshader gradient_shader;
     GXMNVGshader img_texture_shader;
     GXMNVGshader text_texture_shader;
-    GXMNVGshader runtime_shader[13];
+    GXMNVGshader runtime_shader[14];
     int runtimeShaderInit,drawShaderTag,activeShaderTag;
     unsigned runtimeShaderMask;
     float drawShaderParams[4],activeShaderParams[4];
@@ -374,6 +383,11 @@ static int gxmnvg__deleteTexture(GXMNVGcontext *gxm, int id) {
     return 0;
 }
 
+/* Runs once per PRESENTED frame (nvgxmCollectGarbage), never per flush.
+ * A frame can flush NanoVG several times (every surface target switch), so
+ * counting flushes released textures that GPU scenes queued one or two
+ * frames earlier were still sampling: a GPU page fault right after room
+ * changes, when borders and atlases are replaced. */
 static int gxmnvg__garbageCollector(GXMNVGcontext *gxm) {
     int i;
     for (i = 0; i < gxm->ntextures; i++) {
@@ -1311,6 +1325,9 @@ static int gxmnvg__convertPaint(GXMNVGcontext *gxm, GXMNVGfragUniforms *frag, NV
 
 static GXMNVGfragUniforms *nvg__fragUniformPtr(GXMNVGcontext *gxm, int i);
 
+/* Optional diagnostics sink supplied by the executable (main.c). */
+void nvgxm_log_hook(const char *line) __attribute__((weak));
+
 static SceGxmFragmentProgram* gxmnvg__variantProgram(GXMNVGcontext* gxm,SceGxmFragmentProgram* original) {
     SceGxmShaderPatcherId id=0;
     if(original==gxm->shader.prog.frag)id=gxm->shader.prog.frag_id;
@@ -1318,7 +1335,7 @@ static SceGxmFragmentProgram* gxmnvg__variantProgram(GXMNVGcontext* gxm,SceGxmFr
     else if(original==gxm->img_texture_shader.prog.frag)id=gxm->img_texture_shader.prog.frag_id;
     else if(original==gxm->text_texture_shader.prog.frag)id=gxm->text_texture_shader.prog.frag_id;
     else {
-        for(int k=0;k<13;k++)
+        for(int k=0;k<14;k++)
             if(original==gxm->runtime_shader[k].prog.frag){
                 id=gxm->runtime_shader[k].prog.frag_id;
                 break;
@@ -1342,18 +1359,49 @@ static SceGxmFragmentProgram* gxmnvg__variantProgram(GXMNVGcontext* gxm,SceGxmFr
             return gxm->variants[i].program;
         }
     if(gxm->numVariants>=96)return original;
+    /* A write mask that drops all RGB or only alpha is expressed as
+     * ZERO/ONE blend factors on that part with a full mask: the destination
+     * keeps exactly the same bytes. GameMaker's alpha-only passes (e.g.
+     * gpu_set_colorwriteenable(false,false,false,true) with blending off,
+     * then bm_dest_alpha) otherwise need a masked destination-reading
+     * program, the only new GPU state in the Chapter 3 green room crash. */
+    GXMNVGblend eff=*blend;
+    unsigned outMask=mask;
+    if((mask&7u)==0u){
+        eff.colorFunc=SCE_GXM_BLEND_FUNC_ADD;
+        eff.srcRGB=SCE_GXM_BLEND_FACTOR_ZERO;eff.dstRGB=SCE_GXM_BLEND_FACTOR_ONE;
+        outMask|=7u;
+    }
+    if((mask&7u)==7u||(mask&7u)==0u){
+        if(!(mask&8u)){
+            eff.alphaFunc=SCE_GXM_BLEND_FUNC_ADD;
+            eff.srcAlpha=SCE_GXM_BLEND_FACTOR_ZERO;eff.dstAlpha=SCE_GXM_BLEND_FACTOR_ONE;
+            outMask|=8u;
+        }
+    }
     SceGxmBlendInfo info={0};
-    info.colorMask=((mask&1u)?SCE_GXM_COLOR_MASK_R:0)|
-                   ((mask&2u)?SCE_GXM_COLOR_MASK_G:0)|
-                   ((mask&4u)?SCE_GXM_COLOR_MASK_B:0)|
-                   ((mask&8u)?SCE_GXM_COLOR_MASK_A:0);
-    info.colorFunc=blend->colorFunc;
-    info.alphaFunc=blend->alphaFunc;
-    info.colorSrc=blend->srcRGB;info.colorDst=blend->dstRGB;
-    info.alphaSrc=blend->srcAlpha;info.alphaDst=blend->dstAlpha;
+    info.colorMask=((outMask&1u)?SCE_GXM_COLOR_MASK_R:0)|
+                   ((outMask&2u)?SCE_GXM_COLOR_MASK_G:0)|
+                   ((outMask&4u)?SCE_GXM_COLOR_MASK_B:0)|
+                   ((outMask&8u)?SCE_GXM_COLOR_MASK_A:0);
+    info.colorFunc=eff.colorFunc;
+    info.alphaFunc=eff.alphaFunc;
+    info.colorSrc=eff.srcRGB;info.colorDst=eff.dstRGB;
+    info.alphaSrc=eff.srcAlpha;info.alphaDst=eff.dstAlpha;
     SceGxmFragmentProgram *prog=NULL;
-    if(gxmCreateFragmentProgram(id,SCE_GXM_OUTPUT_REGISTER_FORMAT_UCHAR4,
-         &info,gxm->shader.prog.vert_gxp,&prog)<0 || !prog)return original;
+    int created=gxmCreateFragmentProgram(id,SCE_GXM_OUTPUT_REGISTER_FORMAT_UCHAR4,
+         &info,gxm->shader.prog.vert_gxp,&prog);
+    if(nvgxm_log_hook){
+        char line[200];
+        snprintf(line,sizeof(line),
+          "NATIVE_GXM=blend_variant n=%u program=%u mask=%u out_mask=%u "
+          "color=%d:%d:%d alpha=%d:%d:%d result=0x%08X",
+          gxm->numVariants,(unsigned)id,mask,outMask,
+          (int)eff.colorFunc,(int)eff.srcRGB,(int)eff.dstRGB,
+          (int)eff.alphaFunc,(int)eff.srcAlpha,(int)eff.dstAlpha,(unsigned)created);
+        nvgxm_log_hook(line);
+    }
+    if(created<0 || !prog)return original;
     unsigned i=gxm->numVariants++;
     gxm->variants[i].id=id;gxm->variants[i].mask=mask;
     gxm->variants[i].blend=*blend;gxm->variants[i].program=prog;
@@ -1391,7 +1439,7 @@ static void gxmnvg__setUniforms(GXMNVGcontext *gxm, int uniformOffset, int image
 
     if(need_tex && frag->type==NSVG_SHADER_FILLIMG &&
        gxm->runtimeShaderInit==1 &&
-       gxm->activeShaderTag>=1&&gxm->activeShaderTag<=13&&
+       gxm->activeShaderTag>=1&&gxm->activeShaderTag<=14&&
        (gxm->runtimeShaderMask&(1u<<(gxm->activeShaderTag-1)))){
        GXMNVGshader*custom=&gxm->runtime_shader[gxm->activeShaderTag-1];
        if(custom->prog.frag && custom->loc[GXMNVG_LOC_FRAG]){
@@ -1433,10 +1481,11 @@ static void gxmnvg__setUniforms(GXMNVGcontext *gxm, int uniformOffset, int image
                                             slot,&aux->texture.tex));
         }
     }
-    if(gxm->runtimeShaderInit==1 && gxm->activeShaderTag==13 &&
+    if(gxm->runtimeShaderInit==1 &&
+       (gxm->activeShaderTag==13||gxm->activeShaderTag==14) &&
        frag->type==NSVG_SHADER_FILLIMG){
         const SceGxmProgramParameter *vec=sceGxmProgramFindParameterByName(
-           gxm->runtime_shader[12].prog.frag_gxp,"gameVectors");
+           gxm->runtime_shader[gxm->activeShaderTag-1].prog.frag_gxp,"gameVectors");
         if(vec)sceGxmSetUniformDataF(buffer,vec,0,16,gxm->activeShaderVectors);
     }
 
@@ -1701,9 +1750,6 @@ static void gxmnvg__renderFlush(void *uptr) {
     gxm->npaths = 0;
     gxm->ncalls = 0;
     gxm->nuniforms = 0;
-
-    // texture gc
-    gxmnvg__garbageCollector(gxm);
 }
 
 static int gxmnvg__maxVertCount(const NVGpath *paths, int npaths) {
@@ -2010,7 +2056,7 @@ static void gxmnvg__renderDelete(void *uptr) {
     }
 
     if(gxm->runtimeShaderInit==1){
-        for(int i=0;i<13;i++){
+        for(int i=0;i<14;i++){
             GXMNVGshader*custom=&gxm->runtime_shader[i];
             if(custom->prog.frag){
                 sceGxmShaderPatcherReleaseFragmentProgram(
@@ -2402,6 +2448,28 @@ static const char* gxmnvg__game_shader_source(int type){
         "    float3 tint=frag[6].rgb/max(frag[6].a,0.00001);\n"
         "    return float4(color*tint*opacity,opacity)*shaderMask(fpos);\n"
         "}\n";
+    static const char *grayscalesand =
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;     // sandcol (0..1)\n"
+        "uniform float4 gameVectors[4]; // sand1..sand4 (0..255)\n"
+        "float4 main(uniform sampler2D tex : TEXUNIT0,\n"
+        " float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy / frag[9].xy;\n"
+        " float4 color=tex2D(tex,uv);\n"
+        " float3 fin=dot(color.rgb,float3(0.3,0.59,0.11));\n"
+        " // Atlases are RGBA4444: compare in 4-bit steps, not exact bytes.\n"
+        " float3 q=floor(color.rgb*15.0+0.5);\n"
+        " float hit=0.0;\n"
+        " for(int i=0;i<4;i++){\n"
+        "  float3 d=abs(q-floor(gameVectors[i].xyz/17.0+0.5));\n"
+        "  hit=max(hit,(d.x+d.y+d.z)<0.5?1.0:0.0);\n"
+        " }\n"
+        " fin=lerp(fin,gameParams.xyz,hit);\n"
+        " return float4(fin*color.a,color.a)*frag[6]*mask.x*mask.y; }\n";
     switch(type){
         case 1:return gray;
         case 2:return invert;
@@ -2416,6 +2484,7 @@ static const char* gxmnvg__game_shader_source(int type){
         case 11:return lut;
         case 12:return castlereflect;
         case 13:return castlereflect_layerblend;
+        case 14:return grayscalesand;
         default:return NULL;
     }
 }
@@ -2439,7 +2508,7 @@ int nvgxmEnableRuntimeShaders(NVGcontext*ctx,const char*modulePath){
     info.alphaDst=SCE_GXM_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
     int error=0;
     int successes=0;
-    for(int k=0;k<13;k++){
+    for(int k=0;k<14;k++){
         GXMNVGshader*shader=&gxm->runtime_shader[k];
         const char*source=gxmnvg__game_shader_source(k+1);
         uint32_t size=(uint32_t)strlen(source);
@@ -2503,7 +2572,7 @@ void nvgxmSelectRuntimeShader(NVGcontext*ctx,int shaderTag){
     GXMNVGcontext*gxm=(GXMNVGcontext*)nvgInternalParams(ctx)->userPtr;
     if(!gxm)return;
     if(gxm->runtimeShaderInit!=1)shaderTag=0;
-    gxm->drawShaderTag=(shaderTag>=1&&shaderTag<=13&&
+    gxm->drawShaderTag=(shaderTag>=1&&shaderTag<=14&&
           (gxm->runtimeShaderMask&(1u<<(shaderTag-1))))?shaderTag:0;
 }
 void nvgxmSetRuntimeShaderParams(NVGcontext*ctx,const float params[4]){
@@ -2540,6 +2609,36 @@ void nvgxmSetBlendEquation(NVGcontext *ctx,
     if(!ctx)return;
     GXMNVGcontext*gxm=(GXMNVGcontext*)nvgInternalParams(ctx)->userPtr;
     if(gxm){gxm->drawColorEquation=colorFunc;gxm->drawAlphaEquation=alphaFunc;}
+}
+
+void nvgxmCollectGarbage(NVGcontext *ctx) {
+    if(!ctx)return;
+    GXMNVGcontext *gxm=(GXMNVGcontext*)nvgInternalParams(ctx)->userPtr;
+    if(gxm)gxmnvg__garbageCollector(gxm);
+}
+
+void nvgxmSetImagePremultiplied(NVGcontext *ctx,int image,int premultiplied) {
+    if(!ctx||image<=0)return;
+    GXMNVGcontext *gxm=(GXMNVGcontext*)nvgInternalParams(ctx)->userPtr;
+    GXMNVGtexture *tex=gxm?gxmnvg__findTexture(gxm,image):NULL;
+    if(!tex)return;
+    if(premultiplied)tex->flags|=NVG_IMAGE_PREMULTIPLIED;
+    else tex->flags&=~NVG_IMAGE_PREMULTIPLIED;
+}
+
+void nvgxmDeleteImageFenced(NVGcontext *ctx,int image) {
+    if(!ctx||image<=0)return;
+    GXMNVGcontext *gxm=(GXMNVGcontext*)nvgInternalParams(ctx)->userPtr;
+    if(!gxm)return;
+    for(int i=0;i<gxm->ntextures;i++){
+        if(gxm->textures[i].id!=image)continue;
+        if(gxm->textures[i].texture.uid!=0&&
+           (gxm->textures[i].flags&NVG_IMAGE_NODELETE)==0){
+            gpu_unmap_free(gxm->textures[i].texture.uid);
+            memset(&gxm->textures[i],0,sizeof(gxm->textures[i]));
+        }
+        return;
+    }
 }
 
 void nvgxmSetColorWriteMask(NVGcontext *ctx,unsigned mask) {

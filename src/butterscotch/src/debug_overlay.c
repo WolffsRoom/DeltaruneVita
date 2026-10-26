@@ -128,7 +128,7 @@ void DebugOverlay_drawCollisionMasks(Runner* runner) {
     }
 }
 
-#ifdef PLATFORM_VITA
+#if defined(PLATFORM_VITA) || defined(NATIVE_GXM_PROBE_VERSION)
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
 #endif
@@ -136,7 +136,7 @@ void DebugOverlay_drawCollisionMasks(Runner* runner) {
 #include <sys/stat.h>
 
 static void ensureDirExists(const char* dirPath) {
-#ifdef PLATFORM_VITA
+#if defined(PLATFORM_VITA) || defined(NATIVE_GXM_PROBE_VERSION)
     sceIoMkdir(dirPath, 0777);
 #else
 #if defined(_WIN32)
@@ -183,7 +183,7 @@ void DebugOverlay_saveSelectedObjectLog(Runner* runner, int chapter) {
     const char* roomName = (dw != nullptr && runner->currentRoomIndex >= 0 && (uint32_t)runner->currentRoomIndex < dw->room.count) ?
                             dw->room.rooms[runner->currentRoomIndex].name : "unknown_room";
 
-#ifdef PLATFORM_VITA
+#if defined(PLATFORM_VITA) || defined(NATIVE_GXM_PROBE_VERSION)
     ensureDirExists("ux0:data/deltarune/deltarunevita/devlogs");
     char dirChapter[256];
     snprintf(dirChapter, sizeof(dirChapter), "ux0:data/deltarune/deltarunevita/devlogs/chapter %d", chapter);

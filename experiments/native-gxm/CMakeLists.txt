@@ -37,6 +37,7 @@ add_executable(${PROJECT_NAME}
   ../../src/vita-common/vita_backend_selection.c
   ../../src/vita-probe/source/vita_border_rules.c
   ../../src/vita-probe/source/vita_gpu_rules.c
+  ../../src/vita-probe/source/vita_trophies.c
   ../../src/butterscotch/src/data_win.c
   ../../src/butterscotch/src/binary_reader.c
   ../../src/butterscotch/src/image/image_decoder.c
@@ -83,6 +84,8 @@ endif()
 # standalone Runner and GXM renderer independent of legacy VitaGL hooks.
 set_source_files_properties(../../src/butterscotch/src/audio/openal/al_audio_system.c
   PROPERTIES COMPILE_DEFINITIONS PLATFORM_VITA)
+set_source_files_properties(../../src/vita-probe/source/vita_trophies.c
+  PROPERTIES COMPILE_DEFINITIONS VITA_TROPHIES_HOST_PRESENT)
 
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections -Wno-unused-parameter)
 target_link_options(${PROJECT_NAME} PRIVATE -Wl,--gc-sections)
@@ -111,6 +114,8 @@ target_link_libraries(${PROJECT_NAME}
   SceAudio_stub
   SceAudioIn_stub
   SceAppUtil_stub
+  SceRtc_stub
+  SceNpTrophy_stub
   m
 )
 

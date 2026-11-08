@@ -1,0 +1,254 @@
+{
+  "format": "BANS (frames_side.bani), BANI (frames_fast.bani)",
+  "side": {
+    "size": [
+      240,
+      544
+    ],
+    "pixel_format": "RGB565",
+    "columns": "left 120 + right 120 of 960x544"
+  },
+  "install_on_vita": "ux0:data/deltarune/deltarunevita/mods/bordersanim/",
+  "animations": {
+    "border_dw_blue": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_blue_light": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_blue_stars": {
+      "frames": 50,
+      "frame_duration_ms": 100,
+      "side_megabytes": 12.45,
+      "has_fast": true
+    },
+    "border_dw_castle_cafe": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_castle_left": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_castle_right": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_castle_right_gold": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_castle_top": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_castletown": {
+      "frames": 16,
+      "frame_duration_ms": 120,
+      "side_megabytes": 3.98,
+      "has_fast": true
+    },
+    "border_dw_church_a": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_church_b": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_church_c": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_city": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": true
+    },
+    "border_dw_cyber": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": true
+    },
+    "border_dw_garden": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_garden_cliff": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_garden_cliff_bottom": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_garden_cliff_bottom_frame": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_garden_cliff_frame": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_garden_cliff_lattice": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_green_room": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_green_sloppy": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_green_sloppy_z": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_mansion": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_pink": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_pink_alt": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_red_smiles": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_teevie": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_titan_base": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_titan_eyes": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_titan_eyes_red": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    },
+    "border_dw_tv_black": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_tv_blue": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_tv_meta": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_dw_word": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_ja_dw_word": {
+      "frames": 12,
+      "frame_duration_ms": 160,
+      "side_megabytes": 2.99,
+      "has_fast": false
+    },
+    "border_lw_town": {
+      "frames": 20,
+      "frame_duration_ms": 100,
+      "side_megabytes": 4.98,
+      "has_fast": true
+    },
+    "border_lw_town_morning": {
+      "frames": 20,
+      "frame_duration_ms": 100,
+      "side_megabytes": 4.98,
+      "has_fast": false
+    },
+    "border_lw_town_night": {
+      "frames": 20,
+      "frame_duration_ms": 100,
+      "side_megabytes": 4.98,
+      "has_fast": false
+    },
+    "border_lw_town_sunset": {
+      "frames": 24,
+      "frame_duration_ms": 100,
+      "side_megabytes": 5.98,
+      "has_fast": false
+    }
+  }
+}

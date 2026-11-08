@@ -318,44 +318,48 @@ const A = {
 let audioUnlocked = false;
 let audioCtx = null;
 let blipBuffer = null;
+let audioUnlocked = false;
+let isResumingAudio = false;
 
 async function initAudio() {
   if (audioCtx) return;
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    audioCtx = new AudioContextClass();
     const res = await fetch("assets/snd_text.wav");
-    const ab = await res.arrayBuffer();
-    audioCtx.decodeAudioData(ab, 
-      (buffer) => { blipBuffer = buffer; },
-      (err) => { console.error("decodeAudioData error", err); }
-    );
-  } catch (e) {
-    console.error("initAudio error", e);
-  }
+    if (res.ok) {
+      const ab = await res.arrayBuffer();
+      audioCtx.decodeAudioData(ab, 
+        (buffer) => { blipBuffer = buffer; },
+        () => {}
+      );
+    }
+  } catch (e) {}
 }
 
-function unlockAudio(){
-  if (audioUnlocked) {
-    if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume().catch(()=>{});
-    }
-    return;
+async function unlockAudio(){
+  if (!audioCtx) {
+    await initAudio();
   }
-  audioUnlocked = true;
-  initAudio();
-  if (audioCtx && audioCtx.state === "suspended") {
-    audioCtx.resume().catch(()=>{});
+  if (audioCtx && audioCtx.state === "suspended" && !isResumingAudio) {
+    isResumingAudio = true;
+    try {
+      await audioCtx.resume();
+    } catch (_) {}
+    isResumingAudio = false;
+  }
+  if (audioCtx && audioCtx.state === "running") {
+    audioUnlocked = true;
+    window.removeEventListener("pointerdown", unlockAudio, {capture: true});
+    window.removeEventListener("keydown", unlockAudio, {capture: true});
   }
 }
-window.addEventListener("click", unlockAudio, {capture: true});
 window.addEventListener("pointerdown", unlockAudio, {capture: true});
-window.addEventListener("mousedown", unlockAudio, {capture: true});
 window.addEventListener("keydown", unlockAudio, {capture: true});
-document.addEventListener("click", unlockAudio, {capture: true});
-document.addEventListener("pointerdown", unlockAudio, {capture: true});
 
 function play(a){ 
-  if(!sfxOn || !a || !audioUnlocked) return; 
+  if(!sfxOn || !a) return; 
   try {
     a.currentTime=0; 
     a.volume=.55;
@@ -365,13 +369,9 @@ function play(a){
 }
 
 function blip(){ 
-  if(!sfxOn || !audioUnlocked) return; 
-  if(audioCtx && blipBuffer) {
+  if(!sfxOn) return; 
+  if(audioCtx && blipBuffer && audioCtx.state === "running") {
     try {
-      if (audioCtx.state === "suspended") {
-        audioCtx.resume().catch(()=>{});
-        return;
-      }
       const source = audioCtx.createBufferSource();
       source.buffer = blipBuffer;
       const gainNode = audioCtx.createGain();
@@ -380,9 +380,7 @@ function blip(){
       gainNode.connect(audioCtx.destination);
       source.start(0);
       return;
-    } catch(e) {
-      console.warn("Web Audio blip failed, falling back", e);
-    }
+    } catch(e) {}
   }
   if(A.text){
     try {
@@ -1781,6 +1779,21 @@ function returnToShop(){
   speech(SEAM_LINES.choose);
 }
 
+function shouldStoreUncompressed(path) {
+  const p = path.toLowerCase();
+  return p.endsWith(".ogg") || p.endsWith(".png") || p.endsWith(".jpg") || 
+         p.endsWith(".jpeg") || p.endsWith(".mp4") || p.endsWith(".zip") || 
+         p.endsWith(".gz") || p.endsWith(".mp3") || p.endsWith(".webm");
+}
+
+function addZipFile(targetZip, path, data) {
+  if (shouldStoreUncompressed(path)) {
+    targetZip.file(path, data, { compression: "STORE" });
+  } else {
+    targetZip.file(path, data, { compression: "DEFLATE", compressionOptions: { level: 1 } });
+  }
+}
+
 async function applySelectedLanguagePacks(zip){
   if(!selectedExtras.size) return;
   const catalog=await loadLanguageCatalog();
@@ -1821,6 +1834,7 @@ async function applySelectedLanguagePacks(zip){
       const merged=new Uint8Array(total); let off=0;
       for(const chunk of chunks){ merged.set(chunk,off); off+=chunk.length; }
       packBuf=merged.buffer;
+      chunks.length = 0;
     }else{
       const candidates = getCandidateUrls(entry);
       let res = null;
@@ -1848,6 +1862,7 @@ async function applySelectedLanguagePacks(zip){
     }
     if(entry.sha256 && (await sha256Hex(packBuf)).toLowerCase()!==entry.sha256.toLowerCase()) throw new Error("SHA-256 inválido: "+L.label);
     const pack=await JSZip.loadAsync(packBuf);
+    packBuf = null;
     const mf=JSON.parse(await pack.file("manifest.json").async("string"));
     const root=manifest.output_folder+"/deltarunevita/mods/Lang/"+L.packId+"/";
     const records=mf.records||[];
@@ -1864,7 +1879,7 @@ async function applySelectedLanguagePacks(zip){
         else data=await applyBrowserPatch(oldBuf,new Uint8Array(await pack.file(rec.browser_patch).async("arraybuffer")));
       }
       if(rec.output_sha256 && (await sha256Hex(data)).toLowerCase()!==rec.output_sha256.toLowerCase()) throw new Error("Falha ao validar: "+L.label+"/"+rec.output);
-      zip.file(root+rec.output,data);
+      addZipFile(zip, root+rec.output, data);
     }
   }
 }
@@ -1888,7 +1903,7 @@ async function generate(mirrorId, attachedZipFile){
         const buf = await res.arrayBuffer();
         if(fileRec.size && buf.byteLength !== fileRec.size) throw new Error("Tamanho inválido no arquivo base: " + fileOutput);
         if(fileRec.sha256 && (await sha256Hex(buf)).toLowerCase() !== fileRec.sha256.toLowerCase()) throw new Error("SHA-256 inválido no arquivo base: " + fileOutput);
-        zip.file(outPath, buf);
+        addZipFile(zip, outPath, buf);
       } else if(fileRec.mode === "copy" || fileRec.mode === "browser_patch"){
         const steamEntry = findSteamEntry(fileRec.source);
         if(!steamEntry) throw new Error("Arquivo Steam ausente: " + fileRec.source);
@@ -1897,14 +1912,14 @@ async function generate(mirrorId, attachedZipFile){
         if(req && req.size && srcBuf.length !== req.size) throw new Error("Arquivo Steam incompatível: " + fileRec.source);
         if(req && req.sha256 && (await sha256Hex(srcBuf)).toLowerCase() !== req.sha256.toLowerCase()) throw new Error("Arquivo Steam incompatível: " + fileRec.source);
         if(fileRec.mode === "copy"){
-          zip.file(outPath, srcBuf);
+          addZipFile(zip, outPath, srcBuf);
         }else{
           const patchRes = await fetchWithRetry("patch_data/patches/" + fileRec.patch);
           if(!patchRes.ok) throw new Error("Patch ausente: " + fileRec.patch);
           const patchBuf = new Uint8Array(await patchRes.arrayBuffer());
           const patchedBuf = await applyBrowserPatch(srcBuf, patchBuf);
           if(fileRec.sha256 && (await sha256Hex(patchedBuf)).toLowerCase() !== fileRec.sha256.toLowerCase()) throw new Error("Falha ao validar arquivo gerado: " + fileOutput);
-          zip.file(outPath, patchedBuf);
+          addZipFile(zip, outPath, patchedBuf);
         }
       }else{
         throw new Error("Modo de manifesto desconhecido: " + fileRec.mode);
@@ -1913,20 +1928,30 @@ async function generate(mirrorId, attachedZipFile){
     await applySelectedLanguagePacks(zip);
 
     setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).progress_compressing || "Compressing final files..."));
-    let content;
-    if(IS_MOBILE){
-      // Avoid a second giant contiguous allocation on mobile browsers.
-      const chunks=[];
-      const stream=zip.generateInternalStream({type:"uint8array", streamFiles:true});
-      content=await new Promise((resolve,reject)=>{
-        stream.on("data", chunk=>chunks.push(chunk));
-        stream.on("error", reject);
-        stream.on("end", ()=>resolve(new Blob(chunks,{type:"application/zip"})));
-        stream.resume();
+    const chunks = [];
+    const stream = zip.generateInternalStream({
+      type: "uint8array",
+      compression: "DEFLATE",
+      compressionOptions: { level: 1 },
+      streamFiles: true
+    });
+    const content = await new Promise((resolve, reject) => {
+      stream.on("data", (chunk, metadata) => {
+        chunks.push(chunk);
+        if (metadata && typeof metadata.percent === "number") {
+          setBar(metadata.percent);
+        }
       });
-    }else{
-      content = await zip.generateAsync({type:"blob", streamFiles:true}, (metadata) => setBar(metadata.percent));
-    }
+      stream.on("error", reject);
+      stream.on("end", () => {
+        try {
+          resolve(new Blob(chunks, { type: "application/zip" }));
+        } catch(err) {
+          reject(err);
+        }
+      });
+      stream.resume();
+    });
 
     const link = document.createElement("a");
     const downloadUrl=URL.createObjectURL(content);

@@ -48,6 +48,7 @@ typedef struct {
     // restarted when a room transition or settings overlay releases audio.
     bool pausedByDisabled;
     bool pausedByTransition;
+    bool pausedByGame; /* explicit GML pause */
     // A room-end script requested that this music stop while the destination
     // room was still under construction. Resolve it after the next room has
     // had a chance to request its own music.
@@ -82,6 +83,7 @@ typedef struct {
     bool active;
     bool pendingDestroy;
     char* filePath; // resolved file path (owned, freed on destroy)
+    float initialPitch; // audio_sound_pitch(stream, ...), applied to instances played later
 } AudioStreamEntry;
 
 typedef struct {
@@ -121,6 +123,8 @@ typedef struct {
 AlAudioSystem* AlAudioSystem_create(void);
 void AlAudioSystem_setCategoryGains(AlAudioSystem* audio, float musicGain, float sfxGain);
 void AlAudioSystem_setDisabled(AlAudioSystem* audio, bool disabled);
+void AlAudioSystem_recoverUnexpectedMusicPauses(AlAudioSystem* audio);
+void AlAudioSystem_logMusicState(AlAudioSystem* audio, const char* roomName);
 void AlAudioSystem_setTransitionHold(AlAudioSystem* audio, bool held);
 #ifdef PLATFORM_VITA
 bool AlAudioSystem_beginVideoHandoff(AlAudioSystem* audio);

@@ -49,6 +49,8 @@ if(PLAYABLE_RUNNER)
     add_executable(${PROJECT_NAME}
     source/playable_main.c
     source/vita_settings.c
+    ../../experiments/native-gxm/native_mic.c
+    ../../experiments/native-gxm/native_asset_pack.c
     source/vita_borders.c
     source/vita_border_rules.c
     source/vita_media_rules.c
@@ -281,7 +283,9 @@ vita_create_vpk(Deltarune.vpk DELT00001 eboot.bin
     ${CMAKE_SOURCE_DIR}/../../data/frames/mini_game/Assets/spinheartmask.png assets/loading/minigame/spinheartmask.png
     ${CMAKE_SOURCE_DIR}/../../data/frames/mini_game/Assets/projectile_diamond.png assets/loading/minigame/projectile_diamond.png
     ${CMAKE_SOURCE_DIR}/../../data/frames/mini_game/Assets/projectile_ball.png assets/loading/minigame/projectile_ball.png
-    ${CMAKE_SOURCE_DIR}/../../data/frames/NewDeltaruneLoadIntro.mp4 first_load.mp4
+    ${CMAKE_SOURCE_DIR}/../../data/frames/NewDeltaruneLoadIntro.mp4 assets/vid/first_load.mp4
+    ${CMAKE_SOURCE_DIR}/../../data/frames/prologue.bin assets/prologue.bin
+    ${CMAKE_SOURCE_DIR}/../../data/frames/prologue/sfx/spamton_laugh_noise.ogg assets/prologue/sfx/spamton_laugh_noise.ogg
     ${CMAKE_SOURCE_DIR}/../../data/prepared/deltarune/deltarunevita/ui/buttons/button_ps4_circle_0.png assets/ui/button_ps4_circle_0.png
     ${CMAKE_SOURCE_DIR}/../../data/prepared/deltarune/deltarunevita/ui/buttons/button_ps4_cross_0.png assets/ui/button_ps4_cross_0.png
     ${CMAKE_SOURCE_DIR}/../../data/prepared/deltarune/deltarunevita/ui/buttons/button_ps4_triangle_0.png assets/ui/button_ps4_triangle_0.png

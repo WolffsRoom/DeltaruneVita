@@ -1,4 +1,4 @@
-﻿// On Windows, include windows.h first so its headers are processed before stb_vorbis
+// On Windows, include windows.h first so its headers are processed before stb_vorbis
 // defines single-letter macros (L, C, R) that conflict with winnt.h struct field names.
 #ifdef _WIN32
 #include <windows.h>
@@ -99,9 +99,27 @@ static void alGetSourceLengthSec(ALuint buffer, float* out) {
 }
 
 // Tears down whatever AL state is attached to a slot and marks it inactive.
+#ifdef PLATFORM_VITA
+/* Music lifecycle trace (pause/resume/release) for "music did not come back
+ * after a battle" reports; SFX are not logged. */
+static void vitaMusicTrace(const char* phase, const SoundInstance* inst) {
+    if (inst == nullptr || !inst->music) return;
+    ALint state = 0;
+    alGetSourcei(inst->alSource, AL_SOURCE_STATE, &state);
+    char detail[96];
+    snprintf(detail, sizeof(detail), "instance=%d sound=%d al_state=0x%X transition=%d",
+             (int)inst->instanceId, (int)inst->soundIndex, (unsigned)state,
+             inst->pausedByTransition ? 1 : 0);
+    vitaAudioLog(phase, "music", detail);
+}
+#else
+#define vitaMusicTrace(phase, inst) ((void)0)
+#endif
+
 static void releaseInstance(SoundInstance* inst) {
     if (!inst->active)
         return;
+    vitaMusicTrace("music_released", inst);
 
     alSourceStop(inst->alSource);
 
@@ -136,6 +154,7 @@ static void releaseInstance(SoundInstance* inst) {
     inst->sharedBuffer = false;
     inst->pausedByDisabled = false;
     inst->pausedByTransition = false;
+    inst->pausedByGame = false;
     inst->pendingTransitionStop = false;
 }
 
@@ -207,9 +226,26 @@ static SoundInstance* findFreeSlot(AlAudioSystem* ma) {
     return best;
 }
 
+// Stream indices (AUDIO_STREAM_INDEX_BASE+) are also above SOUND_INSTANCE_ID_BASE. A plain
+// ">= SOUND_INSTANCE_ID_BASE" test sent them to findInstanceById, so audio_pause_sound,
+// audio_stop_sound, audio_sound_pitch and friends silently did nothing for a stream index.
+static bool isSoundInstanceHandle(int32_t handle) {
+    return handle >= SOUND_INSTANCE_ID_BASE && handle < AUDIO_STREAM_INDEX_BASE;
+}
+
+// Handles are BASE + generation * MAX_SOUND_INSTANCES + slot. GML keeps old handles around
+// (global.batmusic[1], global.currentsong[1]...); with slot-only ids a stale handle silently
+// addressed whatever sound now occupied that slot, so fading or pausing an old song could
+// mute or pause the new one. A stale handle now resolves to nothing, as in GameMaker.
+static int32_t makeSoundInstanceHandle(AlAudioSystem* ma, int32_t slotIndex) {
+    const int32_t generations = (AUDIO_STREAM_INDEX_BASE - SOUND_INSTANCE_ID_BASE) / MAX_SOUND_INSTANCES;
+    int32_t generation = (int32_t) ((uint32_t) ma->nextInstanceCounter % (uint32_t) generations);
+    return SOUND_INSTANCE_ID_BASE + generation * MAX_SOUND_INSTANCES + slotIndex;
+}
+
 static SoundInstance* findInstanceById(AlAudioSystem* ma, int32_t instanceId) {
-    int32_t slotIndex = instanceId - SOUND_INSTANCE_ID_BASE;
-    if (0 > slotIndex || slotIndex >= MAX_SOUND_INSTANCES) return nullptr;
+    if (!isSoundInstanceHandle(instanceId)) return nullptr;
+    int32_t slotIndex = (instanceId - SOUND_INSTANCE_ID_BASE) % MAX_SOUND_INSTANCES;
     SoundInstance* inst = &ma->instances[slotIndex];
     if (!inst->active || inst->instanceId != instanceId) return nullptr;
     return inst;
@@ -722,7 +758,11 @@ static void maUpdate(AudioSystem* audio, float deltaTime) {
         }
 
         // Clean up ended non-looping sounds (ma_sound_at_end avoids reaping still-loading async sounds)
-        if (alSourceHasStopped(inst->alSource) && !alSourceIsLooping(inst->alSource)) {
+        // Never reap a sound that is paused by transition, game or disabled state;
+        // a reused OpenAL source remains in AL_STOPPED while queued/held, so reaping
+        // it here destroyed room-transition SFX (like AUDIO_INTRONOISE) before presentation.
+        if (!inst->pausedByTransition && !inst->pausedByDisabled && !inst->pausedByGame &&
+            alSourceHasStopped(inst->alSource) && !alSourceIsLooping(inst->alSource)) {
             releaseInstance(inst);
         }
     }
@@ -757,6 +797,33 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
             return -1;
         }
         sound = &dw->sond.sounds[soundIndex];
+    }
+
+    /* Native GXM Ch3: the audience OGG is a looping ambient cue, not a
+     * polyphonic SFX. Repeated scene ownership transitions can request it
+     * twice without releasing the first instance. Reuse ONLY this precise
+     * stream; ordinary overlapping sound effects retain GameMaker behavior. */
+    if(isStream && streamPath && strstr(streamPath,"berdly_audience.ogg")){
+        for(int k=0;k<MAX_SOUND_INSTANCES;k++){
+            SoundInstance* existing=&ma->instances[k];
+            if(!existing->active||!existing->streaming||existing->soundIndex<0)
+                continue;
+            int oldSlot=existing->soundIndex-AUDIO_STREAM_INDEX_BASE;
+            if(oldSlot<0||oldSlot>=MAX_AUDIO_STREAMS||
+               !ma->streams[oldSlot].active||!ma->streams[oldSlot].filePath)
+                continue;
+            ALint activeState=AL_STOPPED;
+            if(existing->alSource)
+                alGetSourcei(existing->alSource,AL_SOURCE_STATE,&activeState);
+            if(activeState==AL_PLAYING &&
+               strcmp(ma->streams[oldSlot].filePath,streamPath)==0){
+#ifdef PLATFORM_VITA
+                vitaAudioLog("ambient_stream_duplicate_reused",
+                             "berdly_audience.ogg","duplicate_play_suppressed=1");
+#endif
+                return existing->instanceId;
+            }
+        }
     }
 
     SoundInstance* slot = findFreeSlot(ma);
@@ -1073,6 +1140,10 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
     // Forcing every stream to 1.0 made assets authored below 1.0 play faster
     // than the original game (notably some Chapter 2 Spamton tracks).
     float pitch = sound != nullptr && sound->pitch != 0.0f ? sound->pitch : 1.0f;
+    // snd_pitch(stream) runs before the stream is played: legend.ogg is authored to play
+    // at 0.95, and mus_loop_ext() sets the battle track pitch the same way.
+    if (isStream && ma->streams[soundIndex - AUDIO_STREAM_INDEX_BASE].initialPitch > 0.0f)
+        pitch = ma->streams[soundIndex - AUDIO_STREAM_INDEX_BASE].initialPitch;
     if (slot->streaming || slot->music) {
         fprintf(stderr, "Audio: playback start name=%s streaming=%d rate=%d pitch=%.4f file=%s\n",
                 sound != nullptr && sound->name != nullptr ? sound->name : "<unnamed>",
@@ -1098,7 +1169,7 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
     // Set up instance tracking
     slot->active = true;
     slot->soundIndex = soundIndex;
-    slot->instanceId = SOUND_INSTANCE_ID_BASE + slotIndex;
+    slot->instanceId = makeSoundInstanceHandle(ma, slotIndex);
     slot->currentGain = volume;
     slot->targetGain = volume;
     slot->fadeTimeRemaining = 0.0f;
@@ -1114,6 +1185,43 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
 
     // Track unique IDs for disambiguation
     ma->nextInstanceCounter++;
+
+    /* Native GXM: when battle audio begins, do not mix it with a still
+     * active room/theme stream. GameMaker pauses an expected music handle,
+     * but long-running older handles may be left PLAYING after minigame
+     * transitions (Ch3 board_ocean + tenna_battle + battle.ogg observed).
+     * Pause, do not destroy, the older music instances: original GML can
+     * explicitly audio_resume_sound() them on victory. Leave layered music,
+     * narration and audience streams untouched outside combat. */
+    if(isStream && slot->music && streamPath){
+        const char* leaf=strrchr(streamPath,'/');
+        leaf=leaf?leaf+1:streamPath;
+        if(strcmp(leaf,"battle.ogg")==0 || strcmp(leaf,"tenna_battle.ogg")==0){
+            unsigned stopped=0;
+            for(int k=0;k<MAX_SOUND_INSTANCES;k++){
+                SoundInstance* old=&ma->instances[k];
+                if(old==slot||!old->active||!old->music||!old->alSource)
+                    continue;
+                ALint previousState=AL_STOPPED;
+                alGetSourcei(old->alSource,AL_SOURCE_STATE,&previousState);
+                if(previousState==AL_PLAYING){
+                    alSourcePause(old->alSource);
+                    ++stopped;
+                }
+            }
+#ifdef PLATFORM_VITA
+            if(stopped){
+                char detail[85];
+                snprintf(detail,sizeof(detail),"paused_older_music=%u",stopped);
+                vitaAudioLog("battle_music_exclusive",leaf,detail);
+            }
+#endif
+        }
+    }
+
+    if (!slot->streaming) {
+        alSourceRewind(slot->alSource);
+    }
 
     // Room Start can create music while the renderer is still allocating and
     // uploading its destination atlas set. Starting the Vita playback thread
@@ -1144,7 +1252,7 @@ static int32_t maPlaySound(AudioSystem* audio, int32_t soundIndex, int32_t prior
 static void maStopSound(AudioSystem* audio, int32_t soundOrInstance) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         // Stop specific instance
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr) {
@@ -1182,7 +1290,7 @@ static void maStopAll(AudioSystem* audio) {
 static bool maIsPlaying(AudioSystem* audio, int32_t soundOrInstance) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst == nullptr)
             return false;
@@ -1207,16 +1315,20 @@ static bool maIsPlaying(AudioSystem* audio, int32_t soundOrInstance) {
 static void maPauseSound(AudioSystem* audio, int32_t soundOrInstance) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr) {
             alSourcePause(inst->alSource);
+            inst->pausedByGame=true;
+            vitaMusicTrace("music_paused", inst);
         }
     } else {
         repeat(MAX_SOUND_INSTANCES, i) {
             SoundInstance* inst = &ma->instances[i];
             if (inst->active && inst->soundIndex == soundOrInstance) {
                 alSourcePause(inst->alSource);
+                inst->pausedByGame=true;
+            vitaMusicTrace("music_paused", inst);
             }
         }
     }
@@ -1267,18 +1379,69 @@ static stb_vorbis* openStreamingVorbis(const char* path, SoundInstance* inst, in
 
 static void maResumeSound(AudioSystem* audio, int32_t soundOrInstance) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
+#ifdef PLATFORM_VITA
+    {
+        char requested[48];
+        snprintf(requested, sizeof(requested), "%d", (int)soundOrInstance);
+        bool found = false;
+        repeat(MAX_SOUND_INSTANCES, i) {
+            SoundInstance* inst = &ma->instances[i];
+            if (inst->active && (inst->instanceId == soundOrInstance ||
+                                 inst->soundIndex == soundOrInstance)) {
+                vitaMusicTrace("music_resume_requested", inst);
+                found = true;
+            }
+        }
+        if (!found) vitaAudioLog("resume_target_missing", requested, "-");
+    }
+#endif
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr && !inst->pausedByDisabled && !inst->pausedByTransition) {
+            inst->pausedByGame=false;
             resumeInstanceIfReady(inst);
+#ifdef PLATFORM_VITA
+            /* A battle pauses the outdoor stream, sometimes setting its gain
+             * to zero during the transition. GML explicitly resumes it after
+             * the victory sequence; do not leave a PLAYING source inaudible.
+             * This runs ONLY on an explicit audio_resume_sound call, and
+             * never changes a track queued to stop/fade or disabled music. */
+            if(inst->music && !ma->transitionHold && !inst->releaseAfterFade &&
+               inst->currentGain<=0.001f && inst->targetGain<=0.001f &&
+               ma->musicGain>0.001f){
+                float restore=inst->transitionSavedGain>0.005f?
+                    inst->transitionSavedGain:1.0f;
+                inst->currentGain=restore;inst->targetGain=restore;
+                inst->fadeTimeRemaining=0.0f;
+                alSourcef(inst->alSource,AL_GAIN,
+                           restore*instanceCategoryGain(ma,inst));
+                vitaAudioLog("vita_bgm_resume_restore","music",
+                             "explicit_resume gain_recovered=1");
+            }
+#endif
         }
     } else {
         repeat(MAX_SOUND_INSTANCES, i) {
             SoundInstance* inst = &ma->instances[i];
             if (inst->active && inst->soundIndex == soundOrInstance &&
                 !inst->pausedByDisabled && !inst->pausedByTransition) {
-                resumeInstanceIfReady(inst);
+                inst->pausedByGame=false;
+            resumeInstanceIfReady(inst);
+#ifdef PLATFORM_VITA
+                if(inst->music && !ma->transitionHold && !inst->releaseAfterFade &&
+                   inst->currentGain<=0.001f && inst->targetGain<=0.001f &&
+                   ma->musicGain>0.001f){
+                    float restore=inst->transitionSavedGain>0.005f?
+                        inst->transitionSavedGain:1.0f;
+                    inst->currentGain=restore;inst->targetGain=restore;
+                    inst->fadeTimeRemaining=0.0f;
+                    alSourcef(inst->alSource,AL_GAIN,
+                               restore*instanceCategoryGain(ma,inst));
+                    vitaAudioLog("vita_bgm_resume_restore","music",
+                                 "explicit_resume gain_recovered=1");
+                }
+#endif
             }
         }
     }
@@ -1290,6 +1453,7 @@ static void maPauseAll(AudioSystem* audio) {
     repeat(MAX_SOUND_INSTANCES, i) {
         SoundInstance* inst = &ma->instances[i];
         if (inst->active && alSourceIsPlaying(inst->alSource)) {
+            inst->pausedByGame=true;
             alSourcePause(inst->alSource);
         }
     }
@@ -1301,6 +1465,7 @@ static void maResumeAll(AudioSystem* audio) {
     repeat(MAX_SOUND_INSTANCES, i) {
         SoundInstance* inst = &ma->instances[i];
         if (inst->active && !inst->pausedByDisabled && !inst->pausedByTransition) {
+            inst->pausedByGame=false;
             resumeInstanceIfReady(inst);
         }
     }
@@ -1334,7 +1499,35 @@ static void alResume(AudioSystem* audio) {
 static void maSetSoundGain(AudioSystem* audio, int32_t soundOrInstance, float gain, uint32_t timeMs) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    // Before GMS 2024.11 a stream index's gain does not reach instances that are
+    // already playing. mus_loop_ext() relies on that: the instance gets its own gain.
+    if (soundOrInstance >= AUDIO_STREAM_INDEX_BASE) return;
+
+#ifdef PLATFORM_VITA
+    // Sweet Cap'n Cakes: "Everyone is dancing!" fades its boss track by sound asset. Record
+    // whether such a fade reached a live instance, so the next log can settle that report.
+    if (!isSoundInstanceHandle(soundOrInstance) && timeMs > 0 && soundOrInstance >= 0) {
+        int matched = 0, held = 0;
+        repeat(MAX_SOUND_INSTANCES, i) {
+            SoundInstance* candidate = &ma->instances[i];
+            if (!candidate->active || candidate->soundIndex != soundOrInstance || !candidate->music) continue;
+            matched++;
+            if (ma->transitionHold && !candidate->pausedByTransition) held++;
+        }
+        DataWin* fadeDw = ma->base.audioGroups != nullptr && arrlen(ma->base.audioGroups) > 0 ?
+                          ma->base.audioGroups[0] : nullptr;
+        const char* fadeName = fadeDw != nullptr && (uint32_t) soundOrInstance < fadeDw->sond.count ?
+                               fadeDw->sond.sounds[soundOrInstance].name : nullptr;
+        if (matched > 0 || (fadeName != nullptr && strncmp(fadeName, "snd_", 4) != 0)) {
+            char fadeDetail[96];
+            snprintf(fadeDetail, sizeof(fadeDetail), "gain=%.3f ms=%u matched=%d held_by_transition=%d",
+                     gain, (unsigned int) timeMs, matched, held);
+            vitaAudioLog("music_asset_fade", fadeName, fadeDetail);
+        }
+    }
+#endif
+
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr) {
             // Room End fades the current BGM before the destination room can
@@ -1380,7 +1573,7 @@ static void maSetSoundGain(AudioSystem* audio, int32_t soundOrInstance, float ga
 static float maGetSoundGain(AudioSystem* audio, int32_t soundOrInstance) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr) return inst->currentGain;
     } else {
@@ -1397,7 +1590,13 @@ static float maGetSoundGain(AudioSystem* audio, int32_t soundOrInstance) {
 static void maSetSoundPitch(AudioSystem* audio, int32_t soundOrInstance, float pitch) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    // Remember it for later plays, then fall through to also update playing instances.
+    if (soundOrInstance >= AUDIO_STREAM_INDEX_BASE &&
+        soundOrInstance < AUDIO_STREAM_INDEX_BASE + MAX_AUDIO_STREAMS) {
+        ma->streams[soundOrInstance - AUDIO_STREAM_INDEX_BASE].initialPitch = pitch;
+    }
+
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr) {
             alSourcef(inst->alSource, AL_PITCH, pitch);
@@ -1416,7 +1615,7 @@ static float maGetSoundPitch(AudioSystem* audio, int32_t soundOrInstance) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
     float pitch = 1.0f;
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr) alGetSourcef(inst->alSource, AL_PITCH, &pitch);
     } else {
@@ -1448,7 +1647,7 @@ static float streamCursorSeconds(SoundInstance* inst) {
 static float maGetTrackPosition(AudioSystem* audio, int32_t soundOrInstance) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr) {
             if (inst->streaming) return streamCursorSeconds(inst);
@@ -1502,6 +1701,11 @@ static void setInstanceTrackPosition(AlAudioSystem* ma, SoundInstance* inst, flo
         for (int i = 0; i < detachedCount; i++)
             inst->streamBuffers[i] = detached[i];
 
+        // Same end-marker caveat as the underrun path in maUpdate: on Vita's OpenAL a
+        // drained source can stay stopped when fresh buffers are attached without a rewind.
+        alSourceRewind(inst->alSource);
+        alSourcei(inst->alSource, AL_BUFFER, 0);
+
         if (!stb_vorbis_seek(v, sample)) {
             stb_vorbis_seek_start(v);
             sample = 0;
@@ -1549,7 +1753,7 @@ static void setInstanceTrackPosition(AlAudioSystem* ma, SoundInstance* inst, flo
 static void maSetTrackPosition(AudioSystem* audio, int32_t soundOrInstance, float positionSeconds) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         SoundInstance* inst = findInstanceById(ma, soundOrInstance);
         if (inst != nullptr) {
             setInstanceTrackPosition(ma, inst, positionSeconds);
@@ -1569,7 +1773,7 @@ static float maGetSoundLength(AudioSystem* audio, int32_t soundOrInstance) {
     AlAudioSystem* ma = (AlAudioSystem*) audio;
 
     SoundInstance* match = nullptr;
-    if (soundOrInstance >= SOUND_INSTANCE_ID_BASE) {
+    if (isSoundInstanceHandle(soundOrInstance)) {
         match = findInstanceById(ma, soundOrInstance);
     } else {
         repeat(MAX_SOUND_INSTANCES, i) {
@@ -1740,6 +1944,7 @@ static int32_t maCreateStream(AudioSystem* audio, const char* filename) {
     ma->streams[freeSlot].active = true;
     ma->streams[freeSlot].pendingDestroy = false;
     ma->streams[freeSlot].filePath = resolved;
+    ma->streams[freeSlot].initialPitch = 1.0f;
 
     int32_t streamIndex = AUDIO_STREAM_INDEX_BASE + freeSlot;
 #ifdef PLATFORM_VITA
@@ -2001,6 +2206,88 @@ void AlAudioSystem_setCategoryGains(AlAudioSystem* ma, float musicGain, float sf
     }
 }
 
+/* VitaGL music recovery after repeated castle/festival transitions.
+ * Never override explicit GML pauses, settings disable, transition queues,
+ * video handoff or a finished/retiring song. */
+void AlAudioSystem_recoverUnexpectedMusicPauses(AlAudioSystem* ma){
+#ifdef PLATFORM_VITA
+    if(!ma || ma->disabled || ma->transitionHold || ma->videoAudioHandoff)return;
+    for(int i=0;i<MAX_SOUND_INSTANCES;i++){
+        SoundInstance*inst=&ma->instances[i];
+        if(!inst->active || !inst->streaming || !inst->music ||
+           inst->pausedByGame || inst->pausedByDisabled ||
+           inst->pausedByTransition || inst->pendingTransitionStop ||
+           inst->releaseAfterFade || inst->streamEnded ||
+           !inst->alSource || !alIsSource(inst->alSource))continue;
+        ALint state=AL_INITIAL,queued=0;
+        alGetSourcei(inst->alSource,AL_SOURCE_STATE,&state);
+        alGetSourcei(inst->alSource,AL_BUFFERS_QUEUED,&queued);
+        if(queued<=0)continue;
+        /* Disabling/re-enabling Audio in Game Settings wakes a dormant
+         * OpenAL source and reapplies AL_GAIN. Do just that for an existing
+         * expected-to-be-audible music stream, without recreating the music,
+         * resetting the decoder/cursor or disturbing intentional story
+         * silence. Existing sources in AL_PLAYING may have lost their gain
+         * after the last scene fade; an explicit zero GML volume is honored. */
+        float expected=inst->currentGain * instanceCategoryGain(ma,inst);
+        if(expected<=0.001f || inst->fadeTimeRemaining>0.0f)continue;
+        if(state==AL_PAUSED){
+            alSourcePlay(inst->alSource);
+            static unsigned pauses=0;
+            if(pauses++<18u)vitaAudioLog("vitagl_bgm_pause_recovered",
+                                         "music","queued_resume=1");
+        }else if(state==AL_PLAYING){
+            ALfloat actual=0.0f;
+            alGetSourcef(inst->alSource,AL_GAIN,&actual);
+            if(actual<0.001f){
+                alSourcef(inst->alSource,AL_GAIN,expected);
+                static unsigned gains=0;
+                if(gains++<18u){
+                    char msg[110];
+                    snprintf(msg,sizeof(msg),
+                      "state=%d queued=%d expected=%.3f old_gain=%.3f",
+                      (int)state,(int)queued,(double)expected,(double)actual);
+                    vitaAudioLog("vitagl_bgm_gain_recovered","music",msg);
+                }
+            }
+        }
+    }
+#else
+    (void)ma;
+#endif
+}
+
+/* Low-frequency snapshot of what OpenAL actually reports for each music source. The logs for
+ * room_legend and room_dark_chase show the streams PLAYING while the player reports silence;
+ * the existing start/stop events cannot tell those apart, this can. */
+void AlAudioSystem_logMusicState(AlAudioSystem* ma, const char* roomName){
+#ifdef PLATFORM_VITA
+    if(!ma)return;
+    for(int i=0;i<MAX_SOUND_INSTANCES;i++){
+        SoundInstance*inst=&ma->instances[i];
+        if(!inst->active||!inst->music||!inst->alSource||!alIsSource(inst->alSource))continue;
+        ALint state=AL_INITIAL,queued=0,processed=0;
+        ALfloat gain=0.0f,pitch=0.0f;
+        alGetSourcei(inst->alSource,AL_SOURCE_STATE,&state);
+        alGetSourcei(inst->alSource,AL_BUFFERS_QUEUED,&queued);
+        alGetSourcei(inst->alSource,AL_BUFFERS_PROCESSED,&processed);
+        alGetSourcef(inst->alSource,AL_GAIN,&gain);
+        alGetSourcef(inst->alSource,AL_PITCH,&pitch);
+        char detail[220];
+        snprintf(detail,sizeof(detail),
+            "id=%d sound=%d state=%d queued=%d processed=%d al_gain=%.3f pitch=%.3f cur=%.3f target=%.3f cat=%.3f played=%llu paused_game=%d paused_transition=%d paused_disabled=%d hold=%d",
+            (int)inst->instanceId,(int)inst->soundIndex,(int)state,(int)queued,(int)processed,
+            (double)gain,(double)pitch,(double)inst->currentGain,(double)inst->targetGain,
+            (double)ma->musicGain,(unsigned long long)inst->playedSamples,
+            inst->pausedByGame?1:0,inst->pausedByTransition?1:0,inst->pausedByDisabled?1:0,
+            ma->transitionHold?1:0);
+        vitaAudioLog("music_state",roomName,detail);
+    }
+#else
+    (void)ma;(void)roomName;
+#endif
+}
+
 void AlAudioSystem_setDisabled(AlAudioSystem* ma, bool disabled) {
     if (ma == nullptr || ma->disabled == disabled) return;
     ma->disabled = disabled;
@@ -2181,8 +2468,65 @@ void AlAudioSystem_setTransitionHold(AlAudioSystem* ma, bool held) {
                 ALint queued = 0;
                 if (inst->streaming)
                     alGetSourcei(inst->alSource, AL_BUFFERS_QUEUED, &queued);
-                if (!inst->streaming || queued > 0)
+                if (!inst->streaming || queued > 0) {
+                    if (!inst->streaming) {
+                        ALint srcState = AL_INITIAL;
+                        alGetSourcei(inst->alSource, AL_SOURCE_STATE, &srcState);
+                        if (srcState == AL_STOPPED)
+                            alSourceRewind(inst->alSource);
+                    }
                     alSourcePlay(inst->alSource);
+                }
+#ifdef PLATFORM_VITA
+                /* PROCESS_LOGO creates AUDIO_INTRONOISE as a DataWin
+                 * external-OGG SOND resource, NOT audio_create_stream().
+                 * It is decoded into a single OpenAL AL_BUFFER and its
+                 * soundIndex is a SOND id (below AUDIO_STREAM_INDEX_BASE).
+                 * The old probe incorrectly required streaming + stream id
+                 * and NEVER executed in Chapters 2/3. */
+                const Sound* logoSound=nullptr;
+                if(!inst->music && inst->soundIndex>=0 &&
+                   inst->soundIndex<AUDIO_STREAM_INDEX_BASE &&
+                   ma->base.audioGroups && arrlen(ma->base.audioGroups)>0 &&
+                   ma->base.audioGroups[0] &&
+                   (uint32_t)inst->soundIndex<ma->base.audioGroups[0]->sond.count)
+                    logoSound=&ma->base.audioGroups[0]->sond.sounds[inst->soundIndex];
+                const char*logoName=logoSound?
+                    (logoSound->file?logoSound->file:logoSound->name):nullptr;
+                if(logoName && strstr(logoName,"AUDIO_INTRONOISE")){
+                    ALint state=AL_INITIAL;
+                    ALint q=0,buffer=0;
+                    ALfloat gain=0.0f;
+                    alGetSourcei(inst->alSource,AL_SOURCE_STATE,&state);
+                    if(inst->streaming)
+                        alGetSourcei(inst->alSource,AL_BUFFERS_QUEUED,&q);
+                    else{
+                        alGetSourcei(inst->alSource,AL_BUFFER,&buffer);
+                        q=buffer!=0?1:0;
+                    }
+                    alGetSourcef(inst->alSource,AL_GAIN,&gain);
+                    const float expected=inst->currentGain*instanceCategoryGain(ma,inst);
+                    if(!ma->disabled && !inst->pausedByDisabled && q>0 &&
+                       expected>0.001f && gain<0.001f){
+                        alSourcef(inst->alSource,AL_GAIN,expected);
+                        alGetSourcef(inst->alSource,AL_GAIN,&gain);
+                    }
+                    if(!ma->disabled && !inst->pausedByDisabled && q>0 &&
+                       expected>0.001f &&
+                       (state==AL_INITIAL||state==AL_STOPPED)){
+                        if(state==AL_STOPPED&&!inst->streaming)
+                            alSourceRewind(inst->alSource);
+                        alSourcePlay(inst->alSource);
+                        alGetSourcei(inst->alSource,AL_SOURCE_STATE,&state);
+                    }
+                    char introState[205];
+                    snprintf(introState,sizeof(introState),
+                        "state=%d queued=%d buffer=%d streaming=%d gain=%.3f expected=%.3f disabled=%d",
+                        (int)state,(int)q,(int)buffer,inst->streaming?1:0,
+                        (double)gain,(double)expected,ma->disabled?1:0);
+                    vitaAudioLog("logo_sfx_release_verified",logoName,introState);
+                }
+#endif
             }
             inst->transitionSnapshotValid = false;
         }

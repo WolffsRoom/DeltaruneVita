@@ -20,7 +20,7 @@ CENTRAL_LANG_ROOT = PROJECT_ROOT / "mods" / "Lang"
 STEAM_ROOT = BUILD_PATCH_ROOT / "SteamFiles" / "DELTARUNE"
 DEV_ROOT = BUILD_PATCH_ROOT / "VitaFiles" / "deltarune"
 PATCH_ROOT = BUILD_PATCH_ROOT / "patch_data"
-PORT_VERSION = "0.73"
+PORT_VERSION = "0.81"
 
 
 def prepare_vita_output(source: Path, relative: Path, temporary: Path) -> Path:

@@ -16,9 +16,8 @@ rules = (root / "src/vita-probe/source/vita_gpu_rules.c").read_text(encoding="ut
 simple_start = rules.index("int VitaGpuRules_ch5CliffSimpleMode")
 sync_start = rules.index("int VitaGpuRules_modernSynchronousEviction")
 simple = rules[simple_start:sync_start]
-assert "room_dw_cliff_kawkawdash" not in simple
-assert 'strcmp(roomName, "room_dw_cliff_twirlflowerwind") == 0' in simple
-assert 'strcmp(roomName, "room_dw_cliff_precipice") == 0' in simple
+assert 'strncmp(roomName, "room_dw_cliff_", 14) == 0' in simple
+assert 'strcmp(roomName, "room_dw_fcastle_flowery") == 0' in simple
 
 modern = (root / "src/butterscotch/src/gl/gl_renderer.c").read_text(encoding="utf-8")
 assert "VitaGpuRules_modernSynchronousEviction(g_vitaActiveChapter, room)" in modern

@@ -28,6 +28,10 @@
 #include "bs_renderer_contract.h"
 #include "image_decoder.h"
 #include "runner.h"
+#include "runner_mouse.h"
+#include "vita_background_work.h"
+#include "vita_room_prefetch.h"
+#include "native_mic.h"
 #include "audio/openal/al_audio_system.h"
 #ifdef NATIVE_GXM_VIDEO
 #include "native_video_gxm.h"
@@ -39,6 +43,9 @@ int g_vitaProbeLoggingEnabled = 1;
 int g_nativeStretchFill = 0;
 int g_nativeBorderMode = 1;
 int g_nativeBetterBorders = 0;
+/* Observed by GXM application surface compositor each frame.
+ * Native UI is kept unwarped, and movies skip geometry distortion. */
+int g_nativeCrtTubeEnabled = 0;
 NVGcontext* g_nativeSettingsVG = NULL;
 int g_nativeGxpAvailable = 0;
 /* Same main-thread stack as the VitaGL executable (playable_main.c): the VM
@@ -280,7 +287,7 @@ static void log_shared_session_header(int chapter) {
 }
 
 /* Lab-only relaunch marker; the playable Modern-GL title has another path. */
-#define GX_CHAPTER_MARKER "ux0:data/deltarune_native_gxm_saves/next_chapter.txt"
+#define GX_CHAPTER_MARKER "ux0:data/deltarune_saves/gxm_next_chapter.txt"
 #define GX_CHAPTER_ROOT "ux0:data/deltarune/deltarunevita/chapter"
 
 static int consume_chapter_request(void) {
@@ -317,7 +324,7 @@ static void native_first_load_video_play(NVGcontext *vg) {
     VitaVideo_attachRenderer(vg);
     VitaVideo_setLooping(false);
     VitaVideo_setVolume(1.0f);
-    if (VitaVideo_open("app0:first_load.mp4") < 0) {
+    if (VitaVideo_open("app0:assets/vid/first_load.mp4") < 0) {
         log_line("NATIVE_GXM=first_load_video open_failed");
         VitaVideo_afterPresent();
         return;
@@ -335,11 +342,14 @@ static void native_first_load_video_play(NVGcontext *vg) {
 
         uint64_t now = sceKernelGetProcessTimeWide();
         if (!decoded && now - beginUs > 6000000ull) break;
-        if (endUs && now - endUs >= 3500000ull) break;
+        /* Movie already reached its final frame. A 3.5 s extra hold
+         * looked like the Chapter0 loader was frozen. Give it a short
+         * intentional ending and a ~0.3s fade instead. */
+        if (endUs && now - endUs >= 450000ull) break;
 
         float brightness = 1.0f;
-        if (endUs && now - endUs > 3000000ull)
-            brightness = 1.0f - (float)(now - endUs - 3000000ull) / 500000.0f;
+        if (endUs && now - endUs > 120000ull)
+            brightness = 1.0f - (float)(now - endUs - 120000ull) / 330000.0f;
         if (brightness < 0.0f) brightness = 0.0f;
 
         gxmBeginFrame();
@@ -350,9 +360,10 @@ static void native_first_load_video_play(NVGcontext *vg) {
         if (image > 0) {
             float vw = VitaVideo_getWidth(), vh = VitaVideo_getHeight();
             if (vw < 1.0f || vh < 1.0f) { vw = 960.0f; vh = 544.0f; }
-            float scale = fminf(960.0f / vw, 544.0f / vh);
-            float w = vw * scale, h = vh * scale;
-            float x = (960.0f - w) * 0.5f, y = (544.0f - h) * 0.5f;
+            /* The boot movie is authored for the Vita display. Keep it out
+             * of the game's 4:3 application-surface letterbox. */
+            float w = 960.0f, h = 544.0f;
+            float x = 0.0f, y = 0.0f;
             NVGpaint paint = nvgImagePattern(vg, x, y, w, h, 0.0f, image, 1.0f);
             paint.innerColor = nvgRGBAf(brightness, brightness, brightness, 1.0f);
             paint.outerColor = paint.innerColor;
@@ -381,7 +392,7 @@ static int restart_into_chapter(int chapter, NVGXMwindow* window) {
         log_line(line);
         return -1;
     }
-    sceIoMkdir("ux0:data/deltarune_native_gxm_saves",0777);
+    sceIoMkdir("ux0:data/deltarune_saves",0777);
     SceUID fd=sceIoOpen(GX_CHAPTER_MARKER,
         SCE_O_WRONLY|SCE_O_CREAT|SCE_O_TRUNC,0666);
     if(fd<0){log_line("NATIVE_GXM=game_change marker_open_failed");return -2;}
@@ -403,6 +414,9 @@ static int restart_into_chapter(int chapter, NVGXMwindow* window) {
 }
 
 #include "vita_settings.h"
+#include "native_dev_quick.inc"
+/* DEV-only room change context, consumed by Runner before Room Start. */
+int g_vitaDevJumpTarget=-1;
 #include "../../src/vita-common/vita_backend_selection.h"
 
 static void gxm_boot_marker_create(void) {
@@ -498,6 +512,149 @@ static void gxm_generate_progress(unsigned done, unsigned total, void* user) {
     gxmSwapBuffer();
     nvgxmCollectGarbage(g->vg);
 }
+
+/* Chapter loading screen, as in the VitaGL build: a random Toby animation
+ * and the localized "Loading" row, presented while data.win is parsed on a
+ * worker thread. */
+typedef struct {
+    BSBootstrapProbe* bs; int chapter; const char* mod; volatile int done; int result;
+} GxmParseJob;
+static int gxm_parse_thread(SceSize args, void* argp) {
+    GxmParseJob* job = *(GxmParseJob**)argp;
+    (void)args;
+    job->result = bs_bootstrap_load(job->bs, job->chapter, job->mod);
+    __sync_synchronize();
+    job->done = 1;
+    return sceKernelExitDeleteThread(0);
+}
+/* Chapter 0 parse started before the cold-boot video (see main). */
+static GxmParseJob g_bootParse;
+static GxmParseJob* g_bootParsePtr = &g_bootParse;
+static int g_bootParseStarted = 0;
+static void gxm_parse_begin_during_video(BSBootstrapProbe* bs, int chapter, const char* mod) {
+    g_bootParse = (GxmParseJob){bs, chapter, mod, 0, -1};
+    SceUID thread = sceKernelCreateThread("GXM_Parse", gxm_parse_thread, 0x10000100,
+                                          1024 * 1024, 0, 0, NULL);
+    if (thread >= 0 && sceKernelStartThread(thread, sizeof(g_bootParsePtr), &g_bootParsePtr) >= 0) {
+        g_bootParseStarted = 1;
+        log_line("NATIVE_GXM=chapter_parse started_during_video=1");
+    } else if (thread >= 0) {
+        sceKernelDeleteThread(thread);
+    }
+}
+static int gxm_parse_with_loading_screen(NVGcontext* vg, BSBootstrapProbe* bs,
+                                         int chapter, const char* mod, const char* language) {
+    /* Chapter 0 shows no loading screen: its data.win was read while the
+     * opening video played, or is small enough to read directly. */
+    if (chapter == 0) {
+        if (g_bootParseStarted) {
+            while (!g_bootParse.done) sceKernelDelayThread(2000);
+            __sync_synchronize();
+            return g_bootParse.result;
+        }
+        return bs_bootstrap_load(bs, chapter, mod);
+    }
+    static const char* folders[] = {"toby_sleep", "toby_dance", "toby_walk", "toby_spin", "toby_turn"};
+    static const int counts[] = {4, 18, 2, 8, 27};
+    static const uint32_t durations[] = {375000u, 125000u, 180000u, 125000u, 100000u};
+    GxmGenerateScreen labels = {vg, 0, 0, 0, 0};
+    char path[128];
+    snprintf(path, sizeof(path), "app0:assets/loading/Lang/%s.png", language ? language : "English");
+    labels.labels = gxm_load_png_image(vg, path, &labels.w, &labels.h);
+    if (!labels.labels)
+        labels.labels = gxm_load_png_image(vg, "app0:assets/loading/Lang/English.png", &labels.w, &labels.h);
+    uint64_t seed = sceKernelGetProcessTimeWide();
+    int anim = (int)((seed ^ (seed >> 17) ^ (seed >> 31)) % 5u);
+    int frames[27] = {0}, fw = 0, fh = 0, loaded = 0;
+    for (int i = 0; i < counts[anim]; i++) {
+        snprintf(path, sizeof(path), "app0:assets/loading/animations/%s/frame_%d.png", folders[anim], i);
+        int w = 0, h = 0;
+        frames[i] = gxm_load_png_image(vg, path, &w, &h);
+        if (frames[i]) { loaded++; fw = w; fh = h; }
+    }
+    GxmParseJob job = {bs, chapter, mod, 0, -1};
+    GxmParseJob* jobPtr = &job;
+    SceUID thread = sceKernelCreateThread("GXM_Parse", gxm_parse_thread, 0x10000100,
+                                          1024 * 1024, 0, 0, NULL);
+    if (thread < 0 || sceKernelStartThread(thread, sizeof(jobPtr), &jobPtr) < 0) {
+        if (thread >= 0) sceKernelDeleteThread(thread);
+        job.result = bs_bootstrap_load(bs, chapter, mod);
+        job.done = 1;
+    }
+    uint64_t start = sceKernelGetProcessTimeWide();
+    while (!job.done) {
+        gxmBeginFrame();
+        gxmClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        gxmClear();
+        nvgBeginFrame(vg, DISPLAY_WIDTH, DISPLAY_HEIGHT, 1.0f);
+        if (loaded) {
+            int frame = (int)(((sceKernelGetProcessTimeWide() - start) / durations[anim]) % (uint64_t)counts[anim]);
+            int img = frames[frame] ? frames[frame] : frames[0];
+            float x0 = anim == 4 ? 448.5f : 352.0f, y0 = anim == 4 ? 0.0f : 96.0f;
+            float x1 = anim == 4 ? 511.5f : 608.0f, y1 = anim == 4 ? 249.0f : 240.0f;
+            if (img && fw > 0 && fh > 0) {
+                NVGpaint p = nvgImagePattern(vg, x0, y0, x1 - x0, y1 - y0, 0, img, 1.0f);
+                nvgBeginPath(vg); nvgRect(vg, x0, y0, x1 - x0, y1 - y0);
+                nvgFillPaint(vg, p); nvgFill(vg);
+            }
+        }
+        gxm_draw_atlas_region(&labels, 0, 0, 1, 1.0f / 8.0f, 224, 258, 736, 322,
+                              nvgRGBA(255, 255, 255, 255));
+        nvgEndFrame(vg);
+        gxmEndFrame();
+        gxmSwapBuffer();
+        nvgxmCollectGarbage(vg);
+        sceKernelDelayThread(16000);
+    }
+    __sync_synchronize();
+    for (int i = 0; i < 27; i++) if (frames[i]) nvgDeleteImage(vg, frames[i]);
+    if (labels.labels) nvgDeleteImage(vg, labels.labels);
+    return job.result;
+}
+/* Speculative room payload stage: one bounded 2MiB reservation per job,
+ * reading through a separate FILE* on an application user core. The GAME
+ * thread remains the ONLY writer to DataWin room pointers. The candidate
+ * order follows repeat cold entrances observed in Ch2/Ch5 hardware logs.
+ * No GPU commands or texture ownership may cross the worker boundary. */
+static void gxm_async_room_tick(DataWin* dw,int chapter,uint32_t frame) {
+    static int lastChapter=-1;
+    static unsigned candidate=0;
+    static const char* const cyberRooms[]={
+        "room_dw_cyber_maze_queenscreen",
+        "room_dw_cyber_tasque_battle",
+        "room_dw_cyber_music_bullet",
+        "room_dw_city_big_1"
+    };
+    static const char* const townRooms[]={
+        "room_dw_castle_tv","room_dw_castle_town",
+        "room_town_south","room_town_north"
+    };
+    if(chapter!=lastChapter){lastChapter=chapter;candidate=0;}
+    VitaRoomPrefetch_pump();
+    if(!dw || frame%36u!=0 || (chapter!=2 && chapter!=5))return;
+    const char*const* names=chapter==2?cyberRooms:townRooms;
+    const unsigned size=4;
+    for(unsigned tries=0;tries<2 && candidate<size;tries++){
+        const char*target=names[candidate];
+        int found=-1;
+        for(uint32_t k=0;k<dw->room.count;k++)
+            if(dw->room.rooms[k].name&&strcmp(dw->room.rooms[k].name,target)==0){
+                found=(int)k;break;
+            }
+        if(found<0 || dw->room.rooms[found].payloadLoaded){
+            candidate++;continue;
+        }
+        if(VitaRoomPrefetch_prime(found)){
+            char message[164];
+            snprintf(message,sizeof(message),
+              "NATIVE_GXM=async_room_prefetch scheduled chapter=%d room=%s id=%d",
+              chapter,target,found);
+            log_line(message);
+            candidate++;
+        }
+        break;
+    }
+}
 static void gxm_prepare_texture_cache(NVGcontext* vg, Renderer* renderer, const char* language) {
     unsigned missing = BSContractRenderer_textureCacheMissing(renderer);
     char line[120];
@@ -536,9 +693,10 @@ static void draw_screen_filter(const VitaSettings* settings, Renderer* renderer)
     renderer->vtable->beginGUI(renderer, 960, 544, 0, 0, 960, 544,
                                RENDER_TARGET_HOST_FRAMEBUFFER);
     if (settings->screenFilterMode == 1) {
+        /* CRT Suave: low-cost mask on Native GXM. */
         for (int y = 3; y < 544; y += 6)
             renderer->vtable->drawRectangle(renderer, 0.0f, (float)y, 960.0f,
-                                             (float)(y + 1), 0x000000, 0.18f, false);
+                                             (float)(y + 1), 0x000000, 0.10f, false);
     } else if (settings->screenFilterMode == 3) {
         for (int y = 2; y < 544; y += 16)
             for (int x = ((y / 16) & 1) ? 8 : 0; x < 960; x += 16)
@@ -571,6 +729,46 @@ static void draw_screen_filter(const VitaSettings* settings, Renderer* renderer)
                                          0x000000, 0.045f, false);
         renderer->vtable->drawRectangle(renderer, 0, 0, 2, 544, 0xFF2038, 0.10f, false);
         renderer->vtable->drawRectangle(renderer, 958, 0, 960, 544, 0x20A8FF, 0.10f, false);
+    } else if (settings->screenFilterMode == 5) {
+        /* CRT Médio: exactly 15% stronger than the soft profile. */
+        for(int y=3;y<544;y+=6)
+            renderer->vtable->drawRectangle(renderer,0.0f,(float)y,960.0f,
+                (float)(y+1),0x000000,0.115f,false);
+    } else if (settings->screenFilterMode == 6) {
+        /* CRT Agressivo (GXM): scanlines, edge vignette and glass highlights.
+         * Source game surface uses gentle barrel-like row distortion during
+         * native GXM composite; host GUI stays sharp and no readback needed. */
+        for(int y=3;y<544;y+=6)
+            renderer->vtable->drawRectangle(renderer,0.0f,(float)y,960.0f,
+                (float)(y+1),0x000000,0.16f,false);
+        NVGcontext* vg=g_nativeSettingsVG;
+        if(vg){
+            nvgSave(vg);
+            nvgResetScissor(vg);
+            NVGpaint tube=nvgRadialGradient(vg,480,272,245,345,
+                                            nvgRGBA(0,0,0,0),
+                                            nvgRGBA(0,0,0,125));
+            nvgBeginPath(vg);
+            nvgRect(vg,0,0,960,544);
+            nvgFillPaint(vg,tube);nvgFill(vg);
+            /* Soft rectangular light reflection near the top tube glass. */
+            NVGpaint light=nvgLinearGradient(vg,480,0,480,126,
+                                            nvgRGBA(225,238,255,25),
+                                            nvgRGBA(225,238,255,0));
+            nvgBeginPath(vg);nvgRect(vg,0,0,960,122);
+            nvgFillPaint(vg,light);nvgFill(vg);
+            /* Mask four exterior corners with curved boundary (tube). */
+            for(int i=0;i<4;i++){
+                nvgSave(vg);
+                nvgTranslate(vg,(i&1)?960.0f:0.0f,(i&2)?544.0f:0.0f);
+                nvgScale(vg,(i&1)?-1.0f:1.0f,(i&2)?-1.0f:1.0f);
+                nvgBeginPath(vg);nvgMoveTo(vg,0,0);nvgLineTo(vg,28,0);
+                nvgBezierTo(vg,10,0,0,9,0,28);
+                nvgClosePath(vg);nvgFillColor(vg,nvgRGBA(0,0,0,239));
+                nvgFill(vg);nvgRestore(vg);
+            }
+            nvgRestore(vg);
+        }
     }
     renderer->vtable->endGUI(renderer);
 }
@@ -600,6 +798,8 @@ static void log_audio_metrics(AudioSystem *audio, uint32_t frame) {
     if (!audio) return;
     AlAudioSystem *a=(AlAudioSystem*)audio;
     int active=0, music=0, effects=0, streams=0, queued=0, playing=0;
+    float bgmGain=-1.0f,bgmTarget=-1.0f;
+    int bgmSourceState=-1,bgmTransition=-1;
     int streamSlots=0;
     for(int i=0;i<MAX_AUDIO_STREAMS;i++)
         if(a->streams[i].active)streamSlots++;
@@ -607,11 +807,16 @@ static void log_audio_metrics(AudioSystem *audio, uint32_t frame) {
         SoundInstance *s=&a->instances[i];
         if(!s->active)continue;
         active++;music+=s->music?1:0;effects+=s->music?0:1;
+        if(s->music){
+            bgmGain=s->currentGain;bgmTarget=s->targetGain;
+            bgmTransition=s->pausedByTransition?1:0;
+        }
         if(s->streaming)streams++;
         if(a->alContext && s->alSource) {
             ALint state=0,q=0;
             alGetSourcei(s->alSource,AL_SOURCE_STATE,&state);
             if(state==AL_PLAYING)playing++;
+            if(s->music)bgmSourceState=(int)state;
             if(s->streaming){alGetSourcei(s->alSource,AL_BUFFERS_QUEUED,&q);queued+=q;}
         }
     }
@@ -621,6 +826,13 @@ static void log_audio_metrics(AudioSystem *audio, uint32_t frame) {
       (unsigned long)frame,a->alDevice!=NULL,a->alContext!=NULL,
       active,playing,music,effects,streams,queued,streamSlots);
     log_line(m);
+    if(music && (frame<8 || frame%300==0)){
+        snprintf(m,sizeof(m),
+          "NATIVE_GXM=bgm_state frame=%u source=%d gain=%.3f target=%.3f category=%.3f hold=%d paused_transition=%d",
+          frame,bgmSourceState,(double)bgmGain,(double)bgmTarget,
+          (double)a->musicGain,a->transitionHold?1:0,bgmTransition);
+        log_line(m);
+    }
     if(a->alContext && streamSlots>0 && (frame<5 || frame%600==0)){
         for(int i=0;i<MAX_AUDIO_STREAMS;i++){
             if(!a->streams[i].active)continue;
@@ -830,6 +1042,221 @@ static int run_native_shader_visual_probe(NVGcontext*vg) {
     return 1;
 }
 
+#include "egg_intro.inc"
+
+/* Chapter 4 Mike's hand uses PC mouse_x/y even when a Vita controller is
+ * present. Keep a real virtual mouse instead of moving a decorative sprite.
+ * Only arm this bridge while obj_mike_controller is active, so inventory,
+ * dialogs and all other chapters retain ordinary controls. */
+typedef struct VitaGxmMouseBridge {
+    float x,y;
+    bool initialized,down,wasEnabled,touching;
+    unsigned reportCount;
+    unsigned touchHeldFrames;
+} VitaGxmMouseBridge;
+static VitaGxmMouseBridge g_mikeMouse;
+static bool gxm_mike_has_mouse_scene(Runner *runner){
+    if(!runner||!runner->dataWin)return false;
+    /* Room scene check is called from both the audio scheduler and mouse
+     * bridge. Avoid duplicate object-graph traversal in heavy Mike fights.
+     * Positive results stay valid until room/runtime changes; negative
+     * results recheck every 100ms for dynamically spawned controllers. */
+    static Runner*cachedRunner=NULL;
+    static int cachedRoom=-10000,cachedResult=0;
+    static uint64_t cachedAt=0;
+    uint64_t now=sceKernelGetProcessTimeWide();
+    /* Revalidate even positive results occasionally: after Mike's
+     * controller disappears, a cached true must not leave a ghost cursor. */
+    if(cachedRunner==runner&&cachedRoom==runner->currentRoomIndex &&
+       now-cachedAt<100000)return cachedResult!=0;
+    cachedRunner=runner;cachedRoom=runner->currentRoomIndex;
+    cachedAt=now;cachedResult=0;
+    for(size_t i=0;i<arrlen(runner->instances);i++){
+        Instance* inst=runner->instances[i];
+        if(!inst||!inst->active||inst->objectIndex<0||
+           (uint32_t)inst->objectIndex>=runner->dataWin->objt.count)continue;
+        const char* name=runner->dataWin->objt.objects[inst->objectIndex].name;
+        if(name&&(!strcmp(name,"obj_mike_controller")||
+                  !strcmp(name,"obj_mike_battle_test"))){
+            cachedResult=1;return true;
+        }
+    }
+    return false;
+}
+static bool gxm_mike_mouse_update(Runner*runner,const SceCtrlData *pad,
+                                   bool available,bool touchClicks){
+    if(!runner||!runner->mouse||!pad)return false;
+    bool enabled=available&&gxm_mike_has_mouse_scene(runner);
+    RunnerMouse_beginFrame(runner->mouse);
+    if(!enabled){
+        if(g_mikeMouse.down)RunnerMouse_onButtonUp(runner->mouse,1);
+        g_mikeMouse.down=false;g_mikeMouse.wasEnabled=false;
+        g_mikeMouse.touching=false;
+        g_mikeMouse.touchHeldFrames=0;
+        g_mikeMouse.initialized=false;
+        return false;
+    }
+    if(!g_mikeMouse.initialized){
+        g_mikeMouse.x=480.0f;g_mikeMouse.y=272.0f;
+        g_mikeMouse.initialized=true;
+    }
+    bool inMikeBattle=runner->currentRoom&&runner->currentRoom->name&&
+        strstr(runner->currentRoom->name,"room_dw_castle_tv_zone_battle")!=NULL;
+    SceTouchData touch={0};
+    bool touching=false;
+    if(sceTouchPeek(SCE_TOUCH_PORT_FRONT,&touch,1)>0&&touch.reportNum>0){
+        g_mikeMouse.x=(float)touch.report[0].x*(960.0f/1919.0f);
+        g_mikeMouse.y=(float)touch.report[0].y*(544.0f/1087.0f);
+        touching=true;
+    }else{
+        /* Right analog controls the cursor in Mike's rooms while left
+         * continues moving Kris. In battle BOTH sticks steer the cursor.
+         * Add their deltas so neither input is silently discarded. */
+        int rx=(int)pad->rx-128,ry=(int)pad->ry-128;
+        int lx=inMikeBattle?(int)pad->lx-128:0;
+        int ly=inMikeBattle?(int)pad->ly-128:0;
+        float dx=(abs(rx)>19?(float)rx:0)+(abs(lx)>19?(float)lx:0);
+        float dy=(abs(ry)>19?(float)ry:0)+(abs(ly)>19?(float)ly:0);
+        g_mikeMouse.x+=fmaxf(-128.0f,fminf(128.0f,dx))*7.0f/128.0f;
+        g_mikeMouse.y+=fmaxf(-128.0f,fminf(128.0f,dy))*7.0f/128.0f;
+    }
+    if(g_mikeMouse.x<0)g_mikeMouse.x=0;
+    if(g_mikeMouse.x>959)g_mikeMouse.x=959;
+    if(g_mikeMouse.y<0)g_mikeMouse.y=0;
+    if(g_mikeMouse.y>543)g_mikeMouse.y=543;
+    /* Use the runner's game-view conversion, including letterbox/camera. */
+    Runner_updateMousePosition(runner,960,544,g_mikeMouse.x,g_mikeMouse.y);
+    g_mikeMouse.touching=touching;
+    if(touching){
+        if(g_mikeMouse.touchHeldFrames<120)g_mikeMouse.touchHeldFrames++;
+    }else g_mikeMouse.touchHeldFrames=0;
+    /* Holding a finger for ~150ms is a real mouse click in both modes.
+     * A short tap still clicks immediately when the microphone is ON;
+     * with mic OFF short taps remain reserved for sound simulation. */
+    bool touchMouseClick=touching&&
+        (touchClicks||g_mikeMouse.touchHeldFrames>=9);
+    bool held=(pad->buttons&(SCE_CTRL_CROSS|SCE_CTRL_LTRIGGER|
+                              SCE_CTRL_RTRIGGER))!=0 || touchMouseClick;
+    if(held&&!g_mikeMouse.down)RunnerMouse_onButtonDown(runner->mouse,1);
+    else if(!held&&g_mikeMouse.down)RunnerMouse_onButtonUp(runner->mouse,1);
+    g_mikeMouse.down=held;
+    if(!g_mikeMouse.wasEnabled){
+        log_line("NATIVE_GXM=ch4_mike_virtual_mouse enabled=1 analog=right battle=both left_movement_preserved touch_hold=click");
+        g_mikeMouse.wasEnabled=true;
+    }
+    if(++g_mikeMouse.reportCount%480==0){
+        char line[132];snprintf(line,sizeof(line),
+          "NATIVE_GXM=ch4_mike_mouse x=%.1f y=%.1f click=%d touch=%d",
+          g_mikeMouse.x,g_mikeMouse.y,(int)held,(int)touching);
+        log_line(line);
+    }
+    return true;
+}
+/* Mike microphone bridge. Input modes are exclusive:
+ * - mic ON: calibrated sceAudioIn capture, touches never simulate volume.
+ * - mic OFF: right taps raise one of four stages; left taps lower it.
+ *   Hold stays at that stage, release drops to zero immediately.
+ * A timed tap series survives finger release but expires after 450ms.
+ * No per-frame VM symbol lookup or full room scan. */
+typedef struct GxmMikeInput {
+    int stage,side;
+    bool held,lastDown;
+    uint64_t lastTapUs;
+    VMContext*cachedVm;
+    int cachedVolumeVar,cachedUseMicVar,cachedRightClickVar;
+    int lastSent;
+} GxmMikeInput;
+static GxmMikeInput g_mikeInput={0};
+static void gxm_mike_mic_reset(void){
+    g_mikeInput.stage=0;g_mikeInput.side=0;
+    g_mikeInput.held=false;g_mikeInput.lastDown=false;
+    g_mikeInput.lastTapUs=0;g_mikeInput.lastSent=0;
+}
+static void gxm_mike_mic_update(Runner*runner,const VitaSettings*settings,
+                               int enabled){
+    if(!runner||!settings||!enabled||!runner->vmContext)return;
+    GxmMikeInput*m=&g_mikeInput;
+    if(m->cachedVm!=runner->vmContext){
+        m->cachedVm=runner->vmContext;
+        m->cachedVolumeVar=VM_getOrAllocateVarID(m->cachedVm,"microphone_volume");
+        m->cachedUseMicVar=VM_getOrAllocateVarID(m->cachedVm,"use_mic");
+        m->cachedRightClickVar=VM_getOrAllocateVarID(m->cachedVm,"right_click_mic");
+        gxm_mike_mic_reset();
+    }
+    if(runner->vmContext->globalScopeInstance){
+        Instance*g=runner->vmContext->globalScopeInstance;
+        if(m->cachedUseMicVar>=0 &&
+           !RValue_toBool(Instance_getSelfVar(g,m->cachedUseMicVar)))
+            Instance_setSelfVar(g,m->cachedUseMicVar,RValue_makeBool(true));
+        if(m->cachedRightClickVar>=0 &&
+           RValue_toReal(Instance_getSelfVar(g,m->cachedRightClickVar))!=0)
+            Instance_setSelfVar(g,m->cachedRightClickVar,RValue_makeReal(0));
+    }
+    int level=0;
+    if(settings->microphoneEnabled){
+        /* Do not blend touchscreen, R trigger or stale synthetic input
+         * with the real Vita microphone. No captured data = 0. */
+        gxm_mike_mic_reset();
+        if(VitaMic_isAvailable()){
+            level=VitaMic_getLevel()*settings->microphoneSensitivity/5;
+            if(level>100)level=100;
+        }
+    }else{
+        SceTouchData touch={0};
+        bool down=sceTouchPeek(SCE_TOUCH_PORT_FRONT,&touch,1)>0&&touch.reportNum>0;
+        uint64_t now=sceKernelGetProcessTimeWide();
+        if(down&&!m->lastDown){
+            /* The front touch surface is 1920x1088 on Vita. */
+            int side=touch.report[0].x>=960?1:-1;
+            bool inSeries=m->lastTapUs&&now-m->lastTapUs<=450000;
+            if(!inSeries && side>0)m->stage=0; /* fresh right sequence starts low;
+                                                * left always lowers last stage */
+            m->stage+=side;
+            if(m->stage<0)m->stage=0;
+            if(m->stage>4)m->stage=4;
+            m->side=side;
+            m->lastTapUs=now;
+            static unsigned traces=0;
+            if(traces++<20){
+                char msg[145];
+                snprintf(msg,sizeof(msg),
+                  "NATIVE_GXM=mike_touch_mic side=%s stage=%d volume=%d",
+                  side>0?"right":"left",m->stage,m->stage*25);
+                log_line(msg);
+            }
+        }
+        m->lastDown=down;
+        m->held=down;
+        /* Holding sustains the stage, releasing stops immediately. */
+        level=down?m->stage*25:0;
+        /* Keep the stage while idle (output is still ZERO). This lets a
+         * later left-side press lower the previously chosen intensity. */
+    }
+    if(level<0)level=0;
+    if(level>100)level=100;
+    if(m->cachedVolumeVar<0)return;
+    /* Resolve Mike owner by object index with room-local cached object.
+     * One instance scan per frame, no repeated string name resolution. */
+    static const DataWin*dataRef=NULL;
+    static int mikeObjectIndex=-1;
+    if(dataRef!=runner->dataWin){
+        dataRef=runner->dataWin;mikeObjectIndex=-1;
+        for(uint32_t i=0;i<runner->dataWin->objt.count;i++){
+            const char*name=runner->dataWin->objt.objects[i].name;
+            if(name&&strcmp(name,"obj_mike_controller")==0){
+                mikeObjectIndex=(int)i;break;
+            }
+        }
+    }
+    for(size_t i=0;i<arrlen(runner->instances);i++){
+        Instance*inst=runner->instances[i];
+        if(!inst||inst->destroyed||inst->objectIndex!=mikeObjectIndex)continue;
+        /* Always write the new level, including LOWER and ZERO. */
+        Instance_setSelfVar(inst,m->cachedVolumeVar,RValue_makeReal(level));
+        break;
+    }
+    m->lastSent=level;
+}
 int main(void) {
     gxm_boot_marker_create();
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
@@ -858,7 +1285,12 @@ int main(void) {
         .msaa = SCE_GXM_MULTISAMPLE_NONE,
         .swapInterval = 1,
         .dumpShader = 0,
-        .scenesPerFrame = 1,
+        /* The display target is begun several times per frame: the clear,
+         * the composite after the world pass and again after every surface
+         * switch in Post Draw/GUI. With 1 scene per frame each restart made
+         * the CPU wait for the GPU to finish the previous scene (logged as
+         * 25-33 ms in draw_detail pre_us). 8 is the GXM maximum. */
+        .scenesPerFrame = 8,
     };
     NVGXMwindow *window = gxmCreateWindow(&options);
     if (!window) {
@@ -876,11 +1308,27 @@ int main(void) {
     }
 
     g_nativeSettingsVG=vg;
+    bool nativeTrophiesForIntro=false;
     {
         /* System (NP) trophies, as in the VitaGL loop: set up once per
          * process, then queue any unlock that exists only in trophies.ini. */
-        bool nativeTrophies=VitaTrophies_init();
+        /* Vita3K currently dies while presenting the NP trophy setup dialog
+         * (also reproduced with the unmodified v0.79-6 binary). A deliberate
+         * emulator-only marker lets us smoke-test graphics without changing
+         * the system trophy path on physical Vita consoles. Never create this
+         * file on the console: it only belongs to an emulator's ux0:data. */
+        bool emulatorSkipTrophies=false;
+        {
+            SceUID trophySkip=sceIoOpen(
+                "ux0:data/deltarune/deltarunevita/gxm-emulator-skip-trophies.txt",
+                SCE_O_RDONLY,0);
+            if(trophySkip>=0){emulatorSkipTrophies=true;sceIoClose(trophySkip);}
+        }
+        if(emulatorSkipTrophies)
+            log_line("NATIVE_GXM=emulator_trophies skipped=1 opt_in_marker=1");
+        bool nativeTrophies=emulatorSkipTrophies?false:VitaTrophies_init();
         VitaSettings_setNativeTrophiesActive(&settings,nativeTrophies);
+        nativeTrophiesForIntro=nativeTrophies;
         uint32_t localMask=0;
         for(int id=0;id<30;id++)if(settings.trophiesUnlocked[id])localMask|=1u<<id;
         unsigned queued=nativeTrophies?VitaTrophies_syncMask(localMask):0;
@@ -891,25 +1339,71 @@ int main(void) {
             (unsigned)VitaTrophies_lastResult(),queued);
         log_line(trophyLine);
     }
+    /* Fresh launcher -> Wolff's egg tree prologue, not GML Chapter0.
+     * A chapter marker of '0' is the *original* chapter selector. That
+     * separates this VPK-only experience from every translated data.win.
+     * It also avoids the PT-BR mod's unsupported PC file-validation screen
+     * during the new prologue. */
+    if(activeChapter==0 && !hadChapterRequest && settings.prologuePending){
+        log_line("NATIVE_GXM=prologue_config value=s show=1");
+#ifdef NATIVE_GXM_VIDEO
+        /* Keep the original opening movie before the new tree scene. */
+        SceUID skip=sceIoOpen(
+            "ux0:data/deltarune/deltarunevita/gxm-emulator-skip-intro.txt",
+            SCE_O_RDONLY,0);
+        if(skip>=0){sceIoClose(skip);log_line("NATIVE_GXM=emulator_intro skipped=1 opt_in_marker=1");}
+        else native_first_load_video_play(vg);
+#endif
+        gxm_boot_marker_clear();
+        int status=egg_intro_run(vg,window,&settings,nativeTrophiesForIntro);
+        log_line(status<0?"NATIVE_GXM=egg_intro result=failed":
+                           "NATIVE_GXM=egg_intro result=completed");
+#ifdef NATIVE_GXM_VIDEO
+        VitaVideo_shutdown();
+#endif
+        nvgDeleteGXM(vg);
+        gxmDeleteWindow(window);
+        sceKernelExitProcess(status<0?1:0);
+        return status<0?1:0;
+    }
+    if(activeChapter==0 && !hadChapterRequest && !settings.prologuePending)
+        log_line("NATIVE_GXM=prologue_config value=n show=0 original_chapter0=1");
+    BSBootstrapProbe bs = {0};
+    const char *activeMod =
+        settings.modIndex >= 0 && settings.modIndex < settings.modCount ?
+        settings.modNames[settings.modIndex] : "English";
 #ifdef NATIVE_GXM_VIDEO
     if (activeChapter == 0 && !hadChapterRequest) {
-        native_first_load_video_play(vg);
+        /* Read Chapter 0's data.win while the opening video plays. */
+        gxm_parse_begin_during_video(&bs, activeChapter, activeMod);
+        /* SceAvPlayer first-load playback currently crashes in Vita3K's
+         * native path on this host. Opt-in diagnostic bypass, never enabled
+         * by default; Chapter 3/5 in-game movie playback remains unchanged. */
+        SceUID introSkip=sceIoOpen(
+            "ux0:data/deltarune/deltarunevita/gxm-emulator-skip-intro.txt",
+            SCE_O_RDONLY,0);
+        if(introSkip>=0){
+            sceIoClose(introSkip);
+            log_line("NATIVE_GXM=emulator_intro skipped=1 opt_in_marker=1");
+        }else native_first_load_video_play(vg);
         gxm_boot_marker_clear();
     }
 #endif
-    BSBootstrapProbe bs = {0};
     snprintf(chapterLine,sizeof(chapterLine),"NATIVE_GXM=butterscotch parse_begin chapter=%d",activeChapter);
     log_line(chapterLine);
     uint32_t bootstrapStartUs = sceKernelGetProcessTimeLow();
-    /* Experimental-GL's Game Settings controls shader availability.  An
-     * optional legacy gxm-native-shaders.txt overrides it: 0=off, 1=on.
-     * If libshacccg is missing we retain fixed native GXP safely. */
+    /* The in-game Native GXM shader setting is authoritative. Previous
+     * builds allowed a stale gxm-native-shaders.txt override to silently
+     * disable programs even while Game Settings displayed On. */
     {
-        const char*cfg="ux0:data/deltarune/deltarunevita/gxm-native-shaders.txt";
-        FILE*f=fopen(cfg,"rb");char option[8]={0};
-        if(f){fread(option,1,sizeof(option)-1,f);fclose(f);}
-        int requested=option[0]=='1'?1:
-                      option[0]=='0'?0:(settings.shadersEnabled?1:0);
+        /* The compact Chapter0 launcher does not use the runtime GXP
+         * programs. On the Vita this compiler init cost several seconds
+         * immediately after first_load, even though the data.win was
+         * already parsed in parallel with the movie. Chapter-specific
+         * restarts initialize them normally once a real chapter loads. */
+        int requested=(settings.shadersEnabled && activeChapter!=0)?1:0;
+        if(activeChapter==0 && settings.shadersEnabled)
+            log_line("NATIVE_GXM=shader_init deferred=chapter0_fastboot settings_preserved=1");
         if(requested){
             const char*module="ur0:data/libshacccg.suprx";
             int status=nvgxmEnableRuntimeShaders(vg,module);
@@ -919,7 +1413,7 @@ int main(void) {
             snprintf(message,sizeof(message),
               "NATIVE_GXM=shader_init requested=1 ready=%d mask=0x%02X result=0x%08X backend=vitaShaRK_gxp source=%s",
               g_nativeGxpAvailable,mask,(unsigned)status,
-              option[0]=='1'?"native_override":"game_settings");
+              "game_settings");
             log_line(message);
         }else log_line("NATIVE_GXM=shader_init requested=0 default=fixed_GXP");
     }
@@ -929,14 +1423,13 @@ int main(void) {
         sceKernelExitProcess(0);
         return 0;
     }
-    const char *activeMod =
-        settings.modIndex >= 0 && settings.modIndex < settings.modCount ?
-        settings.modNames[settings.modIndex] : "English";
     {
         extern int g_vitaSpanishModActive;
         g_vitaSpanishModActive=activeChapter>0&&strcmp(activeMod,"Spanish")==0;
     }
-    int bootstrapResult = bs_bootstrap_load(&bs,activeChapter,activeMod);
+    const char* loadingLanguage=strcmp(activeMod,"Russkiy")==0?"Russian":activeMod;
+    int bootstrapResult = gxm_parse_with_loading_screen(vg,&bs,activeChapter,activeMod,
+                                                        loadingLanguage);
     uint32_t bootstrapElapsedMs =
         (sceKernelGetProcessTimeLow() - bootstrapStartUs) / 1000u;
     char bsLine[190];
@@ -974,7 +1467,24 @@ int main(void) {
              runnerResult == 0 ? "constructed" : "failed", runnerResult,
              runnerElapsedMs, bs.runner ? bs.runner->currentRoomIndex : -1);
     log_line(runnerLine);
+    VitaBackgroundWork* gxmAsyncWork=NULL;
     if(runnerResult==0){
+        /* Optional, safe user-mode asynchronous I/O (no kernel hooks).
+         * Continue synchronously if memory or thread creation fails. */
+        /* The same config.ini used by Game Settings is authoritative.
+         * Old gxm-async-room-prefetch.txt markers are no longer needed. */
+        int enableAsync=settings.asyncRoomPrefetchEnabled?1:0;
+        if(enableAsync)
+            gxmAsyncWork=VitaBackgroundWork_create(2u*1024u*1024u);
+        if(gxmAsyncWork){
+            VitaRoomPrefetch_init(gxmAsyncWork,bs.runner->dataWin);
+            log_line(VitaBackgroundWork_usedUnlockedCore(gxmAsyncWork)?
+                "NATIVE_GXM=async_room_io started core=unlocked optional=1":
+                "NATIVE_GXM=async_room_io started core=user_fallback optional=1");
+        }else
+            log_line(enableAsync?
+                "NATIVE_GXM=async_room_io disabled reason=worker_create_failed fallback=sync":
+                "NATIVE_GXM=async_room_io disabled reason=user_opt_out fallback=sync");
         /* Match the PC launcher game_change behavior from the playable Vita port. */
         bs.runner->osType=OS_WINDOWS;
         char *launcherArgs[]={"eboot.bin","-game","data.win"};
@@ -992,6 +1502,8 @@ int main(void) {
             gxm_prepare_texture_cache(vg,bs.renderer,
                 strcmp(activeMod,"Russkiy")==0?"Russian":
                 (strcmp(activeMod,"English")==0?"English":activeMod));
+        if(activeChapter>0&&activeChapter<5)BSContractRenderer_preloadBattleCore(bs.renderer);
+        if(activeChapter==5)BSContractRenderer_preloadChapter5CastleTown(bs.renderer);
         log_audio_metrics(bs.audio,0);
         VitaSettings_applyAudio(&settings,bs.audio);
         log_line("NATIVE_GXM=settings shared_config_loaded");
@@ -1019,6 +1531,11 @@ int main(void) {
     uint32_t failureBlackFrames=0;
     bool failureExitHeld=false;
     int32_t lastRoomSeen=-1;
+    /* One continuous Ch5 transition cover: keep the outgoing shaded
+     * frame hidden throughout async room work, then fade onto the first
+     * freshly composed destination. Prevent black/old unshaded/black. */
+    bool ch5TransitionHolding=false;
+    unsigned ch5TransitionFade=0;
     int32_t devTargetRoom=-1,pendingDevRoom=-1;
     int32_t emulatorSequenceNextRoom=-1;
     uint32_t emulatorSequenceAtFrame=0;
@@ -1061,11 +1578,17 @@ int main(void) {
         }
     }
     bool devNavHeld=false;
+    bool devQuickOpen=false;
+    uint32_t devQuickPrevButtons=0;
+    int devQuickSelected=0,devQuickTargets[5]={-1,-1,-1,-1,-1};
+    const char*devQuickRooms[5]={0,0,0,0,0};
+    char devQuickStatus[128]="ROOM JUMP MAY REQUIRE STORY FLAGS";
     if(gameplayActive) {
         snprintf(chapterLine,sizeof(chapterLine),
             "NATIVE_GXM=butterscotch gameplay_requested chapter=%d control=automatic",activeChapter);
         log_line(chapterLine);
     }
+    VitaMic_start();
     uint32_t lastReportMicros = sceKernelGetProcessTimeLow();
     uint32_t lastReportFrames = 0;
     for (;;) {
@@ -1078,10 +1601,85 @@ int main(void) {
         if(gameplayActive && runnerResult==0){
             nativeTouchPoll(&settings,&pad,bs.audio);
             restartRequested=VitaSettings_handleInput(&settings,&pad,bs.audio);
+            bool shouldCapture=settings.microphoneEnabled &&
+                ((settings.open &&
+                  (settings.category+(!settings.devMode?1:0))==3) ||
+                 (activeChapter==4&&bs.runner&&gxm_mike_has_mouse_scene(bs.runner)));
+            VitaMic_request(shouldCapture);
+            /* Developer quick scenes: L+TRIANGLE from the existing Room
+             * Navigator opens five chapter-specific targets resolved from
+             * room headers. Joystick/D-pad navigation never reaches GML
+             * while the selection popup is visible. */
+            bool devQuickConsumed=false;
+            {
+                uint32_t pressed=pad.buttons&~devQuickPrevButtons;
+                devQuickPrevButtons=pad.buttons;
+                bool enabled=settings.devMode&&settings.devRoomNavEnabled&&
+                    !settings.open&&bs.runner&&bs.runner->dataWin;
+                if(!enabled){
+                    if(devQuickOpen)devQuickConsumed=true;
+                    devQuickOpen=false;
+                }else{
+                    if((pressed&SCE_CTRL_TRIANGLE) &&
+                       (pad.buttons&SCE_CTRL_LTRIGGER)){
+                        devQuickConsumed=true;
+                        devQuickOpen=!devQuickOpen;
+                        if(devQuickOpen){
+                            gxmDevQuickBuild(bs.runner->dataWin,activeChapter,devQuickTargets);
+                            for(int i=0;i<5;i++)
+                                devQuickRooms[i]=devQuickTargets[i]>=0?
+                                    bs.runner->dataWin->room.rooms[devQuickTargets[i]].name:NULL;
+                            devQuickSelected=0;
+                            snprintf(devQuickStatus,sizeof(devQuickStatus),
+                                "CANDIDATES  -  STORY FLAGS NOT INITIALIZED");
+                            char msg[140];snprintf(msg,sizeof(msg),
+                                "NATIVE_GXM=dev_quick_open chapter=%d candidates=%d,%d,%d,%d,%d",
+                                activeChapter,devQuickTargets[0],devQuickTargets[1],
+                                devQuickTargets[2],devQuickTargets[3],devQuickTargets[4]);
+                            log_line(msg);
+                        }
+                    }else if(devQuickOpen){
+                        devQuickConsumed=true;
+                        if(pressed&SCE_CTRL_UP)
+                            devQuickSelected=(devQuickSelected+4)%5;
+                        if(pressed&SCE_CTRL_DOWN)
+                            devQuickSelected=(devQuickSelected+1)%5;
+                        if(pressed&SCE_CTRL_CIRCLE)
+                            devQuickOpen=false;
+                        else if(pressed&SCE_CTRL_CROSS){
+                            int target=devQuickTargets[devQuickSelected];
+                            if(target<0 ||
+                               (uint32_t)target>=bs.runner->dataWin->room.count)
+                                snprintf(devQuickStatus,sizeof(devQuickStatus),
+                                    "NO MATCHING ROOM IN THIS CHAPTER");
+                            else if(bs.runner->pendingRoom>=0||pendingDevRoom>=0)
+                                snprintf(devQuickStatus,sizeof(devQuickStatus),
+                                    "WAIT: A ROOM TRANSITION IS ACTIVE");
+                            else if(target==bs.runner->currentRoomIndex){
+                                snprintf(devQuickStatus,sizeof(devQuickStatus),
+                                    "ALREADY IN THIS ROOM");
+                                devQuickOpen=false;
+                            }else{
+                                pendingDevRoom=target;
+                                devTargetRoom=target;
+                                devQuickOpen=false;
+                                char msg[180];
+                                snprintf(msg,sizeof(msg),
+                                   "NATIVE_GXM=dev_quick_jump chapter=%d category=%d target=%d room=%.80s",
+                                   activeChapter,devQuickSelected,target,
+                                   bs.runner->dataWin->room.rooms[target].name);
+                                log_line(msg);
+                            }
+                        }
+                    }
+                    if(devQuickConsumed||devQuickOpen)
+                        pad.buttons=0; /* consume OPEN, TELEPORT and CANCEL too */
+                }
+            }
             /* DEV was implemented in the playable VitaGL main loop, but
              * never wired into native GXM. D-pad browse, L+X teleport,
              * both isolated from game input while navigator is enabled. */
-            if(!settings.open&&settings.devMode&&settings.devRoomNavEnabled&&
+            if(!devQuickOpen&&!devQuickConsumed&&!settings.open&&settings.devMode&&settings.devRoomNavEnabled&&
                bs.runner&&bs.runner->dataWin&&bs.runner->dataWin->room.count>0){
                 int count=(int)bs.runner->dataWin->room.count;
                 if(devTargetRoom<0||devTargetRoom>=count)
@@ -1169,6 +1767,7 @@ int main(void) {
         }
         uint64_t frameStartUs=sceKernelGetProcessTimeWide();
         uint64_t frameStepEndUs=frameStartUs,frameDrawEndUs=frameStartUs;
+        bool roomChangedAfterDraw=false;
         bool castleTrace=gameplayActive&&runnerResult==0&&activeChapter==5&&
             bs.runner&&castlePhaseTraces<90&&
             (bs.runner->currentRoomIndex==54||bs.runner->pendingRoom==54||
@@ -1193,6 +1792,9 @@ int main(void) {
                 log_line("NATIVE_GXM=butterscotch room_init_complete");
             }
             if(gameFrames==0) log_line("NATIVE_GXM=butterscotch runner_step_begin");
+            if(gxmAsyncWork && bs.runner && bs.runner->dataWin &&
+               bs.runner->pendingRoom<0)
+                gxm_async_room_tick(bs.runner->dataWin,activeChapter,gameFrames);
             /* Left stick walks like the D-pad, with the VitaGL loop's
              * threshold (playable_main.c: |offset| > 48 of 128). */
             unsigned stickButtons=0;
@@ -1203,10 +1805,63 @@ int main(void) {
                 if(dx<-48)stickButtons|=SCE_CTRL_LEFT;
                 if(dx>48)stickButtons|=SCE_CTRL_RIGHT;
             }
-            update_runner_input(bs.runner,(settings.open||settings.controlEditMode||settings.adjustMode)?0:(pad.buttons|g_gameTouchButtons|stickButtons));
+            bool mouseGameplay=activeChapter==4 &&
+                !settings.open&&!settings.controlEditMode&&!settings.adjustMode;
+            bool mikeMouseActive=gxm_mike_mouse_update(bs.runner,&pad,mouseGameplay,settings.microphoneEnabled);
+            /* Physical X click must not double-trigger button1_p in Mike's
+             * attack scripts. Leave L/R and other inputs untouched. */
+            unsigned gameButtons=pad.buttons|g_gameTouchButtons|stickButtons;
+            /* Keep X as GP_FACE1 too: scr_mouse_leftclick() deliberately
+             * uses button1_p on consoles. In PC-mode the mouse bridge
+             * handles the same X press through RunnerMouse. */
+            (void)mikeMouseActive;
+            update_runner_input(bs.runner,(settings.open||settings.controlEditMode||settings.adjustMode)?0:gameButtons);
+            /* GameMaker's Mike hand reads gamepad_axis_value(gp_axislh/v).
+             * The old keyboard-only mapping left those axes permanently 0. */
+            bool gameInput=!settings.open&&!settings.controlEditMode&&!settings.adjustMode;
+            /* GameMaker reads GP_AXIS_LH for Mike's hand. The remapping
+             * applies only to his mouse scenes, never globally to movement. */
+            bool mikeBattle=mikeMouseActive&&bs.runner->currentRoom&&
+                bs.runner->currentRoom->name &&
+                strstr(bs.runner->currentRoom->name,"room_dw_castle_tv_zone_battle")!=NULL;
+            float mouseAxisX=gameInput?((float)((int)(mikeMouseActive?pad.rx:pad.lx)-128)/128.0f):0.0f;
+            float mouseAxisY=gameInput?((float)((int)(mikeMouseActive?pad.ry:pad.ly)-128)/128.0f):0.0f;
+            if(mikeBattle){
+                mouseAxisX=fmaxf(-1.0f,fminf(1.0f,mouseAxisX+((float)((int)pad.lx-128)/128.0f)));
+                mouseAxisY=fmaxf(-1.0f,fminf(1.0f,mouseAxisY+((float)((int)pad.ly-128)/128.0f)));
+            }
+            if(mikeMouseActive&&g_mikeMouse.touching){
+                GMLReal x,y;
+                Runner_getMouseRoomPosition(bs.runner,&x,&y);
+                for(size_t n=0;n<arrlen(bs.runner->instances);n++){
+                    Instance*i=bs.runner->instances[n];
+                    if(!i||i->objectIndex<0||
+                       (uint32_t)i->objectIndex>=bs.runner->dataWin->objt.count)continue;
+                    const char*name=bs.runner->dataWin->objt.objects[i->objectIndex].name;
+                    if(name&&strcmp(name,"obj_mike_controller")==0){
+                        mouseAxisX=fmaxf(-1.0f,fminf(1.0f,(x-i->x)/150.0f));
+                        mouseAxisY=fmaxf(-1.0f,fminf(1.0f,(y-i->y)/150.0f));
+                        break;
+                    }
+                }
+            }
+            RunnerGamepad_setAxis(bs.runner->gamepads,0,GP_AXIS_LH,mouseAxisX);
+            RunnerGamepad_setAxis(bs.runner->gamepads,0,GP_AXIS_LV,mouseAxisY);
+            if(mikeMouseActive)
+                gxm_mike_mic_update(bs.runner,&settings,gameInput);
+            else gxm_mike_mic_reset();
+            /* Chapter 5 Castle Town texture pages are warmed at chapter
+             * startup; never do blocking 150-ms uploads while walking. */
             g_gxmWatchdogRunner=bs.runner;
             g_gxmMainStage="runner_step";
             Runner_step(bs.runner);
+            if(activeChapter==5 && bs.runner->pendingRoom>=0 &&
+               bs.runner->pendingRoom!=bs.runner->currentRoomIndex &&
+               !ch5TransitionHolding){
+                ch5TransitionHolding=true;
+                ch5TransitionFade=0;
+                log_line("NATIVE_GXM=ch5_transition_cover hold=1 until_new_room");
+            }
             sync_game_trophies(&settings,bs.runner,gameFrames);
             if(!castleTrace&&activeChapter==5&&castlePhaseTraces<60&&
                bs.runner->pendingRoom==54){
@@ -1257,6 +1912,7 @@ int main(void) {
             if(gameFrames==0) log_line("NATIVE_GXM=butterscotch draw_pre_begin");
             g_gxmMainStage="draw_pre";
             uint64_t partStartUs=sceKernelGetProcessTimeWide();
+            g_nativeCrtTubeEnabled=(settings.screenFilterMode==5);
             Runner_drawPre(bs.runner,960,544);
             Runner_beginFrame(bs.runner,gw,gh,960,544,960,544);
             drawPartUs[0]+=sceKernelGetProcessTimeWide()-partStartUs;
@@ -1279,15 +1935,54 @@ int main(void) {
             uint64_t guiStartUs=sceKernelGetProcessTimeWide();
             g_gxmMainStage="draw_gui";
             Runner_drawGUI(bs.runner,960,544,gw,gh);
+            /* Post-process only game and GameMaker GUI; keep native Game
+             * Settings/modal text unfiltered and legible above CRT/VHS. */
+            draw_screen_filter(&settings,bs.renderer);
+            /* No host-side CH3 fade: native GML already draws the original
+             * transition. An extra GPU screenshot made black/old/black/new. */
             guiUs+=sceKernelGetProcessTimeWide()-guiStartUs;
             g_gxmMainStage="room_change";
             /* Rooms can also change inside Runner_step; compare with the
              * room seen at the previous frame, not only around this call. */
             int32_t roomBefore=lastRoomSeen;
             uint64_t roomChangeStartUs=sceKernelGetProcessTimeWide();
+            /* CH3 gameshow scene/room swaps: take the outgoing, already
+             * composited world BEFORE GML destroys its room-owned actors.
+             * The saved frame bridges Tenna's recreated sprite, not a
+             * permanent duplicate game object. */
+            /* Preserve GameMaker's scene state: no outgoing host snapshot. */
+            if(bs.runner->pendingRoom>=0 &&
+               bs.runner->pendingRoom!=roomBefore && activeChapter==5){
+                static unsigned roomPreTrace=0;
+                if(roomPreTrace++<80){
+                    char msg[190];
+                    snprintf(msg,sizeof(msg),
+                      "NATIVE_GXM=ch5_room_prepare_begin from=%d to=%d "
+                      "frame=%u async=%d current=%.55s",
+                      roomBefore,bs.runner->pendingRoom,gameFrames,
+                      (int)gxmAsyncWork,
+                      bs.runner->currentRoom && bs.runner->currentRoom->name?
+                        bs.runner->currentRoom->name:"-");
+                    log_line(msg);
+                }
+            }
             Runner_handlePendingRoomChange(bs.runner);
             if(bs.runner->currentRoomIndex!=roomBefore){
+                roomChangedAfterDraw=true;
                 lastRoomSeen=bs.runner->currentRoomIndex;
+                if(activeChapter==3){
+                    /* A room switch must never inherit the old CRT/rainbow,
+                     * while the GML transition actor owns its fade. */
+                    bs.renderer->currentShader=-1;
+                    static unsigned roomResetReported=0;
+                    if(roomResetReported++<12)
+                        log_line("NATIVE_GXM=ch3_room_transition owner=gml host_fade=disabled");
+                }
+                if(activeChapter==5){
+                    ch5TransitionHolding=false;
+                    ch5TransitionFade=12u;
+                    log_line("NATIVE_GXM=ch5_transition_cover destination_ready fade_frames=12");
+                }
                 g_gxmMainStage="room_prepare";
                 BSContractRenderer_roomEntered(bs.renderer);
                 char roomLine[200];
@@ -1335,8 +2030,84 @@ int main(void) {
                      fps,frameStepEndUs-frameStartUs,0,
                      now-frameStepEndUs,memory,evictions,0,0,
                      targetName,devTargetRoom);
+                if(devQuickOpen)
+                    VitaSettings_drawDevQuickScenes(&settings,bs.renderer,
+                        activeChapter,devQuickSelected,gxmDevQuickLabels,
+                        devQuickTargets,devQuickRooms,devQuickStatus);
             }
-            draw_screen_filter(&settings,bs.renderer);
+            /* The previous one-frame black rectangle blinked twice, and
+             * async room preparation exposed the outgoing room without its
+             * GXM shadow compositor in between. Maintain the same black
+             * cover for the WHOLE pending transition, then smoothly uncover
+             * the fresh room over twelve presented frames. Border is intact. */
+            if(activeChapter==5 && gxmAsyncWork &&
+               (ch5TransitionHolding || ch5TransitionFade)){
+                /* The GXM room-commit barrier has already prevented
+                 * presentation during async payload completion. GML owns its
+                 * transition fade; a second host blackout flashed in between. */
+                ch5TransitionHolding=false;
+                ch5TransitionFade=0;
+                static unsigned asyncVisualReported=0;
+                if(asyncVisualReported++<8)
+                    log_line("NATIVE_GXM=async_transition_visual owner=gml host_cover=disabled");
+            }
+            if(activeChapter==5 && !gxmAsyncWork){
+                float cover=0.0f;
+                if(roomChangedAfterDraw || ch5TransitionHolding)
+                    cover=1.0f;
+                else if(ch5TransitionFade>0){
+                    cover=(float)ch5TransitionFade/12.0f;
+                    ch5TransitionFade--;
+                }
+                if(cover>0.0f){
+                    nvgSave(vg);
+                    nvgResetTransform(vg);
+                    nvgResetScissor(vg);
+                    nvgGlobalCompositeOperation(vg,NVG_SOURCE_OVER);
+                    nvgBeginPath(vg);nvgRect(vg,160,32,640,480);
+                    nvgFillColor(vg,nvgRGBA(0,0,0,(unsigned char)(cover*255.0f)));
+                    nvgFill(vg);
+                    nvgRestore(vg);
+                }
+            }
+#ifdef NATIVE_GXM_VIDEO
+            /* Chapter5 Garden introduction: draw the VIDEO FRAME after every
+             * scene, GameMaker GUI, black transition and DEV/settings layer.
+             * Earlier versions painted to applicationSurface in GML; a
+             * stale room shader / source rectangle hid the video behind a
+             * solid black quad. Render on host with no GXM target switch.
+             * AVPlayer owns its YUV frame until after GPU presentation. */
+            if(activeChapter==5 && VitaVideo_isChapter5Intro() &&
+               VitaVideo_hasDecodedFrame() && bs.runner &&
+               bs.runner->currentRoom && bs.runner->currentRoom->name &&
+               strcmp(bs.runner->currentRoom->name,
+                      "room_dw_garden_video")==0){
+                const int movieImage=VitaVideo_image();
+                if(movieImage>0){
+                    nvgSave(vg);
+                    nvgResetTransform(vg);
+                    nvgResetScissor(vg);
+                    nvgGlobalCompositeOperation(vg,NVG_SOURCE_OVER);
+                    /* MP4 1280x720 is authored at 16:9, not the
+                     * 640x480 GameMaker application surface. Fit the
+                     * Vita's actual 960x544 host framebuffer. */
+                    nvgBeginPath(vg);nvgRect(vg,0,0,960,544);
+                    NVGpaint moviePaint=nvgImagePattern(
+                         vg,0,0,960,544,0.0f,movieImage,1.0f);
+                    nvgFillPaint(vg,moviePaint);nvgFill(vg);
+                    nvgRestore(vg);
+                    static unsigned loggedVideo=0;
+                    if(loggedVideo++<4 || loggedVideo%300==0){
+                        char msg[170];
+                        snprintf(msg,sizeof(msg),
+                            "NATIVE_GXM=ch5_video_host_overlay image=%d frame=%u size=%.0fx%.0f z=top viewport=960x544",
+                            movieImage,loggedVideo,
+                            (double)VitaVideo_getWidth(),(double)VitaVideo_getHeight());
+                        log_line(msg);
+                    }
+                }
+            }
+#endif
             frameDrawEndUs=sceKernelGetProcessTimeWide();
             drawPartUs[4]+=frameDrawEndUs-partStartUs;
             ++gameFrames;
@@ -1367,6 +2138,20 @@ int main(void) {
         }
         if(gameplayActive&&runnerResult==0)
             BSContractRenderer_framePresented(bs.renderer);
+        /* CH5 Castle Town: the shader/async comparison (2026-11-01)
+         * showed cold atlas uploads on arrival. The per-frame town prewarm
+         * routine existed but was never invoked: enable it after present,
+         * outside the GXM scene, during the Castle Area approach only.
+         * It is CPU/GPU texture preparation, NOT async room payload I/O. */
+        if(gameplayActive&&runnerResult==0 && activeChapter==5 &&
+           bs.runner&&bs.runner->currentRoom &&
+           bs.runner->currentRoom->name &&
+           strcmp(bs.runner->currentRoom->name,"room_dw_castle_area_1")==0 &&
+           (gameFrames%4u)==0u){
+            g_gxmMainStage="ch5_castle_prewarm";
+            BSContractRenderer_ch5CastleWarmTick(bs.renderer);
+            g_gxmMainStage="swap_complete";
+        }
         if(castleTrace)log_line("NATIVE_GXM=castle_phase stage=swap_done");
         /* Jump only after scene submission/present: surface destruction is
          * unsafe while a GXM scene or NanoVG call list remains open. */
@@ -1385,6 +2170,9 @@ int main(void) {
                 castlePhaseTraces=0; /* First 90 frames of DESTINATION. */
                 log_line("NATIVE_GXM=dev_jump_phase stage=destination_trace_armed");
             }
+            /* Remember this is a developer jump, not a legitimate story
+             * transition: Dark/Light world state must be restored on entry. */
+            g_vitaDevJumpTarget=pendingDevRoom;
             bs.runner->pendingRoom=pendingDevRoom;
             pendingDevRoom=-1;
         }
@@ -1546,8 +2334,10 @@ int main(void) {
         if(gameplayActive&&runnerResult==0&&activeChapter>0&&bs.runner&&
            pendingChapter<0&&bs.runner->currentRoom&&bs.runner->currentRoom->name&&
            strcmp(bs.runner->currentRoom->name,"PLACE_FAILURE")==0&&
-           Runner_isFailureGivingUp(bs.runner)&&
-           BSContractRenderer_lastFrameDraws(bs.renderer)<=2){
+           /* Real Ch3 log stays at 3 world draws / 4 total in blackness.
+            * EVENT=28 is not guaranteed: GML changes event phases during
+            * the Give Up fade, so relying on it leaves the player trapped. */
+           BSContractRenderer_lastFrameDraws(bs.renderer)<=6){
             if(failureBlackFrames<UINT32_MAX)failureBlackFrames++;
             bool faceDown=(pad.buttons&(SCE_CTRL_CROSS|SCE_CTRL_CIRCLE|
                                         SCE_CTRL_TRIANGLE|SCE_CTRL_SQUARE))!=0;
@@ -1562,6 +2352,13 @@ int main(void) {
         }else{
             failureBlackFrames=0;
             failureExitHeld=false;
+        }
+        /* GML game_end() sets Runner.shouldExit. The Native GXM loop used
+         * to ignore it, leaving a permanent "Saindo..." screen after START.
+         * Exit at the end of the fully closed renderer frame. */
+        if(gameplayActive && bs.runner && bs.runner->shouldExit){
+            log_line("NATIVE_GXM=game_end requested exit_to_livearea=1");
+            break;
         }
         if(pendingChapter>=0) {
             dev_capture_stop();
@@ -1600,10 +2397,18 @@ int main(void) {
 #ifdef NATIVE_GXM_VIDEO
     VitaVideo_shutdown();
 #endif
+    /* The worker holds DataWin metadata while reading; join BEFORE
+     * freeing its rooms/texture tables on chapter exit. */
+    if(gxmAsyncWork){
+        VitaRoomPrefetch_shutdown();
+        VitaBackgroundWork_destroy(gxmAsyncWork);
+        gxmAsyncWork=NULL;
+    }
     bs_bootstrap_unload(&bs);
     g_nativeSettingsVG=NULL;
     nvgDeleteGXM(vg);
     gxmDeleteWindow(window);
+    VitaMic_stop();
     sceKernelExitProcess(0);
     return 0;
 }

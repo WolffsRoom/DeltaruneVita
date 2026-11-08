@@ -15,8 +15,8 @@ exe_name = f"DeltaruneVitaPatcher_{bits}bit"
 
 version_info = VSVersionInfo(
     ffi=FixedFileInfo(
-        filevers=(0, 73, 0, 0),
-        prodvers=(0, 73, 0, 0),
+        filevers=(0, 81, 0, 0),
+        prodvers=(0, 81, 0, 0),
         mask=0x3F,
         flags=0x0,
         OS=0x40004,
@@ -29,12 +29,12 @@ version_info = VSVersionInfo(
             StringTable('040904B0', [
                 StringStruct('CompanyName', 'WolffsRoom'),
                 StringStruct('FileDescription', f'DELTARUNE PS Vita Patcher ({arch_label})'),
-                StringStruct('FileVersion', '0.73.0.0'),
+                StringStruct('FileVersion', '0.81.0.0'),
                 StringStruct('InternalName', 'DeltaruneVitaPatcher'),
                 StringStruct('LegalCopyright', 'WolffsRoom'),
                 StringStruct('OriginalFilename', 'DeltaruneVitaPatcher.exe'),
                 StringStruct('ProductName', 'Deltarune PS Vita Patcher'),
-                StringStruct('ProductVersion', '0.73.0.0'),
+                StringStruct('ProductVersion', '0.81.0.0'),
                 StringStruct('LegalCopyright', 'WolffsRoom'),
             ]),
         ]),

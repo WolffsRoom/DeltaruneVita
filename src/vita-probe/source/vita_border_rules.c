@@ -29,7 +29,14 @@ VitaBorderSource VitaBorderRules_chooseSource(int hasCustom, int hasBetterBorder
 
 int VitaBorderRules_isMenuRoom(const char* roomName) {
     if (roomName == NULL) return 0;
+    /* Returning to the chapter selector first passes through the engine
+     * bootstrap and chapter-opening rooms.  Treat the whole hand-off as menu
+     * presentation so a gameplay surround cannot remain visible until
+     * PLACE_MENU finally starts. */
     return strcmp(roomName, "PLACE_LOGO") == 0 || strcmp(roomName, "room_legend") == 0 ||
+           strcmp(roomName, "room_gms_debug_failsafe") == 0 ||
+           strcmp(roomName, "ROOM_INITIALIZE") == 0 ||
+           strcmp(roomName, "room_intro_ch5") == 0 ||
            strstr(roomName, "MENU") != NULL || strstr(roomName, "menu") != NULL ||
            strstr(roomName, "CHAPTER_SELECT") != NULL || strstr(roomName, "chapter_select") != NULL ||
            strstr(roomName, "SELECT") != NULL || strstr(roomName, "select") != NULL;
@@ -53,6 +60,10 @@ int VitaBorderRules_shouldBlankChapter5Surround(int chapter, const char* roomNam
 
 int VitaBorderRules_shouldBlankSurround(int chapter, const char* roomName, unsigned int sceneFlags) {
     if (chapter <= 0 || roomName == NULL) return 0;
+    if (room_eq(roomName, "room_flowershop_1f") ||
+        room_eq(roomName, "room_flowershop_2f")) {
+        return 1;
+    }
     // The first Dark World room is the black approach to Castle Town. The
     // decorative Castletown surround starts only in room_dw_castle_town.
     if (room_eq(roomName, "room_dw_castle_area_1")) return 1;
@@ -238,7 +249,7 @@ static VitaBorderAsset resolve_ch4(const char* room, const VitaBorderRuleState* 
         asset = VITA_BORDER_ASSET_DW_CHURCH_C;
     if (room_eq(room, "room_dw_churchc_titanclimb1") || room_eq(room, "room_dw_churchc_titanclimb1_post") ||
         room_eq(room, "room_dw_churchc_titanclimb2") || room_eq(room, "room_dw_churchc_titanclimb2_post"))
-        asset = VITA_BORDER_ASSET_DW_TITAN_BASE;
+        asset = VITA_BORDER_ASSET_DW_TITAN_EYES;
     if (room_eq(room, "room_town_church") && s->plot >= 290) asset = VITA_BORDER_ASSET_LW_TOWN_NIGHT;
     return asset;
 }

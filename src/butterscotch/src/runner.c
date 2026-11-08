@@ -1,8 +1,30 @@
 #include "runner.h"
+
+#ifdef PLATFORM_VITA
+// Accumulated Draw time per object, written to the log for slow Chapter 5 rooms.
+static uint32_t* g_vitaDrawHotspotUs = nullptr;
+void Runner_vitaFormatDrawHotspots(Runner* runner, char* out, size_t outSize) {
+    size_t used = (size_t)snprintf(out, outSize, "DRAW_HOTSPOTS");
+    if (g_vitaDrawHotspotUs == nullptr) return;
+    uint32_t count = runner->dataWin->objt.count;
+    for (int rank = 0; rank < 6 && used + 48 < outSize; ++rank) {
+        uint32_t best = 0, bestIndex = UINT32_MAX;
+        for (uint32_t i = 0; i < count; ++i)
+            if (g_vitaDrawHotspotUs[i] > best) { best = g_vitaDrawHotspotUs[i]; bestIndex = i; }
+        if (bestIndex == UINT32_MAX) break;
+        used += (size_t)snprintf(out + used, outSize - used, " %.30s=%u",
+                                 runner->dataWin->objt.objects[bestIndex].name, best);
+        g_vitaDrawHotspotUs[bestIndex] = 0;
+    }
+    memset(g_vitaDrawHotspotUs, 0, count * sizeof(uint32_t));
+}
+#endif
 #ifdef PLATFORM_VITA
 #include "vita_room_prefetch.h"
 #endif
 #include "data_win.h"
+#include "binary_utils.h"
+#include <math.h>
 #include "instance.h"
 #include "renderer.h"
 #include "vm.h"
@@ -20,6 +42,8 @@ extern int g_vitaActiveChapter;
 extern bool g_vitaModernGlActive;
 extern bool g_vitaExperimentalGlActive;
 extern void VitaProbe_logLine(const char* text);
+// VitaGL fork exports this, but the public SDK header omits its declaration.
+extern void vglForceGarbageCollection(void);
 // Chapter 1 frequently sends the player straight back to the previous room.
 // Keep exactly that one lazy ROOM payload parsed; it is small compared with
 // texture pages and avoids reparsing it on every field/forest boundary.
@@ -291,6 +315,10 @@ static void restoreVMInstanceContext(VMContext* vm, Instance* savedInstance) {
     vm->currentInstance = savedInstance;
 }
 
+#ifdef PLATFORM_VITA
+#include "vita_fireworks_native.inc"
+#endif
+
 static void executeCode(Runner* runner, Instance* instance, int32_t codeId) {
     // GameMaker does use codeIds less than 0, we'll just pretend we didn't hear them...
     if (0 > codeId) return;
@@ -325,8 +353,14 @@ static void executeCode(Runner* runner, Instance* instance, int32_t codeId) {
     setVMInstanceContext(vm, instance);
 
     // Execute
-    RValue result = VM_executeCode(vm, codeId);
-    RValue_free(&result);
+#ifdef PLATFORM_VITA
+    if(!vitaTryNativeCh2Fireworks(runner,instance,codeId)){
+#endif
+        RValue result=VM_executeCode(vm,codeId);
+        RValue_free(&result);
+#ifdef PLATFORM_VITA
+    }
+#endif
 
     // Restore instance context
     restoreVMInstanceContext(vm, savedInstance);
@@ -463,20 +497,31 @@ static bool isEventBlockedByPendingRoom(Runner* runner, Instance* instance, int3
     return true;
 }
 
-#ifdef PLATFORM_VITA
 static void vitaEnableChapter5CliffSimpleMode(Runner* runner, Instance* instance,
                                                int32_t eventType) {
-    if (g_vitaActiveChapter != 5 || eventType != EVENT_CREATE ||
+    bool enabled = false;
+#ifdef PLATFORM_VITA
+    enabled = g_vitaActiveChapter == 5;
+#else
+    enabled = getenv("BS_TEST_CH5_CLIFF_SIMPLE") != nullptr;
+#endif
+    if (!enabled || eventType != EVENT_CREATE ||
         runner == nullptr || instance == nullptr || runner->vmContext == nullptr ||
         instance->objectIndex < 0 ||
         (uint32_t)instance->objectIndex >= runner->dataWin->objt.count)
         return;
     const char* roomName = runner->currentRoom != nullptr ?
                            runner->currentRoom->name : nullptr;
+#ifdef PLATFORM_VITA
     if (!VitaGpuRules_ch5CliffSimpleMode(roomName)) return;
+#else
+    if (roomName == nullptr ||
+        (strcmp(roomName, "room_dw_fcastle_flowery") != 0 &&
+         strstr(roomName, "cliff") == nullptr)) return;
+#endif
     const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
     if (objectName == nullptr ||
-        strcmp(objectName, "obj_parallax_cliffs_moving_layers") != 0)
+        strncmp(objectName, "obj_parallax_cliffs_moving_layers", 33) != 0)
         return;
 
     VMContext* vm = runner->vmContext;
@@ -491,9 +536,181 @@ static void vitaEnableChapter5CliffSimpleMode(Runner* runner, Instance* instance
         GMLArray_set(alphas.array, 1, RValue_makeReal(0.0));
         GMLArray_set(alphas.array, 3, RValue_makeReal(0.0));
     }
+#ifdef PLATFORM_VITA
     VitaProbe_logLine("CH5_CLIFF_SIMPLE=enabled object=obj_parallax_cliffs_moving_layers");
-}
+#else
+    fprintf(stderr, "CH5_CLIFF_SIMPLE=enabled object=obj_parallax_cliffs_moving_layers local_test=1\n");
 #endif
+}
+
+static int32_t Runner_varId(VMContext* vm, const char* name) {
+    ptrdiff_t slot = shgeti(vm->varNameMap, (char*)name);
+    return slot < 0 ? -1 : vm->varNameMap[slot].value;
+}
+
+/* The Vita already selects the stock object's Simple profile for the Cliff
+ * rooms. Translate that exact Draw branch: user event, layer selection,
+ * positions, scale and alpha are unchanged; only VM/method dispatch disappears. */
+static bool Runner_tryNativeCliffLayersDraw(Runner* runner, Instance* instance,
+                                             int32_t codeId) {
+    if (runner == nullptr || instance == nullptr || runner->renderer == nullptr ||
+        runner->vmContext == nullptr || codeId < 0 ||
+        (uint32_t)codeId >= runner->dataWin->code.count)
+        return false;
+    CodeEntry* code = &runner->dataWin->code.entries[codeId];
+    if (code->name == nullptr || strcmp(code->name,
+        "gml_Object_obj_parallax_cliffs_moving_layers_Draw_0") != 0)
+        return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_CH5_C_FASTPATHS") != nullptr) return false;
+#endif
+    const int32_t simpleId = Runner_varId(runner->vmContext, "simple");
+    const int32_t alphaId = Runner_varId(runner->vmContext, "layer_alpha");
+    const int32_t spritesId = Runner_varId(runner->vmContext, "sprites");
+    if (simpleId < 0 || alphaId < 0 || spritesId < 0)
+        return false;
+    RValue alphas = Instance_getSelfVar(instance, alphaId);
+    RValue sprites = Instance_getSelfVar(instance, spritesId);
+    if (alphas.type != RVALUE_ARRAY || alphas.array == nullptr ||
+        sprites.type != RVALUE_ARRAY || sprites.array == nullptr ||
+        GMLArray_length1D(alphas.array) < 4 || GMLArray_length1D(sprites.array) < 4)
+        return false;
+    if (!RValue_toBool(Instance_getSelfVar(instance, simpleId))) {
+        const char* roomName = runner->currentRoom != nullptr ?
+                               runner->currentRoom->name : nullptr;
+        bool forceSimple = false;
+#ifdef PLATFORM_VITA
+        forceSimple = g_vitaActiveChapter == 5 &&
+                      VitaGpuRules_ch5CliffSimpleMode(roomName);
+#else
+        forceSimple = getenv("BS_TEST_CH5_CLIFF_SIMPLE") != nullptr &&
+                      roomName != nullptr &&
+                      (strcmp(roomName, "room_dw_fcastle_flowery") == 0 ||
+                       strstr(roomName, "cliff") != nullptr);
+#endif
+        if (!forceSimple) return false;
+        Instance_setSelfVar(instance, simpleId, RValue_makeBool(true));
+        GMLArray_set(alphas.array, 1, RValue_makeReal(0.0));
+        GMLArray_set(alphas.array, 3, RValue_makeReal(0.0));
+    }
+
+    /* Preserve `with (obj_parallax_cliffs_sunlayer) event_user(0)`.
+     * The sunlayer bakes its glow markers into a 400x300 surface once.
+     * Rebuilding in GML every frame costs 6.5 ms CPU. Once built, draw its surface directly. */
+    const size_t count = arrlen(runner->instances);
+    const int32_t surfVarId = Runner_varId(runner->vmContext, "surf");
+    for (size_t i = 0; i < count; ++i) {
+        Instance* sun = runner->instances[i];
+        if (sun == nullptr || !sun->active || sun->destroyed || sun->objectIndex < 0 ||
+            (uint32_t)sun->objectIndex >= runner->dataWin->objt.count)
+            continue;
+        const char* name = runner->dataWin->objt.objects[sun->objectIndex].name;
+        if (name != nullptr && strcmp(name, "obj_parallax_cliffs_sunlayer") == 0) {
+            int32_t surfId = surfVarId >= 0 ? RValue_toInt32(Instance_getSelfVar(sun, surfVarId)) : -1;
+            bool surfExists = surfId >= 0 && Renderer_surfaceExists(runner->renderer, surfId);
+            if (!surfExists) {
+                Runner_executeEvent(runner, sun, EVENT_OTHER, OTHER_USER0);
+            } else {
+                GMLCamera* cam = Runner_getCameraById(runner, runner->views[0].cameraId);
+                float camX = cam ? cam->viewX : 0.0f;
+                float camY = cam ? cam->viewY : 0.0f;
+                runner->renderer->vtable->drawSurface(
+                    runner->renderer, surfId,
+                    0, 0, -1, -1,
+                    camX + 320.0f - 400.0f,
+                    camY + 45.0f - 300.0f,
+                    2.0f, 2.0f, 0.0f, 0xFFFFFF, 1.0f);
+            }
+        }
+    }
+
+    GMLCamera* camera = Runner_getCameraById(runner, runner->views[0].cameraId);
+    if (camera == nullptr) return false;
+    const float drawX = camera->viewX + 520.0f;
+    const float drawY = camera->viewY + 266.0f;
+    for (int layer = 2; layer <= 3; ++layer) {
+        const float alpha = (float)RValue_toReal(GMLArray_get(alphas.array, layer));
+        if (alpha <= 0.0f) continue;
+        const int32_t sprite = RValue_toInt32(GMLArray_get(sprites.array, layer));
+        Renderer_drawSpriteExt(runner->renderer, sprite, 0, drawX, drawY,
+                               instance->imageXscale, instance->imageYscale,
+                               0.0f, 0xFFFFFF, alpha);
+    }
+    static bool reported = false;
+    if (!reported) {
+        fprintf(stderr, "CH5_CLIFF_NATIVE=enabled profile=simple layers=2,3\n");
+#if defined(PLATFORM_VITA) || defined(NATIVE_GXM_PROBE_VERSION)
+        VitaProbe_logLine("CH5_CLIFF_NATIVE=enabled profile=simple layers=2,3");
+#endif
+        reported = true;
+    }
+    return true;
+}
+
+#define FUSUMA_CULL_MAX 512
+typedef struct FusumaCullState {
+    uint32_t count;
+    uint32_t instanceIds[FUSUMA_CULL_MAX];
+    bool oldValues[FUSUMA_CULL_MAX];
+} FusumaCullState;
+
+/* obj_plat_fusuma_mask loops every wall twice while building its silhouette.
+ * Temporarily mark only walls whose complete bbox is outside the camera. The
+ * original value is restored after the Draw event, so Step/collision state and
+ * later frames cannot observe the optimization. */
+static void Runner_prepareFusumaCull(Runner* runner, Instance* mask,
+                                     int32_t codeId, FusumaCullState* state) {
+    memset(state, 0, sizeof(*state));
+    if (runner == nullptr || mask == nullptr || runner->vmContext == nullptr ||
+        codeId < 0 || (uint32_t)codeId >= runner->dataWin->code.count)
+        return;
+    CodeEntry* code = &runner->dataWin->code.entries[codeId];
+    if (code->name == nullptr || strcmp(code->name,
+        "gml_Object_obj_plat_fusuma_mask_Draw_0") != 0)
+        return;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_CH5_C_FASTPATHS") != nullptr) return;
+#endif
+    const int32_t visibleId = Runner_varId(runner->vmContext, "is_visible");
+    const int32_t farId = Runner_varId(runner->vmContext, "far_background");
+    if (visibleId < 0 || farId < 0) return;
+    GMLCamera* camera = Runner_getCameraById(runner, runner->views[0].cameraId);
+    if (camera == nullptr) return;
+    const bool maskFar = RValue_toBool(Instance_getSelfVar(mask, farId));
+    const float left = camera->viewX - 80.0f, top = camera->viewY - 80.0f;
+    const float right = camera->viewX + camera->viewWidth + 80.0f;
+    const float bottom = camera->viewY + camera->viewHeight + 80.0f;
+    for (size_t i = 0; i < arrlen(runner->instances) && state->count < FUSUMA_CULL_MAX; ++i) {
+        Instance* wall = runner->instances[i];
+        if (wall == nullptr || !wall->active || wall->destroyed || wall->objectIndex < 0 ||
+            (uint32_t)wall->objectIndex >= runner->dataWin->objt.count)
+            continue;
+        const char* name = runner->dataWin->objt.objects[wall->objectIndex].name;
+        if (name == nullptr || strcmp(name, "obj_plat_fusumawall") != 0 ||
+            RValue_toBool(Instance_getSelfVar(wall, farId)) != maskFar ||
+            !RValue_toBool(Instance_getSelfVar(wall, visibleId)))
+            continue;
+        InstanceBBox box = Collision_computeBBox(runner, wall);
+        if (!box.valid || !(box.right < left || box.left > right ||
+                            box.bottom < top || box.top > bottom))
+            continue;
+        state->instanceIds[state->count] = wall->instanceId;
+        state->oldValues[state->count] = true;
+        ++state->count;
+        Instance_setSelfVar(wall, visibleId, RValue_makeBool(false));
+    }
+}
+
+static void Runner_restoreFusumaCull(Runner* runner, FusumaCullState* state) {
+    if (runner == nullptr || state == nullptr || state->count == 0) return;
+    const int32_t visibleId = Runner_varId(runner->vmContext, "is_visible");
+    if (visibleId < 0) return;
+    for (uint32_t i = 0; i < state->count; ++i) {
+        Instance* wall = hmget(runner->instancesById, state->instanceIds[i]);
+        if (wall != nullptr && wall->active && !wall->destroyed)
+            Instance_setSelfVar(wall, visibleId, RValue_makeBool(state->oldValues[i]));
+    }
+}
 
 static RValue failureField(Runner* runner, Instance* instance, const char* name) {
     ptrdiff_t slot = shgeti(runner->vmContext->varNameMap, name);
@@ -642,10 +859,10 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         strcmp(runner->currentRoom->name, "room_dw_garden_floradinnencounter") == 0) {
         const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
         if (objectName != nullptr && strcmp(objectName, "obj_grassanim_new") == 0 &&
-            (runner->frameCount & 1) != 0) {
+            (runner->frameCount % 4u) != 0u) {
             // Keep animation time advancing while avoiding the expensive
-            // tilemap_get/tilemap_set scan on the skipped frame. The next
-            // 15-Hz update catches the tiles up to the current animation.
+            // tilemap_get/tilemap_set scan on three of every four frames.
+            // GML animation timing stays full-rate; tile changes reach ~15Hz.
             int32_t animId = shget(runner->vmContext->varNameMap, "anim");
             int32_t speedId = shget(runner->vmContext->varNameMap, "anim_speed");
             int32_t lengthId = shget(runner->vmContext->varNameMap, "anim_length");
@@ -669,10 +886,22 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         (strcmp(runner->currentRoom->name, "room_dw_fcastle_flowery") == 0 ||
          // The save room before the final battle draws the same reflection
          // pass; Native GXM measured 25 ms of GPU wait per frame there.
-         strcmp(runner->currentRoom->name, "room_dw_fcastle_final_save") == 0)) {
+         strcmp(runner->currentRoom->name, "room_dw_fcastle_final_save") == 0
+#ifndef NATIVE_GXM_PROBE_VERSION
+         // v0.80-47-ch5 log: this pass is the slowest draw in foyer, entrance
+         // and the staircase too, so VitaGL reuses it across Flower Castle.
+         || strncmp(runner->currentRoom->name, "room_dw_fcastle_", 16) == 0
+#endif
+         )) {
         const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+        uint32_t reflectionInterval = 3U;
+#ifndef NATIVE_GXM_PROBE_VERSION
+        // The battle costs 45 ms per frame; 5 Hz is enough for this backdrop.
+        if (strcmp(runner->currentRoom->name, "room_dw_fcastle_flowery") == 0)
+            reflectionInterval = 6U;
+#endif
         if (objectName != nullptr && strcmp(objectName, "obj_castlereflect_manager") == 0 &&
-            runner->renderer != nullptr && (runner->frameCount % 3U) != 0U) {
+            runner->renderer != nullptr && (runner->frameCount % reflectionInterval) != 0U) {
             int32_t surfId = shget(runner->vmContext->varNameMap, "surf");
             if (surfId >= 0) {
                 RValue surf = Instance_getSelfVar(instance, surfId);
@@ -707,6 +936,81 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         }
     }
 #endif
+
+    if (eventType == EVENT_DRAW &&
+        runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
+        runner->vmContext != nullptr &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count) {
+        const char* objectName = runner->dataWin->objt.objects[instance->objectIndex].name;
+        if (objectName != nullptr) {
+            if (strcmp(objectName, "obj_sakurafubuki_new") == 0) {
+                // Draw_0 allocates and clears a 640x480 particle surface for
+                // part_system_drawit(ps), which is unused on the host petal path.
+                if (eventSubtype == DRAW_NORMAL) return;
+                int32_t stgId = shget(runner->vmContext->varNameMap, "transition_stage");
+                int32_t pctId = shget(runner->vmContext->varNameMap, "transition_percent");
+                int32_t surfId = shget(runner->vmContext->varNameMap, "surf_view1");
+                int32_t stage = stgId >= 0 ? RValue_toInt32(Instance_getSelfVar(instance, stgId)) : 0;
+                double pct = pctId >= 0 ? RValue_toReal(Instance_getSelfVar(instance, pctId)) : 0.0;
+                bool battleActive = false;
+                for (size_t ti = 0; ti < arrlenu(runner->instances); ++ti) {
+                    Instance* tinst = runner->instances[ti];
+                    if (tinst != nullptr && tinst->active && !tinst->destroyed &&
+                        tinst->objectIndex >= 0 && (uint32_t)tinst->objectIndex < runner->dataWin->objt.count) {
+                        const char* tname = runner->dataWin->objt.objects[tinst->objectIndex].name;
+                        if (tname != nullptr && (strcmp(tname, "obj_tensionbar") == 0 || strcmp(tname, "obj_battlecontroller") == 0)) {
+                            battleActive = true;
+                            break;
+                        }
+                    }
+                }
+                if (stage >= 2 || pct >= 2.0 || battleActive) {
+                    // Step_0 calls surface_free(surf_view1) at stage 2 without
+                    // resetting surf_view1 = -4. When obj_tensionbar later
+                    // creates healthbar_surf, it reuses that surface ID and
+                    // Draw_73 draws a duplicate TP bar at (camerax(), cameray()).
+                    if (surfId >= 0)
+                        Instance_setSelfVar(instance, surfId, RValue_makeInt32(-4));
+                    return;
+                }
+            } else if (strcmp(objectName, "obj_blocktree_bg") == 0 &&
+                       eventSubtype == DRAW_NORMAL &&
+                       strcmp(runner->currentRoom->name, "room_dw_garden_floradinnencounter") == 0) {
+                int32_t vcur = (runner->viewCurrent >= 0 && runner->viewCurrent < MAX_VIEWS) ?
+                               runner->viewCurrent : 0;
+                GMLCamera* cam = Runner_getCameraById(runner, runner->views[vcur].cameraId);
+                if (cam != nullptr &&
+                    (instance->x + 260.0f < cam->viewX ||
+                     instance->x - 260.0f > cam->viewX + cam->viewWidth ||
+                     instance->y + 280.0f < cam->viewY ||
+                     instance->y - 280.0f > cam->viewY + cam->viewHeight)) {
+                    return;
+                }
+                // Before the diagonal petal wipe begins (transition_stage == 0),
+                // surf_view1 (view 1) is drawn opaque across the entire 640x480
+                // screen in Draw_73, completely covering view 0's trees.
+                if (vcur == 0 && runner->views[1].enabled) {
+                    int32_t stgId = shget(runner->vmContext->varNameMap, "transition_stage");
+                    int32_t pctId = shget(runner->vmContext->varNameMap, "transition_percent");
+                    for (size_t k = 0; k < arrlenu(runner->instances); ++k) {
+                        Instance* sak = runner->instances[k];
+                        if (sak == nullptr || !sak->active || sak->destroyed ||
+                            sak->objectIndex < 0 ||
+                            (uint32_t)sak->objectIndex >= runner->dataWin->objt.count)
+                            continue;
+                        const char* sname = runner->dataWin->objt.objects[sak->objectIndex].name;
+                        if (sname != nullptr && strcmp(sname, "obj_sakurafubuki_new") == 0) {
+                            int32_t stg = stgId >= 0 ? RValue_toInt32(Instance_getSelfVar(sak, stgId)) : 0;
+                            double pct = pctId >= 0 ? RValue_toReal(Instance_getSelfVar(sak, pctId)) : 0.0;
+                            if (stg == 0 && pct <= 0.0) return;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     VMContext* vm = runner->vmContext;
     int32_t savedEventType = vm->currentEventType;
@@ -762,15 +1066,50 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
     uint64_t ev_start = nowNanos();
 #endif
 #if IS_WAD17_OR_HIGHER_ENABLED
+    FusumaCullState fusumaCull;
+    Runner_prepareFusumaCull(runner, instance, codeId, &fusumaCull);
     bool nativeDraw = eventType == EVENT_DRAW && eventSubtype == DRAW_NORMAL &&
-                      (VMBuiltins_tryCullTVPanel(vm, instance, codeId) ||
-                       VMBuiltins_tryGardenLightDraw(vm, instance, codeId));
+                      (Runner_tryNativeCliffLayersDraw(runner, instance, codeId) ||
+                       VMBuiltins_tryCullTVPanel(vm, instance, codeId) ||
+                       VMBuiltins_tryGardenLightDraw(vm, instance, codeId) ||
+                       VMBuiltins_tryGrassStripDraw(vm, instance, codeId) ||
+                       VMBuiltins_tryBluePlatformDraw(vm, instance, codeId) ||
+                       VMBuiltins_tryFloortexDraw(vm, instance, codeId));
 #ifdef PLATFORM_VITA
     if (!nativeDraw && g_vitaActiveChapter == 5 && eventType == EVENT_DRAW &&
         eventSubtype == DRAW_NORMAL)
         nativeDraw = VMBuiltins_tryManeDraw(vm, instance, codeId);
 #endif
+    if (!nativeDraw && eventType == EVENT_STEP && eventSubtype == STEP_NORMAL &&
+        getenv("BS_TEST_CH5_FLORADINN_TRANSITION") != nullptr &&
+        runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
+        strcmp(runner->currentRoom->name, "room_dw_garden_floradinnencounter") == 0 &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
+        runner->dataWin->objt.objects[instance->objectIndex].name != nullptr &&
+        strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "obj_sakurafubuki_new") == 0) {
+        int32_t stgId = shget(vm->varNameMap, "transition_stage");
+        int32_t pctId = shget(vm->varNameMap, "transition_percent");
+        int32_t lx1Id = shget(vm->varNameMap, "line_x");
+        int32_t lx2Id = shget(vm->varNameMap, "line_x2");
+        if (lx1Id >= 0) Instance_setSelfVar(instance, lx1Id, RValue_makeReal(740.0));
+        if (lx2Id >= 0) Instance_setSelfVar(instance, lx2Id, RValue_makeReal(1240.0));
+        if (stgId >= 0 && pctId >= 0) {
+            if (runner->frameCount < 20) {
+                Instance_setSelfVar(instance, stgId, RValue_makeInt32(0));
+                Instance_setSelfVar(instance, pctId, RValue_makeReal(0.0));
+                runner->views[1].enabled = true;
+            } else {
+                double pct = (double)(runner->frameCount - 20) * 0.025;
+                Instance_setSelfVar(instance, stgId, RValue_makeInt32(1));
+                Instance_setSelfVar(instance, pctId, RValue_makeReal(pct));
+                runner->views[1].enabled = true;
+            }
+        }
+        nativeDraw = true;
+    }
     if (!nativeDraw) executeCode(runner, instance, codeId);
+    Runner_restoreFusumaCull(runner, &fusumaCull);
 #else
     executeCode(runner, instance, codeId);
 #endif
@@ -792,15 +1131,49 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         }
     }
 #endif
-#ifdef PLATFORM_VITA
     vitaEnableChapter5CliffSimpleMode(runner, instance, eventType);
-#endif
 #if defined(PLATFORM_VITA) || defined(_WIN32)
     if (eventType == EVENT_STEP && eventSubtype == STEP_NORMAL
 #ifndef PLATFORM_VITA
         && getenv("BS_TEST_RETRY") != nullptr
 #endif
     ) Runner_shortenRetryFade(runner, instance);
+#endif
+#if defined(_WIN32) && !defined(PLATFORM_VITA)
+    if (eventType == EVENT_STEP && eventSubtype == STEP_NORMAL &&
+        getenv("BS_TEST_CH5_FLORADINN_TRANSITION") != nullptr &&
+        runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
+        strcmp(runner->currentRoom->name, "room_dw_garden_floradinnencounter") == 0 &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
+        runner->dataWin->objt.objects[instance->objectIndex].name != nullptr) {
+        const char* tname = runner->dataWin->objt.objects[instance->objectIndex].name;
+        if (strcmp(tname, "obj_mainchara") == 0) {
+            instance->x = 760.0f;
+            instance->y = 1220.0f;
+            GMLCamera* cam0 = Runner_getCameraForView(runner, 0);
+            if (cam0 != nullptr) {
+                cam0->viewX = (float)instance->x - 280.0f;
+                cam0->viewY = 1000.0f;
+                Runner_updateCameraViewSimple(cam0);
+            }
+        } else if (strcmp(tname, "obj_sakurafubuki_new") == 0 && runner->vmContext != nullptr) {
+            int32_t stgId = shget(runner->vmContext->varNameMap, "transition_stage");
+            int32_t pctId = shget(runner->vmContext->varNameMap, "transition_percent");
+            if (stgId >= 0 && pctId >= 0) {
+                if (runner->frameCount < 20) {
+                    Instance_setSelfVar(instance, stgId, RValue_makeInt32(0));
+                    Instance_setSelfVar(instance, pctId, RValue_makeReal(0.0));
+                    runner->views[1].enabled = true;
+                } else if (runner->frameCount < 90) {
+                    double pct = (double)(runner->frameCount - 20) * 0.025;
+                    Instance_setSelfVar(instance, stgId, RValue_makeInt32(1));
+                    Instance_setSelfVar(instance, pctId, RValue_makeReal(pct));
+                    runner->views[1].enabled = true;
+                }
+            }
+        }
+    }
 #endif
 #ifdef NATIVE_GXM_PROBE_VERSION
     uint64_t ev_end = gxmSampleEventTiming ? nowNanos() : 0;
@@ -838,6 +1211,15 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         runner->profDrawMaxUs = dur;
         runner->profDrawMaxObject = instance->objectIndex;
     }
+#ifdef PLATFORM_VITA
+    if (eventType == EVENT_DRAW && instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count) {
+        if (g_vitaDrawHotspotUs == nullptr)
+            g_vitaDrawHotspotUs = (uint32_t*)calloc(runner->dataWin->objt.count, sizeof(uint32_t));
+        if (g_vitaDrawHotspotUs != nullptr)
+            g_vitaDrawHotspotUs[instance->objectIndex] += (uint32_t)dur;
+    }
+#endif
     if (dur >= 2500 && (runner->profSlowEventLastLogNs == 0 ||
                        ev_end - runner->profSlowEventLastLogNs >= 1000000000ULL)) {
         const char* eventName = Runner_getEventName(eventType, eventSubtype);
@@ -1127,8 +1509,16 @@ static int compareDrawKeys(const DrawKey* a, const DrawKey* b) {
     if (a->depth != b->depth)
         return a->depth > b->depth ? -1 : 1; // higher depth first
 
-    if (a->type  != b->type)
-        return a->type  < b->type  ? -1 : 1; // tiles before instances
+    if (a->type != b->type) {
+        /* GM2 room layers contain the static background/tile/sprite
+         * elements; objects at the same depth must draw after the layer.
+         * The old TILE -> INSTANCE -> LAYER tie-break put stage art over
+         * Tenna/Kris in Chapter 3 cutscenes (and affected other GM2 scenes).
+         * GM1 has no DRAWABLE_LAYER so its original order is unchanged. */
+        int rankA=a->type==DRAWABLE_LAYER?1:(a->type==DRAWABLE_INSTANCE?2:0);
+        int rankB=b->type==DRAWABLE_LAYER?1:(b->type==DRAWABLE_INSTANCE?2:0);
+        return rankA<rankB?-1:1;
+    }
 
     if (a->type == DRAWABLE_TILE)
         return (a->order > b->order) - (a->order < b->order); // tiles: higher index later
@@ -1188,6 +1578,11 @@ uint32_t Runner_tileFrameIndex(const Background* tileset, uint32_t tileIndex, in
     return tileset->gms2TileIds[(size_t)tileIndex * frames + wrapped];
 }
 
+#ifdef NATIVE_GXM_PROBE_VERSION
+/* Nonzero only inside explicit draw_tilemap() invoked by CH5 shadow
+ * surface generation. Normal world tile passes retain camera culling. */
+int g_nativeGxmFullShadowTilemap=0;
+#endif
 void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerOffsetX, float layerOffsetY, uint32_t frame) {
     if (data == nullptr || data->tileData == nullptr) return;
     if (0 > data->backgroundIndex) return;
@@ -1219,7 +1614,12 @@ void Runner_drawTileLayer(Runner* runner, RoomLayerTilesData* data, float layerO
     int32_t lastTx = (int32_t) data->tilesX;
     int32_t lastTy = (int32_t) data->tilesY;
     GMLCamera* camera = Runner_getCameraById(runner, runner->renderer->cameraCurrent);
-    if (camera != nullptr && camera->viewAngle == 0.0f && tileW > 0 && tileH > 0) {
+    bool restrictCamera = camera != nullptr && camera->viewAngle == 0.0f &&
+                          tileW > 0 && tileH > 0;
+#ifdef NATIVE_GXM_PROBE_VERSION
+    if(g_nativeGxmFullShadowTilemap)restrictCamera=false;
+#endif
+    if (restrictCamera) {
         const int32_t guard = 2;
         firstTx = (int32_t) floorf((camera->viewX - layerOffsetX) / (float) tileW) - guard;
         firstTy = (int32_t) floorf((camera->viewY - layerOffsetY) / (float) tileH) - guard;
@@ -1354,8 +1754,537 @@ static void rebuildDrawableCacheIfDirty(Runner* runner) {
     }
 }
 
+#ifndef NATIVE_GXM_PROBE_VERSION
+/* v0.80-47: Chapter 4's rotating towers (titanclimb*, rotatingtower*). The Draw
+ * event of obj_rotating_tower_controller_new walks all of valid_tile_indices
+ * every frame (6467 entries in titanclimb2_tiled) and throws away everything
+ * outside the camera rows or on the tower's back: ~270k VM ops per frame to
+ * draw ~200 tiles, the bulk of the 5 FPS seen on the Vita. For the duration of
+ * that one event the array is swapped for the subset those GML conditions could
+ * accept, in the same order. The script is unchanged and still applies its own
+ * exact tests, so the rows are kept wider than its window (start-1 .. +25). */
+#define TOWER_WINDOW_ROW_MARGIN 3
+#define TOWER_WINDOW_MAX_COLUMNS 256
+
+static GMLArray* towerTileWindow = nullptr;
+static const DataWin* towerTileWindowDataWin = nullptr;
+static int32_t towerTileWindowObject = -1;
+static int32_t towerVarTiles, towerVarVis, towerVarColumns, towerVarRowHeight;
+static Renderer* towerTileWindowRenderer = nullptr;
+
+/* v0.80-59: titanclimb1_tiled (appearance 1) still ran ~60 ms per frame on the
+ * Vita, mostly the front tile loop of this Draw event and one method call per
+ * tile. For that branch the GML now sees an empty valid_tile_indices, and the
+ * same loop runs in C at the event's second surface_reset_target, which is
+ * right after that loop in the script. The back loop is unaffected: its bound is
+ * array_length(len), always 0. */
+static GMLArray* towerEmptyTiles = nullptr;
+static Instance* towerNativeInstance = nullptr;
+static int towerNativeResets = 0;
+static int32_t towerNativeTotal = 0;
+static int32_t towerVarAppearance = -1, towerVarColor, towerVarTileX, towerVarTileXscale, towerVarTileW,
+               towerVarTowerX, towerVarShake, towerVarYstart, towerVarTilesets, towerVarIndex, towerVarSprite,
+               towerVarRows, towerVarCol, towerVarI, towerVarTmidx;
+
+static void towerNativeFrontPass(Runner* runner, Instance* inst) {
+    GMLArray* window = towerTileWindow;
+    GMLCamera* camera = Runner_getCameraById(runner, runner->views[0].cameraId);
+    if (window == nullptr || camera == nullptr || runner->renderer == nullptr) return;
+    const double cx = (double) camera->viewX, cy = (double) camera->viewY;
+    const int32_t columns = RValue_toInt32(Instance_getSelfVar(inst, towerVarColumns));
+    const double rowHeight = RValue_toReal(Instance_getSelfVar(inst, towerVarRowHeight));
+    const double tileW = RValue_toReal(Instance_getSelfVar(inst, towerVarTileW));
+    const int32_t rows = RValue_toInt32(Instance_getSelfVar(inst, towerVarRows));
+    const int32_t tilesets = RValue_toInt32(Instance_getSelfVar(inst, towerVarTilesets));
+    if (columns <= 0 || rowHeight <= 0.0 || tileW == 0.0) return;
+    int32_t renderY = (int32_t) rint(cy / rowHeight);
+    int32_t start = renderY - 1, end = renderY + 25;
+    if (start < 0) start = 0;
+    if (end > rows) end = rows;
+    const double towerX = RValue_toReal(Instance_getSelfVar(inst, towerVarTowerX)) -
+                          RValue_toReal(Instance_getSelfVar(inst, towerVarShake));
+    const double ystart = RValue_toReal(Instance_getSelfVar(inst, towerVarYstart));
+    RValue vis = Instance_getSelfVar(inst, towerVarVis);
+    RValue colors = Instance_getSelfVar(inst, towerVarColor);
+    RValue tileX = Instance_getSelfVar(inst, towerVarTileX);
+    RValue tileXscale = Instance_getSelfVar(inst, towerVarTileXscale);
+    RValue indices = Instance_getSelfVar(inst, towerVarIndex);
+    RValue sprites = Instance_getSelfVar(inst, towerVarSprite);
+    if (vis.type != RVALUE_ARRAY || colors.type != RVALUE_ARRAY || tileX.type != RVALUE_ARRAY ||
+        tileXscale.type != RVALUE_ARRAY || indices.type != RVALUE_ARRAY || sprites.type != RVALUE_ARRAY) return;
+    bool any = false;
+    RValue lastColor = RValue_makeReal(0);
+    for (int32_t n = 0; n < window->modern.length; n++) {
+        const int32_t pos = RValue_toInt32(window->modern.data[n]);
+        const int32_t k = pos % columns, ii = pos / columns;
+        if (RValue_toInt32(GMLArray_get(vis.array, k)) != 1 || ii < start || ii > end) continue;
+        const RValue colorValue = GMLArray_get(colors.array, k);
+        const uint32_t color = (uint32_t) RValue_toInt32(colorValue);
+        lastColor = colorValue;
+        any = true;
+        const double xscaleBase = -RValue_toReal(GMLArray_get(tileXscale.array, k)) / tileW;
+        const float xx = (float) (towerX + RValue_toReal(GMLArray_get(tileX.array, k)) +
+                                  RValue_toReal(GMLArray_get(tileXscale.array, k)) * 0.5 - cx);
+        const float yy = (float) (rowHeight * ii + ystart + 10.0 - cy);
+        RValue posIndices = GMLArray_get(indices.array, pos);
+        RValue posSprites = GMLArray_get(sprites.array, pos);
+        if (posIndices.type != RVALUE_ARRAY || posSprites.type != RVALUE_ARRAY) continue;
+        for (int32_t tm = 0; tm < tilesets; tm++) {
+            const int32_t t = RValue_toInt32(GMLArray_get(posIndices.array, tm));
+            if (t <= 0) continue;
+            double xscale = xscaleBase, yflip = 1.0, rotation = 0.0;
+            if (t & (1 << 28)) xscale = -xscale;
+            if (t & (1 << 29)) yflip = -1.0;
+            if (t & (1 << 30)) {
+                rotation = -90.0;
+                yflip *= fabs(xscale);
+                xscale = xscale > 0.0 ? 1.0 : (xscale < 0.0 ? -1.0 : 0.0);
+            }
+            if (xscale == 0.0 || yflip == 0.0) continue;  // draw_sprite_ext skips these
+            Renderer_drawSpriteExt(runner->renderer, RValue_toInt32(GMLArray_get(posSprites.array, tm)),
+                                   t & 0x7ffff, xx, yy, (float) xscale, (float) yflip, (float) rotation, color, 1.0f);
+        }
+    }
+    // Leave the loop variables as the GML loop would.
+    Instance_setSelfVar(inst, towerVarI, RValue_makeReal((GMLReal) towerNativeTotal));
+    if (any) {
+        Instance_setSelfVar(inst, towerVarCol, lastColor);
+        Instance_setSelfVar(inst, towerVarTmidx, RValue_makeReal((GMLReal) tilesets));
+    }
+}
+
+void Runner_towerNativeNoteSurfaceReset(Runner* runner, Instance* current) {
+    if (towerNativeInstance == nullptr || current != towerNativeInstance) return;
+    if (++towerNativeResets == 2) towerNativeFrontPass(runner, current);
+}
+
+// Returns the complete array (with a reference held) when the window is active.
+static GMLArray* towerTileWindowBegin(Runner* runner, Instance* inst) {
+    if (towerTileWindowDataWin != runner->dataWin) {
+        towerTileWindowDataWin = runner->dataWin;
+        towerTileWindowObject = -1;
+        repeat(runner->dataWin->objt.count, i) {
+            const char* name = runner->dataWin->objt.objects[i].name;
+            if (name != nullptr && strcmp(name, "obj_rotating_tower_controller_new") == 0) {
+                towerTileWindowObject = (int32_t) i;
+                break;
+            }
+        }
+        if (towerTileWindowObject >= 0) {
+            VMContext* vm = runner->vmContext;
+            towerVarTiles = VM_getOrAllocateVarID(vm, "valid_tile_indices");
+            towerVarVis = VM_getOrAllocateVarID(vm, "tile_vis");
+            towerVarColumns = VM_getOrAllocateVarID(vm, "horizontaltilecount");
+            towerVarRowHeight = VM_getOrAllocateVarID(vm, "tile_height_fine");
+            towerVarAppearance = VM_getOrAllocateVarID(vm, "appearance");
+            towerVarColor = VM_getOrAllocateVarID(vm, "tile_color");
+            towerVarTileX = VM_getOrAllocateVarID(vm, "tile_x");
+            towerVarTileXscale = VM_getOrAllocateVarID(vm, "tile_xscale");
+            towerVarTileW = VM_getOrAllocateVarID(vm, "tile_width_fine");
+            towerVarTowerX = VM_getOrAllocateVarID(vm, "tower_x");
+            towerVarShake = VM_getOrAllocateVarID(vm, "tower_xshake");
+            towerVarYstart = VM_getOrAllocateVarID(vm, "tower_ystart");
+            towerVarTilesets = VM_getOrAllocateVarID(vm, "tileset_count");
+            towerVarIndex = VM_getOrAllocateVarID(vm, "tile_index");
+            towerVarSprite = VM_getOrAllocateVarID(vm, "tile_sprite");
+            towerVarRows = VM_getOrAllocateVarID(vm, "verticaltilecount");
+            towerVarCol = VM_getOrAllocateVarID(vm, "col");
+            towerVarI = VM_getOrAllocateVarID(vm, "i");
+            towerVarTmidx = VM_getOrAllocateVarID(vm, "tmidx");
+        }
+    }
+    if (towerTileWindowObject < 0 || inst->objectIndex != towerTileWindowObject) return nullptr;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_TOWER_WINDOW") != nullptr) return nullptr; // A/B regression runs
+#endif
+
+    RValue tilesValue = Instance_getSelfVar(inst, towerVarTiles);
+    RValue visValue = Instance_getSelfVar(inst, towerVarVis);
+    if (tilesValue.type != RVALUE_ARRAY || tilesValue.array == nullptr ||
+        tilesValue.array->type != GML_MODERN_ARRAY ||
+        visValue.type != RVALUE_ARRAY || visValue.array == nullptr) return nullptr;
+    int32_t columns = RValue_toInt32(Instance_getSelfVar(inst, towerVarColumns));
+    int32_t rowHeight = RValue_toInt32(Instance_getSelfVar(inst, towerVarRowHeight));
+    if (columns <= 0 || columns > TOWER_WINDOW_MAX_COLUMNS || rowHeight <= 0) return nullptr;
+    GMLCamera* camera = Runner_getCameraById(runner, runner->views[0].cameraId);
+    if (camera == nullptr || !camera->allocated) return nullptr;
+
+    GMLArray* all = tilesValue.array;
+    int32_t total = GMLArray_length1D(all);
+    if (towerTileWindow == nullptr || towerTileWindow->modern.capacity < total) {
+        GMLArray_decRef(towerTileWindow);
+        towerTileWindow = GMLArray_create(runner->dataWin->gen8.wadVersion, total);
+    }
+
+    bool visible[TOWER_WINDOW_MAX_COLUMNS];
+    for (int32_t k = 0; k < columns; k++)
+        visible[k] = RValue_toInt32(GMLArray_get(visValue.array, k)) != 0;
+
+    int32_t firstRow = (int32_t) lroundf(camera->viewY / (float) rowHeight) - 1 - TOWER_WINDOW_ROW_MARGIN;
+    int32_t lastRow = (int32_t) lroundf(camera->viewY / (float) rowHeight) + 25 + TOWER_WINDOW_ROW_MARGIN;
+    int32_t kept = 0;
+    RValue* out = towerTileWindow->modern.data;
+    for (int32_t i = 0; i < total; i++) {
+        const RValue* entry = &all->modern.data[i];
+        int32_t pos = RValue_toInt32(*entry);
+        int32_t row = pos / columns;
+        if (row < firstRow || row > lastRow || !visible[pos % columns]) continue;
+        out[kept++] = RValue_makeReal((GMLReal) pos);
+    }
+    towerTileWindow->modern.length = kept;
+
+    static unsigned towerWindowTraces = 0;
+    if (towerWindowTraces < 4) {
+        towerWindowTraces++;
+        fprintf(stderr, "TOWER_TILE_WINDOW=active total=%d kept=%d rows=%d..%d\n",
+                total, kept, firstRow, lastRow);
+    }
+
+    // setSelfVar frees the old slot and takes its own reference to the new one.
+    GMLArray_incRef(all);
+    bool nativeFront = RValue_toInt32(Instance_getSelfVar(inst, towerVarAppearance)) == 1;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_TOWER_NATIVE") != nullptr) nativeFront = false; // A/B regression runs
+#endif
+    if (nativeFront) {
+        if (towerEmptyTiles == nullptr) towerEmptyTiles = GMLArray_create(runner->dataWin->gen8.wadVersion, 0);
+        towerEmptyTiles->modern.length = 0;
+        towerNativeInstance = inst;
+        towerNativeResets = 0;
+        towerNativeTotal = total;
+        Instance_setSelfVar(inst, towerVarTiles, RValue_makeArrayWeak(towerEmptyTiles));
+    } else {
+        Instance_setSelfVar(inst, towerVarTiles, RValue_makeArrayWeak(towerTileWindow));
+    }
+    towerTileWindowRenderer = runner->renderer;
+    if (towerTileWindowRenderer != nullptr) towerTileWindowRenderer->quadBatchWindow = true;
+    return all;
+}
+
+/* v0.80-50: Chapter 4 battles, Titan included. obj_darkshape's Draw renders each
+ * enemy to its own 46x46 surface and copies it back in 46 one-pixel strips, so
+ * that a sine wobble scaled by (4 - image_alpha * 4) can shift them. At
+ * image_alpha == 1, the state of every active enemy, the wobble is zero and the
+ * result is the sprite itself: two render target switches, 47 draws and about
+ * 1400 VM ops per enemy per frame for nothing. Draw it directly in that case.
+ * Shaking enemies (they consume the game's RNG), fading ones and sprites the
+ * 46x46 surface would have clipped keep the original script. */
+#define DARKSHAPE_SURFACE_HALF 23.0f
+static const DataWin* darkshapeDataWin = nullptr;
+static int32_t darkshapeObject = -1;
+static int32_t darkVarShake, darkVarImage, darkVarShrink, darkVarTimer;
+static int32_t darkVarIndividuality, darkVarXscale, darkVarYscale, darkVarLight;
+
+static bool darkshapeFitsSurface(const Sprite* sprite, float xscale, float yscale, float angle) {
+    float left = fabsf(xscale) * (float) sprite->originX;
+    float right = fabsf(xscale) * (float) (sprite->width - sprite->originX);
+    float top = fabsf(yscale) * (float) sprite->originY;
+    float bottom = fabsf(yscale) * (float) (sprite->height - sprite->originY);
+    float halfW = fmaxf(left, right), halfH = fmaxf(top, bottom);
+    if (fmodf(fabsf(angle), 360.0f) == 0.0f)
+        return halfW <= DARKSHAPE_SURFACE_HALF && halfH <= DARKSHAPE_SURFACE_HALF;
+    return halfW * halfW + halfH * halfH <= DARKSHAPE_SURFACE_HALF * DARKSHAPE_SURFACE_HALF;
+}
+
+static bool darkshapeDrawFastPath(Runner* runner, Instance* inst, int32_t ownerObjectIndex) {
+    if (darkshapeDataWin != runner->dataWin) {
+        darkshapeDataWin = runner->dataWin;
+        darkshapeObject = -1;
+        repeat(runner->dataWin->objt.count, i) {
+            const char* name = runner->dataWin->objt.objects[i].name;
+            if (name != nullptr && strcmp(name, "obj_darkshape") == 0) {
+                darkshapeObject = (int32_t) i;
+                break;
+            }
+        }
+        if (darkshapeObject >= 0) {
+            VMContext* vm = runner->vmContext;
+            darkVarShake = VM_getOrAllocateVarID(vm, "shakeme");
+            darkVarImage = VM_getOrAllocateVarID(vm, "image");
+            darkVarShrink = VM_getOrAllocateVarID(vm, "shrink_sprite");
+            darkVarTimer = VM_getOrAllocateVarID(vm, "timer");
+            darkVarIndividuality = VM_getOrAllocateVarID(vm, "individuality");
+            darkVarXscale = VM_getOrAllocateVarID(vm, "xscale");
+            darkVarYscale = VM_getOrAllocateVarID(vm, "yscale");
+            darkVarLight = VM_getOrAllocateVarID(vm, "light");
+        }
+    }
+    if (darkshapeObject < 0 || ownerObjectIndex != darkshapeObject) return false;
+    if (inst->imageAlpha != 1.0f || runner->renderer == nullptr) return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_DARKSHAPE_FAST") != nullptr) return false; // A/B regression runs
+#endif
+    if (RValue_toBool(Instance_getSelfVar(inst, darkVarShake))) return false;
+
+    int32_t image = RValue_toInt32(Instance_getSelfVar(inst, darkVarImage));
+    int32_t spriteIndex = image != 0
+        ? RValue_toInt32(Instance_getSelfVar(inst, darkVarShrink)) : inst->spriteIndex;
+    if (spriteIndex < 0 || (uint32_t) spriteIndex >= runner->dataWin->sprt.count) return false;
+    int32_t subimg = image != 0 ? image : (int32_t) ((RValue_toReal(Instance_getSelfVar(inst, darkVarTimer)) +
+        RValue_toReal(Instance_getSelfVar(inst, darkVarIndividuality))) * 0.25);
+    float xscale = (float) RValue_toReal(Instance_getSelfVar(inst, darkVarXscale));
+    float yscale = (float) RValue_toReal(Instance_getSelfVar(inst, darkVarYscale));
+    if (!darkshapeFitsSurface(&runner->dataWin->sprt.sprites[spriteIndex], xscale, yscale, inst->imageAngle))
+        return false;
+
+    // The strips were placed at x - 22 and y - 23, around a sprite drawn at (23, 23).
+    float x = (float) inst->x + 1.0f, y = (float) inst->y;
+    Renderer_drawSpriteExt(runner->renderer, spriteIndex, subimg, x, y, xscale, yscale,
+                           inst->imageAngle, inst->imageBlend, 1.0f);
+    float light = (float) RValue_toReal(Instance_getSelfVar(inst, darkVarLight));
+    if (light > 0.0f) {
+        const RendererVtable* vtable = runner->renderer->vtable;
+        if (vtable->gpuSetFog != nullptr) vtable->gpuSetFog(runner->renderer, true, 0xFFFFFFu);
+        Renderer_drawSpriteExt(runner->renderer, spriteIndex, subimg, x, y, xscale,
+                               image != 0 ? yscale : xscale, inst->imageAngle, inst->imageBlend, light);
+        if (vtable->gpuSetFog != nullptr) vtable->gpuSetFog(runner->renderer, false, 0xFFFFFFu);
+    }
+    return true;
+}
+
+/* v0.80-53: DEVICE_MENU's background, the wave shown after finishing a chapter.
+ * In every chapter its Draw walks 190 rows and calls draw_background_part_ext
+ * twice per row, about 16 of the 20 ms of GML per frame on the Vita. The result
+ * only depends on six variables, so it is drawn here and the GML loop is turned
+ * off by raising the 50 in `i < (__WAVEHEIGHT - 50)`, which leaves the rest of the
+ * event as written. A data.win whose bytecode differs keeps its own loop. */
+#define MENU_WAVE_LOOP_LIMIT_WORD 13u
+#define MENU_WAVE_LOOP_OFF 0x840F7D00u
+static uint8_t* deviceMenuWaveLoopLimit(Runner* runner, int32_t codeId) {
+    DataWin* dw = runner->dataWin;
+    if (codeId < 0 || (uint32_t) codeId >= dw->code.count) return nullptr;
+    CodeEntry* code = &dw->code.entries[codeId];
+    if (code->name == nullptr || strcmp(code->name, "gml_Object_DEVICE_MENU_Draw_0") != 0) return nullptr;
+    uint8_t* base = dw->bytecodeBuffer + (code->bytecodeAbsoluteOffset - dw->bytecodeBufferBase);
+    const uint32_t words = code->length / 4u;
+    for (uint32_t i = 0; i + 17u <= words; i++) {
+        uint8_t* at = base + i * 4u;
+        // __WAVEHEIGHT = 240; __WAVEWIDTH = 320; for (i = 0; i < (__WAVEHEIGHT - 50); ...)
+        if (BinaryUtils_readUint32(at) != 0x840F00F0u || BinaryUtils_readUint32(at + 12) != 0x840F0140u ||
+            BinaryUtils_readUint32(at + 24) != 0x840F0000u || BinaryUtils_readUint32(at + 56) != 0x0D520000u ||
+            BinaryUtils_readUint32(at + 60) != 0x15550100u || (BinaryUtils_readUint32(at + 64) >> 24) != 0xB8u)
+            continue;
+        uint32_t limit = BinaryUtils_readUint32(at + MENU_WAVE_LOOP_LIMIT_WORD * 4u);
+        if (limit == 0x840F0032u || limit == MENU_WAVE_LOOP_OFF) return at + MENU_WAVE_LOOP_LIMIT_WORD * 4u;
+    }
+    return nullptr;
+}
+
+static void deviceMenuWaveDraw(Runner* runner, Instance* inst, int32_t codeId) {
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_MENU_WAVE_NATIVE") != nullptr) return; // A/B regression runs
+#endif
+    uint8_t* limit = deviceMenuWaveLoopLimit(runner, codeId);
+    if (limit == nullptr) return;
+    BinaryUtils_writeUint32(limit, MENU_WAVE_LOOP_OFF);
+
+    VMContext* vm = runner->vmContext;
+    if (RValue_toInt32(Instance_getSelfVar(inst, VM_getOrAllocateVarID(vm, "BGMADE"))) != 1) return;
+    // Chapter 1 has no SUBTYPE and draws the wave whenever BGMADE is set.
+    RValue subtype = Instance_getSelfVar(inst, VM_getOrAllocateVarID(vm, "SUBTYPE"));
+    if (subtype.type != RVALUE_UNDEFINED && RValue_toInt32(subtype) != 1) return;
+
+    // The event updates these two before its loop, so draw with the updated values.
+    double siner = RValue_toReal(Instance_getSelfVar(inst, VM_getOrAllocateVarID(vm, "BG_SINER"))) + 1.0;
+    double alpha = RValue_toReal(Instance_getSelfVar(inst, VM_getOrAllocateVarID(vm, "BG_ALPHA")));
+    if (alpha < 0.5) alpha += 0.04 - alpha / 14.0;
+    if (alpha > 0.5) alpha = 0.5;
+    const double magnitude = RValue_toReal(Instance_getSelfVar(inst, VM_getOrAllocateVarID(vm, "BGMAGNITUDE")));
+    // IMAGE_MENU is a sprite asset, not a variable.
+    static int32_t sprite = -1;
+    Sprt* sprites = &runner->dataWin->sprt;
+    if (sprite < 0 || (uint32_t) sprite >= sprites->count || sprites->sprites[sprite].name == nullptr ||
+        strcmp(sprites->sprites[sprite].name, "IMAGE_MENU") != 0) {
+        sprite = -1;
+        repeat(sprites->count, index) {
+            const char* name = sprites->sprites[index].name;
+            if (name != nullptr && strcmp(name, "IMAGE_MENU") == 0) {
+                sprite = (int32_t) index;
+                break;
+            }
+        }
+    }
+    if (sprite < 0) return;
+    const float phase = (float) fmod(siner / 30.0, 6.283185307179586);
+    const float stripAlpha = (float) (alpha * 0.8), offsetY = (float) (alpha * 20.0);
+    for (int32_t i = 0; i < 190; i++) {
+        const double minus = magnitude * ((double) i / 240.0) * 1.3;
+        const float mag = minus > magnitude ? 0.0f : (float) (magnitude - minus);
+        const float x = sinf((float) i / 8.0f + phase) * mag;
+        const float y = (float) (i - 10) - offsetY;
+        Renderer_drawSpritePartExt(runner->renderer, sprite, 0, 0, i, 320, 1, x, y, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+                                   inst->imageBlend, stripAlpha);
+        Renderer_drawSpritePartExt(runner->renderer, sprite, 0, 0, i, 320, 1, -x, y, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+                                   inst->imageBlend, stripAlpha);
+    }
+}
+
+/* v0.80-57: final battle. Each of the tower's decorations runs about 200 VM ops in
+ * Draw and switches shader twice for its rim, about 10 ms per frame on the Vita
+ * (DRAW_HOTSPOTS). The first decoration of a depth now draws them all: bases first,
+ * then the rims under one shader. Only overlapping decorations can differ, by a rim
+ * landing on a base that used to cover it. */
+typedef struct {
+    float x, y, xscale, yscale, alpha;
+    int32_t image, rimSprite;
+} FloweryDecorationRim;
+#define FLOWERY_DECORATION_MAX 128
+
+static double floweryLoop(double value, double size) {
+    if (size == 0.0) return value;
+    double result = fmod(value, size);
+    if (value < 0.0) result += size;
+    return result;
+}
+
+static double floweryClamp01(double value) {
+    return value < 0.0 ? 0.0 : (value > 1.0 ? 1.0 : value);
+}
+
+static int32_t floweryFindByName(const char* wanted, uint32_t count, const char* (*nameAt)(DataWin*, uint32_t), DataWin* dw) {
+    repeat(count, i) {
+        const char* name = nameAt(dw, (uint32_t) i);
+        if (name != nullptr && strcmp(name, wanted) == 0) return (int32_t) i;
+    }
+    return -1;
+}
+static const char* floweryObjectName(DataWin* dw, uint32_t i) { return dw->objt.objects[i].name; }
+static const char* flowerySpriteName(DataWin* dw, uint32_t i) { return dw->sprt.sprites[i].name; }
+static const char* floweryShaderName(DataWin* dw, uint32_t i) { return dw->shdr.shaders[i].name; }
+
+static bool floweryDecorationFastPath(Runner* runner, Instance* inst, int32_t ownerObjectIndex) {
+    static DataWin* cached = nullptr;
+    static int32_t decoration, tower, flower, leaf, flowerRim, leafRim, rimShader;
+    static int32_t vRad, vSiner, vHeight, vRot, vWidth, vCamy, vCamUpdate, vFinalHeight, vSpin, vBright, vTowerCol, vOutline;
+    DataWin* dw = runner->dataWin;
+    if (cached != dw) {
+        cached = dw;
+        decoration = floweryFindByName("obj_flowery_tower_decoration", dw->objt.count, floweryObjectName, dw);
+        tower = floweryFindByName("obj_flowery_towery", dw->objt.count, floweryObjectName, dw);
+        flower = floweryFindByName("spr_fcastle_tower_flower", dw->sprt.count, flowerySpriteName, dw);
+        leaf = floweryFindByName("spr_fcastle_tower_leaf", dw->sprt.count, flowerySpriteName, dw);
+        flowerRim = floweryFindByName("spr_fcastle_tower_flower_rim", dw->sprt.count, flowerySpriteName, dw);
+        leafRim = floweryFindByName("spr_fcastle_tower_leaf_rim", dw->sprt.count, flowerySpriteName, dw);
+        rimShader = floweryFindByName("shd_brightness_to_alpha", dw->shdr.count, floweryShaderName, dw);
+        if (decoration >= 0) {
+            VMContext* vm = runner->vmContext;
+            vRad = VM_getOrAllocateVarID(vm, "rad");
+            vSiner = VM_getOrAllocateVarID(vm, "siner");
+            vHeight = VM_getOrAllocateVarID(vm, "height");
+            vRot = VM_getOrAllocateVarID(vm, "rot");
+            vWidth = VM_getOrAllocateVarID(vm, "width");
+            vCamy = VM_getOrAllocateVarID(vm, "camy");
+            vCamUpdate = VM_getOrAllocateVarID(vm, "cam_update");
+            vFinalHeight = VM_getOrAllocateVarID(vm, "finalheight");
+            vSpin = VM_getOrAllocateVarID(vm, "final_spin");
+            vBright = VM_getOrAllocateVarID(vm, "brightness");
+            vTowerCol = VM_getOrAllocateVarID(vm, "towerCol");
+            vOutline = VM_getOrAllocateVarID(vm, "outlineCol");
+        }
+    }
+    if (decoration < 0 || ownerObjectIndex != decoration || inst->objectIndex != decoration) return false;
+    if (tower < 0 || flower < 0 || leaf < 0 || flowerRim < 0 || leafRim < 0 || rimShader < 0 ||
+        runner->renderer == nullptr) return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_FLOWERY_DECORATION_FAST") != nullptr) return false; // A/B regression runs
+#endif
+    static int lastFrame = -1;
+    static int32_t lastView = -1, lastDepth = 0;
+    if (lastFrame == runner->frameCount && lastView == runner->viewCurrent && lastDepth == inst->depth) return true;
+
+    int32_t instanceCount = (int32_t) arrlen(runner->instances);
+    Instance* towerInst = nullptr;
+    int32_t decorations = 0;
+    repeat(instanceCount, i) {
+        Instance* other = runner->instances[i];
+        if (other == nullptr || !other->active) continue;
+        if (other->objectIndex == tower && towerInst == nullptr) towerInst = other;
+        if (other->objectIndex == decoration) decorations++;
+    }
+    GMLCamera* camera = Runner_getCameraForView(runner, 0);
+    if (towerInst == nullptr || camera == nullptr || decorations > FLOWERY_DECORATION_MAX) return false;
+
+    lastFrame = runner->frameCount;
+    lastView = runner->viewCurrent;
+    lastDepth = inst->depth;
+
+    if (!RValue_toBool(Instance_getSelfVar(towerInst, vCamUpdate))) {
+        const double viewY = (double) camera->viewY;
+        Instance_setSelfVar(towerInst, vCamy, RValue_makeReal((GMLReal) viewY));
+        Instance_setSelfVar(towerInst, vFinalHeight, RValue_makeReal((GMLReal) rint(
+            RValue_toReal(Instance_getSelfVar(towerInst, vHeight)) - viewY / 2.0)));
+        Instance_setSelfVar(towerInst, vCamUpdate, RValue_makeReal(1));
+    }
+    const RValue camyValue = Instance_getSelfVar(towerInst, vCamy);
+    const double camy = RValue_toReal(camyValue);
+    const double finalSpin = RValue_toReal(Instance_getSelfVar(towerInst, vSpin));
+    const int32_t brightness = RValue_toInt32(Instance_getSelfVar(towerInst, vBright));
+    const int32_t towerCol = RValue_toInt32(Instance_getSelfVar(towerInst, vTowerCol));
+    const int32_t outlineCol = RValue_toInt32(Instance_getSelfVar(towerInst, vOutline));
+
+    FloweryDecorationRim rims[FLOWERY_DECORATION_MAX];
+    int32_t rimCount = 0;
+    repeat(instanceCount, i) {
+        Instance* other = runner->instances[i];
+        if (other == nullptr || !other->active || !other->visible || other->objectIndex != decoration ||
+            other->depth != inst->depth) continue;
+        Instance_setSelfVar(other, vCamy, camyValue);
+        const double yy = floweryLoop(RValue_toReal(Instance_getSelfVar(other, vHeight)) + (double) other->y - camy / 2.0, 600.0) + camy - 40.0;
+        if (yy < camy - 40.0 || yy > camy + 500.0) continue;
+        double spin = floweryLoop(finalSpin + RValue_toReal(Instance_getSelfVar(other, vRot)) - 90.0 + 7.5, 360.0);
+        const int32_t image = (int32_t) (spin / 15.0);
+        const double scale = RValue_toReal(Instance_getSelfVar(other, vSiner));
+        const double blend = floweryClamp01(1.0 - (scale + 1.0) / 2.0);
+        const int32_t color = Color_lerp(brightness, towerCol, (float) blend);
+        const double xx = (double) towerInst->x + cos(RValue_toReal(Instance_getSelfVar(other, vRad))) *
+            (RValue_toReal(Instance_getSelfVar(other, vWidth)) / 2.0 - 6.0);
+        Renderer_drawSpriteExt(runner->renderer, other->spriteIndex, image, (float) xx, (float) yy,
+                               other->imageXscale, other->imageYscale, 0.0f, (uint32_t) color, 1.0f);
+        spin = floweryLoop(spin - 7.5, 360.0);
+        const double rimAlpha = floweryClamp01(1.0 - cos(spin * 3.14159265358979323846 / 180.0));
+        const int32_t rimSprite = other->spriteIndex == flower ? flowerRim : (other->spriteIndex == leaf ? leafRim : -1);
+        // At alpha 0 a rim draws nothing, so it needs no draw call.
+        if (rimSprite >= 0 && rimAlpha > 0.0) {
+            FloweryDecorationRim* rim = &rims[rimCount++];
+            rim->x = (float) xx;
+            rim->y = (float) yy;
+            rim->xscale = other->imageXscale;
+            rim->yscale = other->imageYscale;
+            rim->alpha = (float) rimAlpha;
+            rim->image = image;
+            rim->rimSprite = rimSprite;
+        }
+    }
+    if (rimCount > 0) {
+        VMBuiltins_setShader(runner->vmContext, rimShader);
+        repeat(rimCount, i) {
+            const FloweryDecorationRim* rim = &rims[i];
+            Renderer_drawSpriteExt(runner->renderer, rim->rimSprite, rim->image, rim->x, rim->y, rim->xscale, rim->yscale,
+                                   0.0f, (uint32_t) outlineCol, rim->alpha);
+        }
+        VMBuiltins_resetShader(runner->vmContext);
+    }
+    return true;
+}
+
+static void towerTileWindowEnd(Instance* inst, GMLArray* all) {
+    if (all == nullptr) return;
+    towerNativeInstance = nullptr;
+    if (towerTileWindowRenderer != nullptr) {
+        towerTileWindowRenderer->vtable->flush(towerTileWindowRenderer);
+        towerTileWindowRenderer->quadBatchWindow = false;
+        towerTileWindowRenderer = nullptr;
+    }
+    Instance_setSelfVar(inst, towerVarTiles, RValue_makeArrayWeak(all));
+    GMLArray_decRef(all);
+}
+#endif
+
 void Runner_draw(Runner* runner) {
     Room* room = runner->currentRoom;
+#ifdef NATIVE_GXM_PROBE_VERSION
+    extern int g_vitaActiveChapter;
+#endif
 
 #ifdef PLATFORM_VITA
     // DELTARUNE battles are overlays and leave the Cyber room parallax active
@@ -1382,6 +2311,38 @@ void Runner_draw(Runner* runner) {
     rebuildDrawableCacheIfDirty(runner);
     int32_t drawableCount = (int32_t) arrlen(runner->cachedDrawables);
 
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* Trace actual depth order for CH3 sepia/battle once upon room entry.
+     * Bounded records let us distinguish bad sorting from explicit GML
+     * draw_surface/Draw GUI ordering without frame-long log spam. */
+    {
+        static int32_t loggedRoom=-999;
+        if (runner->currentRoomIndex != loggedRoom) {
+            loggedRoom=runner->currentRoomIndex;
+            if (runner->currentRoom && (strcmp(runner->currentRoom->name,"room_torhouse_sepia")==0 ||
+                strcmp(runner->currentRoom->name,"room_dw_snow_zone_battle")==0)) {
+                extern void VitaProbe_logLine(const char* text);
+                int limit=drawableCount<54?drawableCount:54;
+                for(int32_t traceIndex=0;traceIndex<limit;traceIndex++){
+                    Drawable* d=&runner->cachedDrawables[traceIndex];
+                    char line[196];
+                    const char* name="-";
+                    if(d->type==DRAWABLE_INSTANCE && d->instance &&
+                       d->instance->objectIndex>=0 &&
+                       (uint32_t)d->instance->objectIndex<runner->dataWin->objt.count)
+                        name=runner->dataWin->objt.objects[d->instance->objectIndex].name;
+                    snprintf(line,sizeof(line),
+                      "NATIVE_GXM=draw_order room=%d rank=%d depth=%d type=%d id=%d name=%.80s",
+                      runner->currentRoomIndex,traceIndex,d->depth,d->type,
+                      d->type==DRAWABLE_INSTANCE?(int)d->instance->instanceId:
+                      d->type==DRAWABLE_LAYER?d->runtimeLayerId:d->tileIndex,
+                      name?name:"-");
+                    VitaProbe_logLine(line);
+                }
+            }
+        }
+    }
+#endif
     // Draw non-foreground backgrounds (behind everything)
     if (!DataWin_isVersionAtLeast(runner->dataWin, 2, 0, 0, 0))
         drawGMS1Backgrounds(runner, false);
@@ -1389,6 +2350,19 @@ void Runner_draw(Runner* runner) {
     fireDrawSubtype(runner, runner->cachedDrawables, drawableCount, DRAW_BEGIN);
 
     // Draw interleaved tiles and instances
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* Ch5 lighting is a world-space compositor, not a background prop.
+     * On GXM defer its Draw until after characters / same-depth layers:
+     * otherwise opaque actor sprites overwrite the shadow overlay as the
+     * player crosses the shade. Keep native behavior isolated to light-world
+     * Ch5; no changes to GameMaker data or other chapter render ordering. */
+    Instance* lateSunshadows[4]={0};
+    int lateShadowCount=0;
+    /* v0.80-6 deferred dialoguer Draw, but its script updates the actual
+     * writer and face instance positions/visibility. Deferring the script
+     * drew only a black dialogue box (without speech or portrait). Never
+     * reorder GameMaker's dialogue events. Use host GUI shader isolation. */
+#endif
     int32_t i = 0;
     DrawKey lastProcessedDrawKey;
 
@@ -1489,14 +2463,38 @@ void Runner_draw(Runner* runner) {
             Instance* inst = d->instance;
             // Filter inactive/invisible instances at draw time so the cache doesn't need invalidation when those flags toggle.
             if (!inst->active || !inst->visible) continue;
+#ifdef NATIVE_GXM_PROBE_VERSION
+            if(g_vitaActiveChapter==5 && room && room->name &&
+               strncmp(room->name,"room_town_",10)==0 &&
+               inst->objectIndex>=0 &&
+               (uint32_t)inst->objectIndex<runner->dataWin->objt.count &&
+               strcmp(runner->dataWin->objt.objects[inst->objectIndex].name,
+                      "obj_sunshadows")==0 && lateShadowCount<4){
+               lateSunshadows[lateShadowCount++]=inst;
+               continue;
+            }
+#endif
 #ifdef PLATFORM_VITA
             if (inst->objectIndex >= 0 &&
                 (uint32_t)inst->objectIndex < runner->dataWin->objt.count) {
                 const char* drawObjectName = runner->dataWin->objt.objects[inst->objectIndex].name;
                 extern void VitaBorders_noteTransitionObject(const char* objectName);
                 VitaBorders_noteTransitionObject(drawObjectName);
+                if(drawObjectName && strcmp(drawObjectName,"obj_darkdoor")==0 &&
+                   inst->spriteIndex>=0 &&
+                   (uint32_t)inst->spriteIndex<runner->dataWin->sprt.count){
+                    const char* doorSprite=runner->dataWin->sprt.sprites[
+                                              inst->spriteIndex].name;
+                    if((doorSprite && (!strcmp(doorSprite,"spr_darkdoor_open") ||
+                                       !strcmp(doorSprite,"spr_giantdarkdoor_white"))) ||
+                       (inst->imageSpeed>0.0f && inst->imageIndex>=1.0f)){
+                        extern void VitaBorders_noteSchooldoorAnimation(void);
+                        VitaBorders_noteSchooldoorAnimation();
+                    }
+                }
             }
-            if (g_vitaActiveChapter == 3 && inst->objectIndex >= 0 &&
+            if (g_vitaActiveChapter >= 1 && g_vitaActiveChapter <= 5 &&
+                inst->objectIndex >= 0 &&
                 (uint32_t)inst->objectIndex < runner->dataWin->objt.count) {
                 extern void VitaBorders_noteVisibleAsset(const char* assetName);
                 VitaBorders_noteVisibleAsset(
@@ -1519,13 +2517,76 @@ void Runner_draw(Runner* runner) {
                     continue;
             }
 #endif
+            /* VitaGL Flowery fight: original lyric Draw updates current_lyric
+             * /lyrics_index BEFORE its early image_alpha=0 exit. Keeping that
+             * event active while temporarily forcing alpha=0 preserves
+             * song/note timing and removes its three 640x100 compositor
+             * surfaces, text, notes and karaoke boxes. Do not hide the
+             * instance or suppress its Step event. */
+            bool vitaHideFloweryLyrics=false;
+            float vitaSavedLyricAlpha=0;
+#if defined(PLATFORM_VITA) && !defined(NATIVE_GXM_PROBE_VERSION)
+            if(g_vitaActiveChapter==5 && room && room->name &&
+               strcmp(room->name,"room_dw_fcastle_flowery")==0 &&
+               inst->objectIndex>=0 &&
+               (uint32_t)inst->objectIndex<runner->dataWin->objt.count){
+                const char*n=runner->dataWin->objt.objects[inst->objectIndex].name;
+                if(n&&strcmp(n,"obj_flowery_lyrics")==0){
+                    vitaHideFloweryLyrics=true;
+                    vitaSavedLyricAlpha=inst->imageAlpha;
+                    inst->imageAlpha=0.0f;
+                    static unsigned floweryLyricTraces=0;
+                    if(floweryLyricTraces++<2)
+                        VitaProbe_logLine("VITAGL_FLOWERY=lyrics_draw_hidden timing_preserved=1");
+                }else if(n&&strcmp(n,"obj_towery_particle")==0 &&
+                         (inst->instanceId&1)){
+                    /* Cosmetic decorative leaf clusters only; keep every
+                     * object's Step/collision and all projectile objects. */
+                    continue;
+                }
+            }
+#endif
             int32_t ownerObjectIndex = -1;
             int32_t codeId = findEventCodeIdAndOwner(runner, inst->objectIndex, EVENT_DRAW, DRAW_NORMAL, &ownerObjectIndex);
             if (codeId >= 0) {
+#ifndef NATIVE_GXM_PROBE_VERSION
+                /* v0.80-49-ch3: the menu's Draw changes no blend, shader or target,
+                 * and its text and sprites flush queued quads before drawing. The
+                 * flag is only read by Legacy-GL. */
+                const bool menuQuadWindow = runner->renderer != nullptr && room != nullptr &&
+                    room->name != nullptr && strcmp(room->name, "PLACE_MENU") == 0 &&
+                    inst->objectIndex >= 0 && (uint32_t)inst->objectIndex < runner->dataWin->objt.count &&
+                    strcmp(runner->dataWin->objt.objects[inst->objectIndex].name, "DEVICE_MENU") == 0;
+                if (menuQuadWindow) {
+                    runner->renderer->quadBatchPartWindow = true;
+                    deviceMenuWaveDraw(runner, inst, codeId);
+                }
+#endif
+#ifndef NATIVE_GXM_PROBE_VERSION
+                if (darkshapeDrawFastPath(runner, inst, ownerObjectIndex)) {
+                    if(vitaHideFloweryLyrics)inst->imageAlpha=vitaSavedLyricAlpha;
+                    continue;
+                }
+                if (floweryDecorationFastPath(runner, inst, ownerObjectIndex)) {
+                    if(vitaHideFloweryLyrics)inst->imageAlpha=vitaSavedLyricAlpha;
+                    continue;
+                }
+                GMLArray* towerTilesAll = towerTileWindowBegin(runner, inst);
+#endif
                 Runner_executeResolvedEvent(runner, inst, EVENT_DRAW, DRAW_NORMAL, codeId, ownerObjectIndex);
+#ifndef NATIVE_GXM_PROBE_VERSION
+                towerTileWindowEnd(inst, towerTilesAll);
+#endif
+#ifndef NATIVE_GXM_PROBE_VERSION
+                if (menuQuadWindow) {
+                    runner->renderer->vtable->flush(runner->renderer);
+                    runner->renderer->quadBatchPartWindow = false;
+                }
+#endif
             } else if (runner->renderer != nullptr) {
                 Renderer_drawSelf(runner->renderer, inst);
             }
+            if(vitaHideFloweryLyrics)inst->imageAlpha=vitaSavedLyricAlpha;
         } else if (d->type == DRAWABLE_LAYER) {
             // Re-resolve every iteration: a previous instance's Draw event may have called layer_create/layer_destroy and reallocated runner->runtimeLayers.
             RuntimeLayer* runtimeLayer = Runner_findRuntimeLayerById(runner, d->runtimeLayerId);
@@ -1571,7 +2632,27 @@ void Runner_draw(Runner* runner) {
 
             // Everything after this point is static/parsed layers from the Room itself
             RoomLayer* parsedLayer = Runner_findRoomLayerById(runner->currentRoom, (int32_t) runtimeLayer->id);
-            if (parsedLayer == nullptr) continue;
+            if (parsedLayer == nullptr) {
+                /* v0.80-49: a layer from layer_create has no parsed data, but
+                 * layer_element_move can put room sprites on it. Chapter 4's
+                 * finalclimb moves all of its glass rows this way, and they were
+                 * never drawn. */
+                if (runner->renderer != nullptr) {
+                    size_t movedCount = arrlenu(runtimeLayer->elements);
+                    repeat(movedCount, j) {
+                        RuntimeLayerElement* el = &runtimeLayer->elements[j];
+                        if (el->type != RuntimeLayerElementType_Sprite || el->spriteElement == nullptr) continue;
+                        RuntimeSpriteElement* spr = el->spriteElement;
+                        if (0 > spr->spriteIndex) continue;
+                        Renderer_drawSpriteExt(
+                            runner->renderer, spr->spriteIndex, (int32_t) spr->frameIndex,
+                            (float) spr->x + layerOffsetX, (float) spr->y + layerOffsetY, spr->scaleX,
+                            spr->scaleY, spr->rotation, el->blend,
+                            el->alpha);
+                    }
+                }
+                continue;
+            }
             if (parsedLayer->type == RoomLayerType_Assets) {
                 RoomLayerAssetsData* data = parsedLayer->assetsData;
                 size_t tileElementCount = arrlenu(runtimeLayer->elements);
@@ -1672,6 +2753,30 @@ void Runner_draw(Runner* runner) {
         }
     }
 
+#ifdef NATIVE_GXM_PROBE_VERSION
+    if(lateShadowCount>0){
+        static int loggedShadowRoom=-999;
+        if(loggedShadowRoom!=runner->currentRoomIndex){
+            loggedShadowRoom=runner->currentRoomIndex;
+            extern void VitaProbe_logLine(const char* text);
+            char msg[118];
+            snprintf(msg,sizeof(msg),
+              "NATIVE_GXM=ch5_shadow_deferred room=%d count=%d after_actors=1",
+              runner->currentRoomIndex,lateShadowCount);
+            VitaProbe_logLine(msg);
+        }
+    }
+    for(int shadowIndex=0;shadowIndex<lateShadowCount;shadowIndex++){
+        Instance* shadow=lateSunshadows[shadowIndex];
+        if(!shadow||!shadow->active||shadow->destroyed||!shadow->visible)continue;
+        int owner=-1;
+        int code=findEventCodeIdAndOwner(runner,shadow->objectIndex,
+                                        EVENT_DRAW,DRAW_NORMAL,&owner);
+        if(code>=0)
+            Runner_executeResolvedEvent(runner,shadow,EVENT_DRAW,DRAW_NORMAL,
+                                        code,owner);
+    }
+#endif
     fireDrawSubtype(runner, runner->cachedDrawables, drawableCount, DRAW_END);
 
     // Draw foreground backgrounds (in front of instances, behind GUI)
@@ -1790,6 +2895,11 @@ static void applyFreeCamera(Runner* runner, int32_t* viewX, int32_t* viewY, int3
     *viewY = (int32_t) (centerY - zoomedH * 0.5f);
 }
 
+#ifdef NATIVE_GXM_PROBE_VERSION
+/* Distinct from surfaceExists: the first sakura source has no completed
+ * render yet. Never composite it before view 1 has actually been painted. */
+int g_vitaCh5FloradinnSecondaryReady=0;
+#endif
 void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, bool debugShowCollisionMasks) {
     Renderer* renderer = runner->renderer;
     renderer->vtable->clearScreen(renderer, runner->drawBackgroundColor ? runner->backgroundColor : 0, 1.0f);
@@ -1810,6 +2920,47 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, bool debugSh
             if (camera == nullptr) continue;
 
             bool toSurface = view->surfaceId != -1;
+#ifdef NATIVE_GXM_PROBE_VERSION
+            extern int g_vitaActiveChapter;
+            /* CH5 Floradinn begins with the pink primary scenery, but its
+             * sakura transition installs a second camera before the intro
+             * starts. Drawing view 1 during stage 0 can layer uninitialized
+             * dark pixels over the real scene and doubles the room cost.
+             * Render that secondary view only when the petal wipe begins. */
+            if(g_vitaActiveChapter==5 && vi==1 &&
+               runner->currentRoom && runner->currentRoom->name &&
+               strcmp(runner->currentRoom->name,
+                   "room_dw_garden_floradinnencounter")==0 &&
+               runner->vmContext){
+                int stageId=shget(runner->vmContext->varNameMap,"transition_stage");
+                int stage=0;
+                bool found=false;
+                for(size_t k=0;k<arrlen(runner->instances);k++){
+                    Instance*inst=runner->instances[k];
+                    if(!inst||inst->destroyed||inst->objectIndex<0||
+                       (uint32_t)inst->objectIndex>=runner->dataWin->objt.count)
+                        continue;
+                    const char*name=runner->dataWin->objt.objects[inst->objectIndex].name;
+                    if(name&&strcmp(name,"obj_sakurafubuki_new")==0){
+                        if(stageId>=0)stage=RValue_toInt32(Instance_getSelfVar(inst,stageId));
+                        found=true;break;
+                    }
+                }
+                if(found && (stage==0 || stage>=2)){
+                    g_vitaCh5FloradinnSecondaryReady=0;
+                    if(stage>=2){
+                        runner->views[1].enabled = false;
+                        runner->views[1].surfaceId = -1;
+                    }
+                    static int reported=0;
+                    if(!reported++){
+                        extern void VitaProbe_logLine(const char*);
+                        VitaProbe_logLine("NATIVE_GXM=ch5_floradinn secondary_view deferred_until_petals");
+                    }
+                    continue;
+                }
+            }
+#endif
 
             if (toSurface) {
                 // The surface is GONE, skip it!
@@ -1817,19 +2968,37 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, bool debugSh
                     continue;
 
 #ifdef PLATFORM_VITA
-                // The Garden sakura transition renders a complete second
-                // 640x480 world view into surf_view1. On Vita this roughly
-                // doubles room cost (16-20 render-target switches/frame).
-                // Reuse the previous surface every other frame: the primary
-                // view, battle, input and GUI remain full-rate, while this
-                // decorative transition background updates at 15 Hz.
+                // While the diagonal sakura wipe is actively sweeping across
+                // the screen (transition_stage == 1), view 1 renders into
+                // surf_view1 alongside view 0. Do NOT throttle view 1 before
+                // the transition starts (stage == 0), because surf_view1 covers
+                // 100% of view 0 during stage 0 and skipping odd frames would
+                // halve the visible frame rate to 15 FPS before the wipe.
                 extern int g_vitaActiveChapter;
                 if (g_vitaActiveChapter == 5 && vi == 1 &&
                     runner->currentRoom != nullptr && runner->currentRoom->name != nullptr &&
                     strcmp(runner->currentRoom->name, "room_dw_garden_floradinnencounter") == 0 &&
+                    runner->vmContext != nullptr &&
                     (runner->frameCount & 1) != 0) {
-                    anyViewRendered = true;
-                    continue;
+                    int32_t stgId = shget(runner->vmContext->varNameMap, "transition_stage");
+                    int32_t stage = 0;
+                    for (size_t k = 0; k < arrlenu(runner->instances); ++k) {
+                        Instance* sak = runner->instances[k];
+                        if (sak == nullptr || !sak->active || sak->destroyed ||
+                            sak->objectIndex < 0 ||
+                            (uint32_t)sak->objectIndex >= runner->dataWin->objt.count)
+                            continue;
+                        const char* sname = runner->dataWin->objt.objects[sak->objectIndex].name;
+                        if (sname != nullptr && strcmp(sname, "obj_sakurafubuki_new") == 0) {
+                            if (stgId >= 0)
+                                stage = RValue_toInt32(Instance_getSelfVar(sak, stgId));
+                            break;
+                        }
+                    }
+                    if (stage == 1) {
+                        anyViewRendered = true;
+                        continue;
+                    }
                 }
 #endif
 
@@ -1850,6 +3019,13 @@ void Runner_drawViews(Runner* runner, int32_t gameW, int32_t gameH, bool debugSh
                 renderer->vtable->flush(renderer);
 
                 Runner_surfaceResetTarget(runner);
+#ifdef NATIVE_GXM_PROBE_VERSION
+                if(g_vitaActiveChapter==5 && vi==1 &&
+                   runner->currentRoom&&runner->currentRoom->name&&
+                   strcmp(runner->currentRoom->name,
+                       "room_dw_garden_floradinnencounter")==0)
+                    g_vitaCh5FloradinnSecondaryReady=1;
+#endif
                 anyViewRendered = true;
                 continue;
             }
@@ -3849,6 +5025,15 @@ static void dispatchCollisionEvents(Runner* runner) {
                         if (!preciseHit) continue;
                     }
 
+                    // GameMaker fires exactly one collision event per colliding pair: the
+                    // handler nearest to other's own object in its parent chain. Without this
+                    // an instance also ran the handlers declared for other's ancestors, which
+                    // is what made Chapter 2's obj_holemouse die on Noelle instead of passing
+                    // her (behavior reported by Butterscotch PR #556, thanks to casrielasriel).
+                    FlattenedCollisionEvent* specificEvt = findSymmetricCollisionEvent(runner, self, other);
+                    if (specificEvt == nullptr || (int32_t) specificEvt->targetObjectIndex != targetObjIndex)
+                        continue;
+
                     // Collision detected! If either instance is solid, restore both to xprevious/yprevious.
                     bool hadSolid = self->solid || other->solid;
                     if (hadSolid) {
@@ -4202,6 +5387,10 @@ void Runner_handlePendingRoomChange(Runner* runner) {
     runner->profRoomCleanupUs = 0;
     runner->profRoomTotalUs = 0;
     // Handle game restart
+#ifdef NATIVE_GXM_PROBE_VERSION
+    if(runner->pendingRoom==ROOM_RESTARTGAME)
+        VitaRoomPrefetch_cancel();
+#endif
     if (runner->pendingRoom == ROOM_RESTARTGAME) {
 #ifdef PLATFORM_VITA
         VitaRoomPrefetch_cancel();
@@ -4225,8 +5414,72 @@ void Runner_handlePendingRoomChange(Runner* runner) {
         return;
     }
 
+    /* CH3 second Knight loss: DEVICE_FAILURE owns the Gaster dialogue,
+     * then prompts GO BACK / GO FORWARD. Never let a spurious PLACE_MENU
+     * transition discard those lines before the choice is made.
+     * On normal failure, knight_mode is false and menu transitions remain
+     * untouched. */
+#ifdef NATIVE_GXM_PROBE_VERSION
+    extern int g_vitaActiveChapter;
+    if(g_vitaActiveChapter==3 && runner->pendingRoom>=0 &&
+       runner->currentRoom && runner->currentRoom->name &&
+       strcmp(runner->currentRoom->name,"PLACE_FAILURE")==0 &&
+       (uint32_t)runner->pendingRoom<runner->dataWin->room.count){
+        const char*dest=runner->dataWin->room.rooms[runner->pendingRoom].name;
+        if(dest&&strcmp(dest,"PLACE_MENU")==0 && runner->vmContext){
+            int kmVar=shget(runner->vmContext->varNameMap,"knight_mode");
+            int conVar=shget(runner->vmContext->varNameMap,"knight_mode_con");
+            for(size_t i=0;i<arrlen(runner->instances);i++){
+                Instance* inst=runner->instances[i];
+                if(!inst||inst->objectIndex<0||
+                   (uint32_t)inst->objectIndex>=runner->dataWin->objt.count)continue;
+                const char*obj=runner->dataWin->objt.objects[inst->objectIndex].name;
+                if(!obj||strcmp(obj,"DEVICE_FAILURE")!=0)continue;
+                if(kmVar>=0 && conVar>=0 &&
+                   RValue_toBool(Instance_getSelfVar(inst,kmVar)) &&
+                   RValue_toInt32(Instance_getSelfVar(inst,conVar))<53){
+                    runner->pendingRoom=-1;
+                    extern void VitaProbe_logLine(const char*);
+                    VitaProbe_logLine("NATIVE_GXM=ch3_knight_failure blocked_early_menu_jump=1");
+                }
+                break;
+            }
+        }
+    }
+#endif
     // Handle room transition
     if (runner->pendingRoom >= 0) {
+#ifdef NATIVE_GXM_PROBE_VERSION
+        /* Do not present intermediate frames when asynchronous room I/O is
+         * still pending. Previously this GXM-only early return occurred
+         * before the PLATFORM_VITA waiting flag was set; Runner_step then
+         * advanced the old room and the host presented black/old/black/new.
+         *
+         * The worker still parses the payload asynchronously (and can win
+         * through speculative prefetch); only the final commit waits on the
+         * game thread. The already presented GPU frame remains unchanged
+         * until the new room can be fully constructed. No GML time/events
+         * are advanced while waiting and no GameMaker fade is replaced. */
+        if ((uint32_t)runner->pendingRoom<runner->dataWin->room.count &&
+            !runner->dataWin->room.rooms[runner->pendingRoom].payloadLoaded) {
+            const int32_t barrierRoom=runner->pendingRoom;
+            const uint64_t barrierStart=nowNanos();
+            unsigned polls=0;
+            while (!VitaRoomPrefetch_prepare(barrierRoom)) {
+                sceKernelDelayThread(1000);
+                ++polls;
+            }
+            if (polls) {
+                char line[180];
+                snprintf(line,sizeof(line),
+                    "NATIVE_GXM=async_room_commit_barrier room=%d wait_ms=%llu polls=%u no_intermediate_present=1",
+                    barrierRoom,
+                    (unsigned long long)((nowNanos()-barrierStart)/1000000ULL),polls);
+                extern void VitaProbe_logLine(const char*);
+                VitaProbe_logLine(line);
+            }
+        }
+#endif
 #ifdef PLATFORM_VITA
         if ((uint32_t)runner->pendingRoom < runner->dataWin->room.count &&
             !runner->dataWin->room.rooms[runner->pendingRoom].payloadLoaded &&
@@ -4363,6 +5616,14 @@ void Runner_handlePendingRoomChange(Runner* runner) {
         bool oldFlowerCastle = strncmp(oldRoomName, "room_dw_fcastle_", 16) == 0;
         bool newFlowerCastle = strncmp(newRoomName, "room_dw_fcastle_", 16) == 0;
         bool vitaSharedFlowerCastleTransition = oldFlowerCastle && newFlowerCastle;
+        bool oldGarden = strncmp(oldRoomName, "room_dw_garden_", 15) == 0 &&
+                         strcmp(oldRoomName, "room_dw_garden_video") != 0;
+        bool newGarden = strncmp(newRoomName, "room_dw_garden_", 15) == 0 &&
+                         strcmp(newRoomName, "room_dw_garden_video") != 0;
+        bool vitaSharedGardenTransition = oldGarden && newGarden;
+        bool oldCliff = strncmp(oldRoomName, "room_dw_cliff_", 14) == 0;
+        bool newCliff = strncmp(newRoomName, "room_dw_cliff_", 14) == 0;
+        bool vitaSharedCliffTransition = oldCliff && newCliff;
         bool vitaFloweryBattleDestination = g_vitaActiveChapter == 5 &&
             strcmp(newRoomName, "room_dw_fcastle_flowery") == 0;
         bool vitaSharedCouchTransition =
@@ -4486,6 +5747,8 @@ void Runner_handlePendingRoomChange(Runner* runner) {
                                     (vitaSharedTownTransition ||
                                     vitaSharedDarkCastleTransition ||
                                     vitaSharedFlowerCastleTransition ||
+                                    vitaSharedGardenTransition ||
+                                    vitaSharedCliffTransition ||
                                     vitaSharedCouchTransition ||
                                     vitaSharedCh3BackstageTransition ||
                                     vitaSharedCh3TvBoardTransition ||
@@ -4549,13 +5812,87 @@ void Runner_handlePendingRoomChange(Runner* runner) {
              // sprites and occasionally aborting the first battle frame.
              // Keep only the destination manifest plus a 40 MiB shared core.
              (vitaFloweryBattleDestination ? 32ULL :
-              vitaSharedFlowerCastleTransition ? 64ULL : 32ULL) :
+              vitaSharedDarkCastleTransition ? 56ULL :
+              vitaSharedTownTransition ? 56ULL :
+              vitaSharedFlowerCastleTransition ? 64ULL :
+              vitaSharedGardenTransition ? 64ULL :
+              vitaSharedCliffTransition ? 36ULL : 32ULL) :
              vitaSharedCh1AreaTransition ? 80ULL :
              // RGBA4444 TV pages use 8 MiB each. Start at 48 MiB so the
              // two-page preload still leaves room for four dynamically drawn
              // pages without immediately evicting the incoming room again.
              vitaSharedCh3TvBoardTransition ? 48ULL :
              vitaSharedCh3GreenTransition ? 48ULL : 36ULL) : 0ULL);
+        /* Cliff air-tube transition must not inherit the high-water
+         * castle/town atlas cache into its wind + sunshadow render targets.
+         * Trim conservatively before constructing any destination surface,
+         * while the destination manifest still protects live scene pages. */
+        if(g_vitaActiveChapter==5 && newRoomName &&
+           strcmp(newRoomName,"room_dw_fcastle_yellowblue")==0){
+            /* Real Vita v0.80-37: 103->221 direct jump completed, but first
+             * full floor/platform frame cost 2.18 seconds. 44MiB of atlases
+             * and 13 surfaces were resident before movement froze. Keep a
+             * clean 28MiB warm-up set instead of carrying the outgoing world. */
+            if(vitaTrimMiB>28ULL)vitaTrimMiB=28ULL;
+            VitaProbe_logLine("VITAGL_CH5_FCASTLE_GPU_GUARD=entry_trim target_mib=28");
+        }
+        if (g_vitaActiveChapter == 5 && newRoomName &&
+            strncmp(newRoomName,"room_dw_cliff_",14)==0 &&
+            !vitaSharedCliffTransition &&
+            vitaTrimMiB > 24ULL) {
+            vitaTrimMiB=24ULL;
+            VitaProbe_logLine("VITAGL_CH5_CLIFF=room_entry_budget target_mib=24 reason=air_tube_gpu_headroom");
+        }
+        /* Both CH2 VitaGL dumps occurred with 84-90 MiB texture residency
+         * and low RAM/PHY staging: first room 192 (acid loop), then room
+         * 188 (3F projection) after repeated 166/187 transitions. Trim
+         * before each affected destination while the room manifest protects
+         * the required pages. Other Mansion rooms are unchanged. */
+        if(g_vitaActiveChapter==2 && newRoomName &&
+           (strcmp(newRoomName,"room_dw_mansion_east_3f")==0 ||
+            strcmp(newRoomName,"room_dw_mansion_east_3f_projection")==0 ||
+            strcmp(newRoomName,"room_dw_mansion_east_teacup_4")==0 ||
+            strcmp(newRoomName,"room_dw_mansion_acid_tunnel_loop_rouxls")==0)){
+            /* Projection still froze on the first rendered frame of room
+             * 188 with 66MiB of atlases and only ~2.5MiB free in PHY. The
+             * previous 72MiB target never evicted a single atlas! Flush the
+             * prior Mansion sub-room's inactive pages before entering this
+             * shader-heavy destination, while preserving required pages. */
+            bool projection=strcmp(newRoomName,
+                "room_dw_mansion_east_3f_projection")==0;
+            uint64_t target=projection?48ULL:72ULL;
+            if(vitaTrimMiB>target)vitaTrimMiB=target;
+            VitaProbe_logLine(projection?
+                "VITAGL_CH2_GPU_GUARD=projection_entry_trim target_mib=48":
+                "VITAGL_CH2_GPU_GUARD=mansion_transition_trim target_mib=72");
+        }
+        /* GPU dump 2026-11-01: CH2 acid_tunnel_loop_rouxls had only
+         * 1.5 MiB free in PHY, 3.5 MiB in main VitaGL RAM and 17.5 MiB
+         * VRAM. Enter with sufficient atlas headroom for its palette
+         * shader / GXM command pages. Do not touch other Mansion rooms. */
+        if(g_vitaActiveChapter==2 && newRoomName &&
+           strcmp(newRoomName,"room_dw_mansion_acid_tunnel_loop_rouxls")==0 &&
+           vitaTrimMiB>72ULL){
+            vitaTrimMiB=72ULL;
+            VitaProbe_logLine("VITAGL_CH2_GPU_GUARD=acid_loop_entry atlas_target_mib=72");
+        }
+        /* A DEV Room Navigator teleport is NOT a normal adjacent-door
+         * transition. Before the destination preloads textures, release the
+         * old room's unpinned GPU pages even when it shares a region with the
+         * new room. This runs AFTER GameMaker Room End destroys its surfaces
+         * and AFTER the outgoing GPU command barrier from the VitaGL host.
+         * Never clear the immutable/pinned shared font and game UI pages. */
+#ifndef NATIVE_GXM_PROBE_VERSION
+        extern volatile int g_vitaDevRoomJumpClean;
+        if(g_vitaDevRoomJumpClean){
+            g_vitaDevRoomJumpClean=0;
+            GLLegacyRenderer_trimTextureCacheForRoomChange(
+                (GLLegacyRenderer*)runner->renderer,0ULL,true);
+            GLLegacyRenderer_collectRetiredTexturesForRoomChange(
+                (GLLegacyRenderer*)runner->renderer);
+            VitaProbe_logLine("VITAGL_DEV_QUICK=old_room_gpu_atlases_cleared before_preload=1");
+        }
+#endif
         GLLegacyRenderer_trimTextureCacheForRoomChange(
             (GLLegacyRenderer*)runner->renderer,
             vitaTrimMiB * 1024ULL * 1024ULL,
@@ -4564,6 +5901,37 @@ void Runner_handlePendingRoomChange(Runner* runner) {
             (GLLegacyRenderer*)runner->renderer);
         uint32_t vitaPreloadedPages = GLLegacyRenderer_preloadRoomTextureSet(
             (GLLegacyRenderer*)runner->renderer);
+        if(g_vitaActiveChapter==5 && newRoomName &&
+           strcmp(newRoomName,"room_dw_fcastle_yellowblue")==0){
+            /* A single GPU fence after atlas LRU cleanup, before creating
+             * the room's large, shaded tile-floor surfaces. Not per-frame. */
+            VitaProbe_logLine("VITAGL_CH5_FCASTLE_GPU_GUARD=pre_create_fence_begin");
+            glFinish();
+            vglForceGarbageCollection();
+            VitaProbe_logLine("VITAGL_CH5_FCASTLE_GPU_GUARD=pre_create_fence_complete");
+        }
+        if(g_vitaActiveChapter==2 && newRoomName &&
+           strcmp(newRoomName,"room_dw_mansion_east_3f_projection")==0){
+            /* One room-boundary barrier. The pal-swap/projection scene owns
+             * dynamic render targets and cannot reuse outstanding incoming
+             * texture uploads while its first surfaces are created. */
+            VitaProbe_logLine("VITAGL_CH2_PROJECTION=precreate_gpu_fence_begin");
+            glFinish();
+            vglForceGarbageCollection();
+            VitaProbe_logLine("VITAGL_CH2_PROJECTION=precreate_gpu_fence_complete");
+        }
+
+        if(g_vitaActiveChapter==5 && oldRoomIndex==161 && newRoomIndex==160){
+            /* 2026-11-02 hardware trace v0.80-28: shop->Seth transitions
+             * completed in 685 ms with 76 MiB free, then produced no new
+             * presented frame. Flush the queued texture prewarm and retire
+             * outgoing GPU work BEFORE creating the miniboss surface graph.
+             * This is a one-time room-boundary barrier, not per-frame sync. */
+            VitaProbe_logLine("VITAGL_CH5_SETH_FREEZE=pre_create_gpu_barrier_begin");
+            glFinish();
+            vglForceGarbageCollection();
+            VitaProbe_logLine("VITAGL_CH5_SETH_FREEZE=pre_create_gpu_barrier_complete");
+        }
         snprintf(vitaRoomPhase, sizeof(vitaRoomPhase),
                  "VITA_ROOM_PHASE=texture_trim_complete from=%d to=%d resident=%llu preloaded=%u",
                  oldRoomIndex, newRoomIndex,
@@ -4578,6 +5946,15 @@ void Runner_handlePendingRoomChange(Runner* runner) {
             // pages are uploaded. Fence and clear stale pages before room
             // construction, then warm the small board core observed in logs.
             GLRenderer* vitaModern = (GLRenderer*)runner->renderer;
+#ifndef NATIVE_GXM_PROBE_VERSION
+            extern volatile int g_vitaDevRoomJumpClean;
+            if(g_vitaDevRoomJumpClean){
+                g_vitaDevRoomJumpClean=0;
+                GLRenderer_trimTextureCacheForRoomChange(vitaModern,0);
+                glFinish();vglForceGarbageCollection();
+                VitaProbe_logLine("VITAGL_DEV_QUICK=old_room_gpu_atlases_cleared renderer=modern before_preload=1");
+            }
+#endif
             bool vitaCh3Board2Destination =
                 g_vitaActiveChapter == 3 && strcmp(newRoomName, "room_board_2") == 0;
             if (vitaCh3Board2Destination) {
@@ -4614,9 +5991,220 @@ void Runner_handlePendingRoomChange(Runner* runner) {
         }
 #endif
 
+        /* DEV Room Navigator bypasses the plot scripts that normally set
+         * global.darkzone before the main character Create event. Restore
+         * world mode *before* room construction, but NEVER change it for
+         * ordinary story transitions. Unknown room families are left alone. */
+#ifdef NATIVE_GXM_PROBE_VERSION
+        extern int g_vitaDevJumpTarget;
+        int vitaDevWorldChanged=-1;
+        if(g_vitaDevJumpTarget==newRoomIndex && runner->vmContext &&
+           runner->vmContext->globalScopeInstance && newRoomName){
+            int nextDark=-1;
+            if(strncmp(newRoomName,"room_dw_",8)==0 ||
+               strncmp(newRoomName,"room_dark",9)==0 ||
+               strncmp(newRoomName,"room_castle",11)==0)
+                nextDark=1;
+            else if(strncmp(newRoomName,"room_town_",10)==0 ||
+                    strncmp(newRoomName,"room_school",11)==0 ||
+                    strncmp(newRoomName,"room_church",11)==0 ||
+                    strncmp(newRoomName,"room_hometown",13)==0)
+                nextDark=0;
+            if(nextDark>=0){
+                int var=VM_getOrAllocateVarID(runner->vmContext,"darkzone");
+                RValue old=Instance_getSelfVar(
+                    runner->vmContext->globalScopeInstance,var);
+                int prev=old.type==RVALUE_UNDEFINED?-1:RValue_toInt32(old);
+                Instance_setSelfVar(runner->vmContext->globalScopeInstance,
+                                    var,RValue_makeReal((double)nextDark));
+                vitaDevWorldChanged=nextDark;
+                char msg[150];snprintf(msg,sizeof(msg),
+                   "NATIVE_GXM=dev_world_sync room=%d darkzone=%d previous=%d",
+                   newRoomIndex,nextDark,prev);
+                extern void VitaProbe_logLine(const char*);
+                VitaProbe_logLine(msg);
+            }else{
+                extern void VitaProbe_logLine(const char*);
+                VitaProbe_logLine("NATIVE_GXM=dev_world_sync unknown_room_family preserve_previous");
+            }
+        }
+        if(g_vitaDevJumpTarget==newRoomIndex)g_vitaDevJumpTarget=-1;
+#endif
+#if defined(PLATFORM_VITA) && !defined(NATIVE_GXM_PROBE_VERSION)
+        /* Bring DEV-only VitaGL world state into the same contract as GXM,
+         * before the destination's GML Create events. Ordinary doorways and
+         * story transitions are never modified. */
+        extern volatile int g_vitaDevRoomJumpTarget;
+        if(g_vitaDevRoomJumpTarget==newRoomIndex){
+            g_vitaDevRoomJumpTarget=-1;
+            if(runner->vmContext && runner->vmContext->globalScopeInstance){
+                /* v0.80-47: leaving a cutscene through the navigator kept its
+                 * control lock: scenes such as knightclimb's "introcut" set
+                 * global.interact=1 and only their own script clears it, so
+                 * Kris arrived frozen in the next room (Cliff Bug log). Rooms
+                 * that really start locked set it again in their Create. */
+                {
+                    int interactVar=VM_getOrAllocateVarID(runner->vmContext,"interact");
+                    int interactPrevious=RValue_toInt32(Instance_getSelfVar(
+                        runner->vmContext->globalScopeInstance,interactVar));
+                    Instance_setSelfVar(runner->vmContext->globalScopeInstance,
+                        interactVar,RValue_makeInt32(0));
+                    char interactMsg[120];
+                    snprintf(interactMsg,sizeof(interactMsg),
+                      "VITAGL_DEV_QUICK=control_reset interact_previous=%d",
+                      interactPrevious);
+                    VitaProbe_logLine(interactMsg);
+                }
+                /* v0.80-49: Chapter 4 climb rooms need global.flag[23], which the
+                 * story sets after Castle Town. Without it obj_climbstarter never
+                 * starts the climb and its trigger keeps global.interact=1: the
+                 * knightclimb lock when jumping from an early save. It must be set
+                 * before Create, where the starter also builds a solid wall. This
+                 * reaches the save file, so it only happens through the navigator. */
+                if(g_vitaActiveChapter==4 &&
+                   strncmp(newRoomName,"room_dw_church",14)==0){
+                    int flagVar=VM_getOrAllocateVarID(runner->vmContext,"flag");
+                    RValue flags=Instance_getSelfVar(
+                        runner->vmContext->globalScopeInstance,flagVar);
+                    if(flags.type==RVALUE_ARRAY && flags.array!=nullptr){
+                        int flagPrevious=RValue_toInt32(GMLArray_get(flags.array,23));
+                        if(flagPrevious==0)
+                            GMLArray_set(flags.array,23,RValue_makeReal(1.0));
+                        char flagMsg[100];
+                        snprintf(flagMsg,sizeof(flagMsg),
+                          "VITAGL_DEV_QUICK=climb_flag previous=%d",flagPrevious);
+                        VitaProbe_logLine(flagMsg);
+                    }
+                }
+                int nextDark=-1;
+                if(strncmp(newRoomName,"room_dw_",8)==0 ||
+                   strncmp(newRoomName,"room_dark",9)==0 ||
+                   strncmp(newRoomName,"room_castle",11)==0)
+                    nextDark=1;
+                else if(strncmp(newRoomName,"room_town_",10)==0 ||
+                        strncmp(newRoomName,"room_school",11)==0 ||
+                        strncmp(newRoomName,"room_church",11)==0)
+                    nextDark=0;
+                if(nextDark>=0){
+                    int var=VM_getOrAllocateVarID(runner->vmContext,"darkzone");
+                    Instance_setSelfVar(runner->vmContext->globalScopeInstance,
+                         var,RValue_makeReal((double)nextDark));
+                    char msg[140];
+                    snprintf(msg,sizeof(msg),
+                      "VITAGL_DEV_QUICK=world_sync room=%d darkzone=%d",
+                      newRoomIndex,nextDark);
+                    VitaProbe_logLine(msg);
+                }
+            }
+        }
+#endif
+#ifndef PLATFORM_VITA
+        // Desktop regression runs: story state for rooms that branch on global.plot.
+        if (getenv("BS_TEST_SET_PLOT") != nullptr && runner->vmContext != nullptr) {
+            Instance_setSelfVar(runner->vmContext->globalScopeInstance,
+                VM_getOrAllocateVarID(runner->vmContext, "plot"),
+                RValue_makeReal((GMLReal) atoi(getenv("BS_TEST_SET_PLOT"))));
+        }
+#endif
         // Keep lazy payload parsing separate from runtime room construction.
         phaseBegin = nowNanos();
         initRoom(runner, newRoomIndex);
+#ifdef NATIVE_GXM_PROBE_VERSION
+        /* Persistent mainchara instances survive the room's CREATE stage;
+         * refresh the same sprite aliases/dark scaling used by native GML
+         * Create when DEV jumps across light/dark, without firing Create
+         * a second time or resetting player HP/cutscene state. */
+        if(vitaDevWorldChanged>=0 && runner->vmContext){
+            VMContext*vm=runner->vmContext;
+            static const char*const light[]={"spr_krisd","spr_krisr","spr_krisu","spr_krisl"};
+            static const char*const dark[]={"spr_krisd_dark","spr_krisr_dark",
+                                           "spr_krisu_dark","spr_krisl_dark"};
+            static const char*const varnames[]={"dsprite","rsprite","usprite","lsprite"};
+            int ids[4]={-1,-1,-1,-1};
+            for(uint32_t x=0;x<runner->dataWin->sprt.count;x++){
+                const char*sp=runner->dataWin->sprt.sprites[x].name;
+                if(!sp)continue;
+                for(int k=0;k<4;k++)
+                    if(strcmp(sp,vitaDevWorldChanged?dark[k]:light[k])==0)
+                        ids[k]=(int)x;
+            }
+            for(size_t x=0;x<arrlen(runner->instances);x++){
+                Instance*inst=runner->instances[x];
+                if(!inst||inst->destroyed||inst->objectIndex<0||
+                   (uint32_t)inst->objectIndex>=runner->dataWin->objt.count)
+                    continue;
+                const char*obj=runner->dataWin->objt.objects[inst->objectIndex].name;
+                if(!obj||strcmp(obj,"obj_mainchara")!=0)continue;
+                float targetScale=vitaDevWorldChanged?2.0f:1.0f;
+                /* A newly CREATED character already selected the proper
+                 * sprites and plot-specific Light World costumes. Only
+                 * repair characters that arrived with the OLD world scale. */
+                if(fabsf(inst->imageXscale-targetScale)<0.05f &&
+                   fabsf(inst->imageYscale-targetScale)<0.05f)
+                    continue;
+                int darkVar=VM_getOrAllocateVarID(vm,"darkmode");
+                int facingVar=VM_getOrAllocateVarID(vm,"facing");
+                int speedVar=VM_getOrAllocateVarID(vm,"wspeed");
+                Instance_setSelfVar(inst,darkVar,RValue_makeReal(vitaDevWorldChanged));
+                Instance_setSelfVar(inst,speedVar,RValue_makeReal(vitaDevWorldChanged?4:3));
+                inst->imageXscale=vitaDevWorldChanged?2.0f:1.0f;
+                inst->imageYscale=vitaDevWorldChanged?2.0f:1.0f;
+                int facingID=VM_getOrAllocateVarID(vm,"facing");
+                RValue facing=Instance_getSelfVar(vm->globalScopeInstance,facingID);
+                int fi=facing.type==RVALUE_UNDEFINED?0:RValue_toInt32(facing);
+                int which=fi==1?1:fi==2?2:fi==3?3:0;
+                for(int k=0;k<4;k++)if(ids[k]>=0){
+                    int v=VM_getOrAllocateVarID(vm,varnames[k]);
+                    Instance_setSelfVar(inst,v,RValue_makeReal(ids[k]));
+                }
+                if(ids[which]>=0)inst->spriteIndex=ids[which];
+                (void)facingVar;
+            }
+            /* The persistent Susie party follower can also cross the
+             * DEV-only Light/Dark boundary without running CREATE again.
+             * Refresh the same directional aliases GML selects, preserving
+             * movement history and follow scripts. */
+            static const char*const susieDark[]={
+                "spr_susie_walk_down_dw","spr_susie_walk_right_dw",
+                "spr_susie_walk_up_dw","spr_susie_walk_left_dw"};
+            static const char*const susieLight[]={
+                "spr_susie_walk_down_lw","spr_susie_walk_right_lw",
+                "spr_susie_walk_up_lw","spr_susie_walk_left_lw"};
+            int followerIds[4]={-1,-1,-1,-1};
+            for(uint32_t x=0;x<runner->dataWin->sprt.count;x++){
+                const char*name=runner->dataWin->sprt.sprites[x].name;
+                if(!name)continue;
+                for(int dir=0;dir<4;dir++)
+                    if(strcmp(name,vitaDevWorldChanged?
+                          susieDark[dir]:susieLight[dir])==0)
+                        followerIds[dir]=(int)x;
+            }
+            int nameVar=VM_getOrAllocateVarID(vm,"name");
+            for(size_t x=0;x<arrlen(runner->instances);x++){
+                Instance*inst=runner->instances[x];
+                if(!inst||inst->destroyed||inst->objectIndex<0 ||
+                   (uint32_t)inst->objectIndex>=runner->dataWin->objt.count)
+                    continue;
+                const char*type=runner->dataWin->objt.objects[inst->objectIndex].name;
+                if(!type||strcmp(type,"obj_caterpillarchara")!=0)continue;
+                float targetScale=vitaDevWorldChanged?2.0f:1.0f;
+                if(fabsf(inst->imageXscale-targetScale)<0.05f &&
+                   fabsf(inst->imageYscale-targetScale)<0.05f)
+                    continue;
+                inst->imageXscale=targetScale;
+                inst->imageYscale=vitaDevWorldChanged?2.0f:1.0f;
+                RValue name=Instance_getSelfVar(inst,nameVar);
+                if(name.type!=RVALUE_STRING || !name.string ||
+                   strcmp(name.string,"susie")!=0)continue;
+                for(int k=0;k<4;k++)if(followerIds[k]>=0){
+                    int var=VM_getOrAllocateVarID(vm,varnames[k]);
+                    Instance_setSelfVar(inst,var,
+                        RValue_makeReal(followerIds[k]));
+                }
+                if(followerIds[0]>=0)inst->spriteIndex=followerIds[0];
+            }
+        }
+#endif
         runner->profRoomCreateUs = (nowNanos() - phaseBegin) / 1000ULL;
 #ifdef PLATFORM_VITA
         snprintf(vitaRoomPhase, sizeof(vitaRoomPhase),
@@ -5047,8 +6635,11 @@ static int32_t vitaInstanceInt(Instance* inst, int32_t varId) {
 
 static void vitaCityMiceSoftlockGuard(Runner* runner) {
     static uint32_t staleWaveFrames = 0;
+    // room_dw_city_mice3 holds global.interact=1 on purpose while the player steers
+    // obj_mouseTowerTrigger with no mouse alive, so it can never look "stale" here.
     if (runner == nullptr || runner->currentRoom == nullptr || runner->currentRoom->name == nullptr ||
-        strncmp(runner->currentRoom->name, "room_dw_city_mice", 17) != 0) {
+        strncmp(runner->currentRoom->name, "room_dw_city_mice", 17) != 0 ||
+        strcmp(runner->currentRoom->name, "room_dw_city_mice3") == 0) {
         staleWaveFrames = 0;
         return;
     }
@@ -5070,62 +6661,11 @@ static void vitaCityMiceSoftlockGuard(Runner* runner) {
     Instance* sw = vitaFirstActiveObjectInstance(runner, switchObj);
     Instance* generator = vitaFirstActiveObjectInstance(runner, generatorObj);
 
-    // obj_noelle_scared spawns a fresh obj_caterpillarchara on landing without setting name="noelle".
-    // Restore name and target properties so subsequent mice collisions trigger Noelle's jump.
-    int32_t caterpId = shget(runner->assetsByName, "obj_caterpillarchara");
-    if (caterpId >= 0) {
-        int32_t nameVarId = shget(ctx->varNameMap, "name");
-        int32_t targetVarId = shget(ctx->varNameMap, "target");
-        for (ptrdiff_t i = 0; i < arrlen(runner->instances); ++i) {
-            Instance* catInst = runner->instances[i];
-            if (catInst != nullptr && catInst->objectIndex == caterpId && catInst->active && !catInst->destroyed) {
-                RValue nameVal = Instance_getSelfVar(catInst, nameVarId);
-                if (nameVal.type != RVALUE_STRING || nameVal.string == nullptr || strlen(nameVal.string) == 0) {
-                    Instance_setSelfVar(catInst, nameVarId, RValue_makeString("noelle"));
-                }
-                RValue targetVal = Instance_getSelfVar(catInst, targetVarId);
-                if (targetVal.type == RVALUE_UNDEFINED || (targetVal.type == RVALUE_INT32 && targetVal.int32 <= 0)) {
-                    Instance_setSelfVar(catInst, targetVarId, RValue_makeInt32(1));
-                }
-            }
-        }
-    }
-
-    // Between waves obj_noelle_scared persists with stale 'con' (e.g. con=4 from the landing phase).
-    // When the next wave of mice arrives and a holemouse hits Noelle, the Collision handler fires
-    // alarm[0]=1 correctly, but Alarm_0 checks 'con == 0' before starting the jump — so if 'con'
-    // is left non-zero from the previous wave the jump animation is silently skipped.
-    // Fix: while mice are spawning/active and Noelle is NOT mid-jump (con != 1/2/3), reset the
-    // scared Noelle instance back to its ready state so the next collision works properly.
-    if (scaredNoelleObj >= 0) {
-        int32_t conVarId        = shget(ctx->varNameMap, "con");
-        int32_t gracePeriodVarId = shget(ctx->varNameMap, "graceperiod");
-        int32_t jumpingVarId    = shget(ctx->varNameMap, "jumping");
-        int32_t jumpyVarId      = shget(ctx->varNameMap, "jumpy");
-        int32_t jumpySpeedVarId = shget(ctx->varNameMap, "jumpyspeed");
-        int32_t timerVarId2     = shget(ctx->varNameMap, "timer");
-        int32_t mouseCount      = vitaCountActiveObjectInstances(runner, mouseObj);
-
-        for (ptrdiff_t i = 0; i < arrlen(runner->instances); ++i) {
-            Instance* noelleInst = runner->instances[i];
-            if (noelleInst == nullptr || noelleInst->objectIndex != scaredNoelleObj ||
-                !noelleInst->active || noelleInst->destroyed) continue;
-
-            int32_t con = conVarId >= 0 ? RValue_toInt32(Instance_getSelfVar(noelleInst, conVarId)) : 0;
-            // con==1: running to mouse, con==2: jumping up, con==3: falling down — do NOT interrupt.
-            // con==0: idle/waiting, con==4+: post-landing states — safe to reset between waves.
-            bool midJump = (con >= 1 && con <= 3);
-            if (!midJump && mouseCount > 0) {
-                // Reset to idle so the Collision handler and Alarm_0 work on the next hit.
-                if (conVarId >= 0)         Instance_setSelfVar(noelleInst, conVarId,        RValue_makeInt32(0));
-                if (gracePeriodVarId >= 0) Instance_setSelfVar(noelleInst, gracePeriodVarId, RValue_makeInt32(0));
-                if (jumpingVarId >= 0)     Instance_setSelfVar(noelleInst, jumpingVarId,     RValue_makeInt32(0));
-                if (jumpyVarId >= 0)       Instance_setSelfVar(noelleInst, jumpyVarId,       RValue_makeInt32(0));
-                if (jumpySpeedVarId >= 0)  Instance_setSelfVar(noelleInst, jumpySpeedVarId,  RValue_makeInt32(0));
-                if (timerVarId2 >= 0)      Instance_setSelfVar(noelleInst, timerVarId2,      RValue_makeInt32(0));
-            }
-        }
-    }
+    // v0.80-47: the former per-frame rewrites of obj_noelle_scared (con/graceperiod/timer...)
+    // and of obj_caterpillarchara (name/target) are gone. They were workarounds for the
+    // collision bug fixed in dispatchCollisionEvents and did real damage: forcing con=0 skipped
+    // the landing step that sets makenewplatform (towers of room_dw_city_mice3 stopped
+    // advancing) and cancelled Noelle's second jump.
 
     int32_t timerId = shget(ctx->varNameMap, "timer");
     int32_t mouseCreateId = shget(ctx->varNameMap, "mousecreate");
@@ -5140,13 +6680,16 @@ static void vitaCityMiceSoftlockGuard(Runner* runner) {
     int32_t interact = vitaInstanceInt(ctx->globalScopeInstance, interactId);
 
     // Watchdog ONLY triggers if Noelle is not currently performing her scared jump animation
-    // and controls have been locked with no active dialogs/cutscenes for more than 180 frames (3 seconds).
+    // and controls have been locked with no active dialogs/cutscenes. A wave in progress keeps
+    // interact=1 for well over 3 seconds, so with mice alive this is only a last resort (60 s);
+    // the old 180-frame limit destroyed every normal wave, which is why the mice just vanished.
     bool staleLock = interact == 1 && mouseCreate == 0 && genTimer <= 0 &&
                      dialogs == 0 && cutscenes == 0 && scaredNoelleCount == 0;
+    uint32_t staleLimit = vitaCountActiveObjectInstances(runner, mouseObj) > 0 ? 1800U : 180U;
 
     staleWaveFrames = staleLock ? staleWaveFrames + 1U : 0U;
 
-    if (staleWaveFrames >= 180U) {
+    if (staleWaveFrames >= staleLimit) {
         int32_t removed = 0;
         Instance* staleMouse = nullptr;
         while ((staleMouse = vitaFirstActiveObjectInstance(runner, mouseObj)) != nullptr) {

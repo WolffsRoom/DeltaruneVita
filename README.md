@@ -1,4 +1,3 @@
-
 <p align="center">
   <a href="#">
     <picture>
@@ -26,8 +25,6 @@
   />
 </p>
 
-
-
 An _unofficial_ port of **DELTARUNE Chapters 1–5** for the PlayStation Vita.
 
 DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focused implementation of [Butterscotch](https://github.com/ButterscotchRunner/Butterscotch), using [VitaGL](https://github.com/Rinnegatamante/vitaGL) for graphics and OpenAL for audio. It adds Vita controls, optional touch input, configurable graphics and audio, console borders, language/mod support, trophies, native video playback, diagnostics, and dedicated patchers that generate the required Vita data from a legally obtained copy of the game.
@@ -45,7 +42,7 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
   <a href="https://github.com/WolffsRoom/DeltaruneVita/releases"><img src="https://img.shields.io/github/downloads/WolffsRoom/DeltaruneVita/total?style=for-the-badge&color=blue&logo=github" alt="Downloads"></a>
   <a href="https://github.com/WolffsRoom/DeltaruneVita/releases/latest"><img src="https://img.shields.io/github/v/release/WolffsRoom/DeltaruneVita?style=for-the-badge&color=brightgreen&logo=github" alt="Release"></a>
   <br>
-  <img src="https://img.shields.io/badge/OVERALL_PROGRESS-73%25-ffc107?style=for-the-badge" alt="Progress">
+  <img src="https://img.shields.io/badge/OVERALL_PROGRESS-81%25-ffc107?style=for-the-badge" alt="Progress">
   <img src="https://img.shields.io/badge/SOURCE-PC%2FSTEAM-004aa5?style=for-the-badge&logo=steam&logoColor=white" alt="Source">
   <img src="https://img.shields.io/badge/STATE-PLAYABLE-brightgreen?style=for-the-badge" alt="State">
 </div>
@@ -54,11 +51,11 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
 
 | Chapter | Details |
 | :--- | :--- |
-| **1** | Playable and extensively reviewed. First-use battle resources and audio-transition performance continue to be refined. |
+| **1** | Playable and extensively reviewed. First-use battle resources, prologue presentation, and universal `AUDIO_INTRONOISE.ogg` cold-boot audio handling. |
 | **2** | Playable with fixes for mice/light puzzles, battles, transitions, textures, menus, audio and battle-dialogue rendering. Translated variants and demanding effects remain under observation. |
-| **3** | Playable with native video, chapter handoff, mini-game, pathfinding, texture, game-show and runtime fixes. Heavy TV/battle scenes remain an optimization focus. |
-| **4** | Playable with rebuilt Texture Pages, runtime/interface compatibility fixes and language-specific caches. Additional full-run testing remains useful. |
-| **5** | Playable with improved room-aware texture residency, transition cleanup and reduced memory pressure. Its heaviest rooms and battles remain the main performance stress test. |
+| **3** | Playable with native video, chapter handoff, mini-game, pathfinding, texture, game-show, Tenna cutscene freeze watchdog and native C post-chapter wavy background (`DEVICE_MENU`). |
+| **4** | Playable with rebuilt Texture Pages, runtime/interface compatibility, church tower climbing fixes, native C tower fastpaths, and Mike's Room mouse (right stick/touch) and microphone input. |
+| **5** | Playable with locked 30 FPS hardware VSync, native C fastpaths (`floortex`, cliffs, sunlayer, platforms), smooth animated borders with feathering, diagonal petal transition (`shd_petalcut`), and resolved duplicate TP bar. |
 
 For release-specific changes, screenshots and the complete changelog, see the latest [Release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
 
@@ -115,10 +112,10 @@ ux0:tai/fd_fix.skprx
 
 1. Purchase and install [DELTARUNE for PC](https://store.steampowered.com/app/1671210/) through Steam.
 2. Confirm that the installation is **v0.0.253** and unmodified.
-3. Download `Deltarune-v0.73.vpk` and the patcher for your PC architecture from the [latest release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
+3. Download `Deltarune-v0.81.vpk` and the patcher for your PC architecture from the [latest release](https://github.com/WolffsRoom/DeltaruneVita/releases/latest).
 4. Generate the Vita data using DeltaruneVita Patcher, Seam's Patcher or the Web Patcher.
 5. Copy the generated `deltarune` folder to `ux0:data/` on the Vita.
-6. Install `Deltarune-v0.73.vpk` using VitaShell.
+6. Install `Deltarune-v0.81.vpk` using VitaShell.
 
 The final path must be:
 
@@ -132,7 +129,7 @@ ux0:data/deltarune/deltarunevita/
   <img src="docs/readme-headings/deltarunevita-patcher-undertale-theme.svg" alt="DELTARUNEVITA PATCHER" height="40">
 </a>
 
-1. Extract either `Deltarune.Vita.Patcher.v0.73.64bits.zip` or `Deltarune.Vita.Patcher.v0.73.32bits.zip`.
+1. Extract either `Deltarune.Vita.Patcher.v0.81.64bits.zip` or `Deltarune.Vita.Patcher.v0.81.32bits.zip`.
 2. Copy the complete Steam `DELTARUNE` folder into `SteamFiles/DELTARUNE`.
 3. Run the included `DeltaruneVitaPatcher_*bit.exe`.
 4. Select optional language packages when offered.
@@ -144,13 +141,16 @@ ux0:data/deltarune/deltarunevita/
   <img src="docs/readme-headings/seams-patcher-undertale-theme.svg" alt="SEAM'S PATCHER" height="40">
 </a>
 
-[Seam's Patcher](https://wolffsroom.github.io/DeltaruneVita/) uses the Seam-shop interface and can run either in a browser or as a standalone Windows application.
+[Seam's Patcher](https://wolffsroom.github.io/DeltaruneVita/) uses the authentic Seam-shop interface and is available in three forms:
 
-1. Extract the 32-bit or 64-bit Seam's Patcher ZIP.
-2. Run `SeamsPatcher_*bit.exe`.
-3. Select a clean DELTARUNE Steam folder when prompted.
-4. Select any optional languages/mods.
-5. Generate the Vita package, then copy its `deltarune` folder to `ux0:data/`.
+- **Seam's Patcher Lite (Recommended, ~220 MB):** Extract `Seam.s.Patcher.v0.81.64bits.zip` or `32bits.zip` and run `SeamsPatcher_Lite_*bit.exe`. Features the full Edge App mode GUI with all 55 animated borders embedded, downloading only selected translation packs on demand with local caching in `cache/`.
+- **Seam's Patcher Standalone / Offline (~890 MB):** Fully self-contained portable executable with all language packs, patch data and animated borders embedded for 100% offline patching.
+- **Web Patcher (Browser / Mobile):** Run directly in your browser at [wolffsroom.github.io/DeltaruneVita](https://wolffsroom.github.io/DeltaruneVita/) with DEFLATE streaming support and mobile compatibility.
+
+1. Run your chosen Seam's Patcher edition.
+2. Select a clean DELTARUNE Steam folder when prompted.
+3. Select any optional languages/mods (including Animated Borders and PT-BR v0.81).
+4. Generate the Vita package, then copy its `deltarune` folder to `ux0:data/`.
 
 On iOS/iPadOS, provide the DELTARUNE folder as a ZIP when the browser cannot select a directory directly.
 
@@ -192,6 +192,16 @@ The layout is based on the official PlayStation-style controls with Vita-specifi
   <img src="docs/readme-headings/game-settings-undertale-theme.svg" alt="GAME SETTINGS" height="40">
 </a>
 
+### Recommended Graphics Settings (v0.81)
+
+| Setting | Recommended Value |
+| :--- | :--- |
+| **Texture Compression** | **Optimized** (or **Aggressive** for extra FPS at the cost of minor color variance) |
+| **FPS Limit** | **30 FPS** (with hardware VSync synchronized to display VBlank) |
+| **Screen Filter** | **None** (or try the new **Soft CRT**, **Medium CRT**, or **Aggressive CRT**) |
+| **Shaders** | **On** |
+| **Graphics API** | **VitaGL (Experimental-GL)** |
+
 <p align="center">
   <img src="docs/media/v0.64/settings/Screen.png" alt="Screen settings" width="31%">
   <img src="docs/media/v0.64/settings/Sound.png" alt="Audio settings" width="31%">
@@ -205,20 +215,20 @@ The layout is based on the official PlayStation-style controls with Vita-specifi
 
 <div align="center">
 
-<a id="deltarune-for-ps-vita-v073-update-trailer"></a>
+<a id="deltarune-for-ps-vita-v081-announcement-trailer"></a>
 
-<a href="#deltarune-for-ps-vita-v073-update-trailer">
-  <img src="docs/readme-headings/deltarune-for-ps-vita-v073-update-trailer-undertale-theme.svg" alt="DELTARUNE FOR PS VITA (V0.73 UPDATE TRAILER)" height="40">
+<a href="#deltarune-for-ps-vita-v081-announcement-trailer">
+  <img src="docs/readme-headings/deltarune-for-ps-vita-v073-update-trailer-undertale-theme.svg" alt="DELTARUNE FOR PS VITA (ANNOUNCEMENT TRAILER)" height="40">
 </a>
 
-  <a href="https://youtu.be/-ryE5zShYhU">
-    <img src="https://img.youtube.com/vi/-ryE5zShYhU/maxresdefault.jpg" width="85%" style="border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" alt="DELTARUNE Vita v0.73 Update Trailer">
+  <a href="https://youtu.be/uT4ApEyrvQM">
+    <img src="https://github.com/user-attachments/assets/d56c1863-434e-49b4-8ca3-d1d6dc55e0f8" width="85%" style="border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" alt="DELTARUNE Vita Announcement Trailer">
   </a>
 
   <br>
 
-  <a href="https://youtu.be/-ryE5zShYhU">
-    <img src="https://img.shields.io/badge/YouTube-Watch%20Update%20Trailer-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch the v0.73 update trailer on YouTube">
+  <a href="https://youtu.be/uT4ApEyrvQM">
+    <img src="https://img.shields.io/badge/YouTube-Watch%20Announcement%20Trailer-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch the v0.81 announcement trailer on YouTube">
   </a>
 
 </div>
@@ -239,7 +249,7 @@ ux0:data/deltarune_saves/trophies.ini
 
 The local trophy interface, unlock notifications and persistence work without any additional plugin. Native PS Vita system trophies are optional.
 
-The v0.73 VPK already contains the unsigned trophy pack at:
+The v0.81 VPK already contains the unsigned trophy pack at:
 
 ```text
 sce_sys/trophy/DLTVITA01_00/TROPHY.TRP
@@ -291,14 +301,15 @@ ux0:tai/NoTrpDrm.suprx
     <tr><th width="50%">Core Features</th><th width="50%">System and Graphics</th></tr>
   </thead>
   <tbody>
-    <tr><td>• Chapter selector for all five chapters</td><td>• VitaGL renderer adapted to the legacy Butterscotch backend</td></tr>
-    <tr><td>• Direct loading of official Steam GameMaker data</td><td>• Room-aware Texture Page loading, cache and eviction</td></tr>
-    <tr><td>• Physical Vita controls and optional touch controls</td><td>• BC3/DXT5 and RGBA4444 prepared texture paths</td></tr>
-    <tr><td>• Vita-native Game Settings menu</td><td>• Dynamic console borders based on chapter and room</td></tr>
-    <tr><td>• Independent volume controls and streamed music</td><td>• Native SceAvPlayer video playback</td></tr>
-    <tr><td>• Language/mod packages with isolated data/cache layouts</td><td>• Resolution, FPS, filters and texture profiles</td></tr>
-    <tr><td>• Local and native trophy integration</td><td>• Persistent logging/profiling tools for diagnostics</td></tr>
-    <tr><td>• Localized loading/generation screen and optional mini-game</td><td>• Legacy GL default plus experimental Modern GL path</td></tr>
+    <tr><td>• Chapter selector for all five chapters</td><td>• Dual Graphics API: VitaGL (Experimental, Legacy, Modern) and native VitaGXM</td></tr>
+    <tr><td>• Direct loading of official Steam GameMaker data</td><td>• Hardware VSync at locked 30 FPS synchronized to display VBlank</td></tr>
+    <tr><td>• Physical Vita controls and optional touch controls</td><td>• Native C fastpaths for heavy rooms in Chapters 4 & 5 (saving up to 35 ms/frame)</td></tr>
+    <tr><td>• Chapter 4 Mike's Room mouse simulation (right stick/touch) & mic input</td><td>• Animated Borders mod with 24 px feathering and &lt; 768 KiB VRAM footprint</td></tr>
+    <tr><td>• Vita-native Game Settings menu & enhanced DEV tools</td><td>• New CRT filter suite (Soft, Medium, Aggressive) and display filters</td></tr>
+    <tr><td>• Independent volume controls and streamed music</td><td>• Authentic Chapter 5 diagonal petal transition (<code>shd_petalcut</code>)</td></tr>
+    <tr><td>• Language/mod packages with isolated data/cache layouts (PT-BR v0.81)</td><td>• Room-aware Texture Page loading, cache and eviction</td></tr>
+    <tr><td>• Local and native trophy integration (NoTrpDrm)</td><td>• Native SceAvPlayer video playback & universal cold-boot audio</td></tr>
+    <tr><td>• Interactive Prologue with plugin detection (NoTrpDrm / CapUnlocker)</td><td>• Official DualShock 4 / PS4 button glyphs in menus and battle prompts</td></tr>
   </tbody>
 </table>
 
@@ -350,13 +361,13 @@ The higher page count is intentional: smaller, more targeted pages can produce a
   <img src="docs/readme-headings/game-data-undertale-theme.svg" alt="GAME DATA" height="40">
 </a>
 
-A v0.73 patcher generates the following base layout:
+A v0.81 patcher generates the following base layout:
 
 ```text
 ux0:data/deltarune/
 ├── config.ini
 └── deltarunevita/
-    ├── borders/                      # dynamic/simple console border assets
+    ├── borders/                      # static console border assets
     ├── chapter0/
     ├── chapter1/
     ├── chapter2/
@@ -364,6 +375,7 @@ ux0:data/deltarune/
     ├── chapter4/
     ├── chapter5/
     ├── mods/
+    │   ├── bordersanim/              # animated border (.bani) assets
     │   └── Lang/
     │       └── <Language>/           # isolated translation/mod data
     ├── music/                        # external/shared music assets
@@ -428,10 +440,10 @@ When reporting a reproducible issue, include the relevant log together with the 
   <img src="docs/readme-headings/known-issues-undertale-theme.svg" alt="KNOWN ISSUES" height="50">
 </a>
 
-- **Modern GL is experimental.** Use Legacy GL for normal gameplay.
+- **Experimental-GL is recommended** for normal gameplay to ensure shader compatibility with Legacy stability. Modern GL remains experimental. VitaGXM is supported as an alternate native backend.
 - Chapter 3's heaviest TV/video/battle transitions can still expose first-use frame drops or memory pressure.
-- Chapter 5 remains the most demanding chapter and can still encounter low FPS or memory pressure in complex scenes/battles.
-- Some Chapter 5 city-shadow effects are not fully reproduced by the Legacy GL path.
+- Chapter 5's heaviest battle scenes remain under observation for memory pressure; general room-transition stalls have been eliminated.
+- Some Chapter 5 city-shadow effects are not fully reproduced by the Legacy GL path (use Experimental-GL or Modern GL).
 - A translated `data.win` whose Texture Page layout changes requires its matching regenerated cache; do not reuse the original-language cache blindly.
 
 <a id="building-from-source"></a>
@@ -503,21 +515,21 @@ The Vita-specific layer provides Game Settings, physical/touch input, console bo
   <img src="docs/readme-headings/mods-and-language-packs-undertale-theme.svg" alt="MODS AND LANGUAGE PACKS" height="50">
 </a>
 
-DeltaruneVita supports alternate game data and external assets through the `deltarunevita/mods` tree. In v0.73, the most developed use of this system is the **language-pack pipeline**.
+DeltaruneVita supports alternate game data and external assets through the `deltarunevita/mods` tree. In v0.81, this includes both the **language-pack pipeline** and the **Animated Borders mod**:
 
-English and the game's native Japanese mode use the original data. Optional v0.73 language packages are currently available for:
+- **Animated Borders Mod (`mods/bordersanim/`):** A PS Vita-exclusive mod providing smooth animated side strips (`frames_side.bani`) for 55 rooms, featuring a 24-pixel linear transparency gradient (feathering) over the static full-screen border with minimal memory footprint (&lt; 768 KiB VRAM).
+- **Language Packs (`mods/Lang/`):** English and the game's native Japanese mode use the original data. Optional v0.81 language packages are available for:
+  - Portuguese (Brazil) — updated with Chapter 5 translation by TEIARRUMA
+  - Spanish
+  - French
+  - German
+  - Russian
+  - Turkish
 
-- Portuguese (Brazil)
-- Spanish
-- French
-- German
-- Russian
-- Turkish
-
-Both DeltaruneVita Patcher and Seam's Patcher use the same language catalog and validate downloaded packages by **file size and SHA-256** before applying them. The packages are kept separate from the GitHub Release assets and are served through the project's `gh-pages` language-pack catalog.
+Both DeltaruneVita Patcher and Seam's Patcher use the same language catalog and validate downloaded packages by **file size and SHA-256** before applying them. The packages are kept separate from the GitHub Release assets and are served through the project's `gh-pages` catalog.
 
 > [!IMPORTANT]
-> A translated `data.win` can have a different Texture Page layout from the original game. Keep each translation together with its matching v0.73 texture cache. Do not copy an original-language cache over a translated chapter unless its TXTR layout is known to match.
+> A translated `data.win` can have a different Texture Page layout from the original game. Keep each translation together with its matching v0.81 texture cache. Do not copy an original-language cache over a translated chapter unless its TXTR layout is known to match.
 
 <a id="languagemod-folder-layout"></a>
 
@@ -535,6 +547,7 @@ A language only needs to contain the chapters/assets that it overrides. A repres
 
 ```text
 mods/
+├── bordersanim/                          # animated border frames (.bani)
 └── Lang/
     └── Portuguese-BR/
         ├── chapter1/
@@ -562,7 +575,7 @@ mods/
 
 The exact contents differ between translations. Some packages replace a full `data.win`; others provide strings, music, video or selected chapter assets. The patchers preserve this per-language separation so incompatible atlas indices and caches are not mixed.
 
-For development/preparation work, source translations can be staged under `data/prepared/deltarune/deltarunevita/mods/Lang/<Language>` and processed with the project's preparation scripts. End users should normally let a v0.73 patcher install the matching language package automatically.
+For development/preparation work, source translations can be staged under `data/prepared/deltarune/deltarunevita/mods/Lang/<Language>` and processed with the project's preparation scripts. End users should normally let a v0.81 patcher install the matching language package automatically.
 
 <a id="recent-changelog"></a>
 
@@ -577,6 +590,8 @@ For development/preparation work, source translations can be staged under `data/
 | **v0.71** | Introduced the room-aware Texture Page rebuild, DeltaCache-based prepared pipeline, local BC3 fallback generation, expanded Game Settings and additional rendering/audio/memory fixes. |
 | **v0.72** | Added the native `SceAvPlayer` video backend, embedded first-launch video, further translation compatibility and Chapter 3/5 video/memory work. |
 | **v0.73** | Public release consolidating v0.70-v0.72 work with DeltaRepack + DeltaCache, the optional loading mini-game, updated patchers/language packs, trophy refinements, room-aware memory improvements, native video/audio fixes and broader Chapter 3/5 stabilization. |
+| **v0.80** | Major architectural milestone introducing the native VitaGXM (`libgxm`) renderer backend, rewritten Texture Page pipeline, memory management overhaul and initial C engine fastpaths. |
+| **v0.81** | Hardware VSync at locked 30 FPS (eliminating the 15 FPS pacer delay), native C fastpaths for Chapters 4 & 5 (`floortex`, cliffs, tower), animated borders mod with feathering, Soft/Medium/Aggressive CRT filters, Mike mouse & mic controls (Ch4), resolved duplicate TP bar & diagonal petal transition (Ch5), interactive Prologue, DualShock 4 glyphs, and new Seam's Patcher Lite/Offline. |
 
 For the development history and individual internal builds, see `docs/` and the repository's [Releases](https://github.com/WolffsRoom/DeltaruneVita/releases).
 

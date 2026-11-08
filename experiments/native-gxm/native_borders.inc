@@ -51,6 +51,65 @@ static void bs_border_sprite_path(const char*name,char*out,unsigned cap){
 static float bs_border_clamp(float v) {
  return v<0?0:v>1?1:v;
 }
+/* Chapter 1 VitaGL precedence: exact config / chapter_1, Better
+ * Borders region override, then original Chapter 1 fallback. */
+static int bs_ch1_custom_border(const char*room,char*out,size_t cap){
+    static int loaded=0;
+    static char config[4096];
+    if(!loaded){
+        loaded=1;
+        FILE*f=fopen("ux0:data/deltarune/deltarunevita/borders/borders_config.txt","rb");
+        if(f){
+            size_t n=fread(config,1,sizeof(config)-1,f);
+            config[n]=0;fclose(f);
+        }
+    }
+    if(!room||!out||cap<2)return 0;
+    const char*keys[2]={room,"chapter_1"};
+    for(unsigned pass=0;pass<2;pass++){
+        char pattern[148];
+        snprintf(pattern,sizeof(pattern),"%.128s=",keys[pass]);
+        size_t len=strlen(pattern);
+        const char*line=config;
+        while(*line){
+            const char*end=strpbrk(line,"\r\n");
+            if(!end)end=line+strlen(line);
+            if((size_t)(end-line)>=len && strncmp(line,pattern,len)==0){
+                const char*val=line+len;
+                size_t n=(size_t)(end-val);
+                while(n&&(val[n-1]==' '||val[n-1]=='\t'))--n;
+                if(n==4&&(!strncmp(val,"NONE",4)||!strncmp(val,"none",4))){
+                    out[0]=0;return 2;
+                }
+                if(n>0&&n<95){
+                    snprintf(out,cap,
+                        "ux0:data/deltarune/deltarunevita/borders/%.*s",(int)n,val);
+                    return 1;
+                }
+            }
+            line=end;
+            while(*line=='\r'||*line=='\n')++line;
+        }
+    }
+    return 0;
+}
+static int bs_ch1_is_lowercase_room(const char*room){
+    if(!room)return 0;
+    for(const char*p=room;*p;p++)
+        if(*p>='A'&&*p<='Z')return 0;
+    return 1;
+}
+static const char*bs_ch1_default_border(const char*room){
+    if(bs_ch1_is_lowercase_room(room)){
+        if(!strncmp(room,"room_town",9)||!strncmp(room,"room_beach",10))
+            return "border_lw_town_0.png";
+        if(!strncmp(room,"room_cc",7)||!strncmp(room,"room_forest",11)||
+           !strncmp(room,"room_field",10)||!strncmp(room,"room_castle",11)||
+           !strncmp(room,"room_shop",9)||!strncmp(room,"room_legend",11))
+            return "border_dw_castletown_0.png";
+    }
+    return "border_line_1080_0.png";
+}
 static void bs_native_border_draw(BSGxmRenderer* b){
  if(!b||!b->vg||!b->base.runner||g_nativeBorderMode==0)return;
  Runner* runner=b->base.runner;
@@ -60,7 +119,38 @@ static void bs_native_border_draw(BSGxmRenderer* b){
   * logo, legend, title), nothing on menus, and no art on Game Over /
   * failure / black-fade rooms, whose surround must stay black. */
  static int chapterMenuSeen=0,gameplayBorders=0;
+ /* Detect first frame of door opening, before GameMaker changes rooms. */
+ static int schoolDoorBlack=0,fromBlack=0,previousRoom=-999;
  if(!room||g_vitaActiveChapter<=0)return;
+ if(previousRoom!=runner->currentRoomIndex){
+   if(strcmp(room,"room_schooldoor")==0)schoolDoorBlack=0;
+   previousRoom=runner->currentRoomIndex;
+ }
+ if(strcmp(room,"room_schooldoor")==0){
+   Instance* door=bs_border_first_object(runner,"obj_darkdoor");
+   if(door && door->active && door->visible){
+     const char* spriteName=door->spriteIndex>=0 &&
+       (uint32_t)door->spriteIndex<runner->dataWin->sprt.count?
+       runner->dataWin->sprt.sprites[door->spriteIndex].name:NULL;
+     if((spriteName && (!strcmp(spriteName,"spr_darkdoor_open") ||
+                        !strcmp(spriteName,"spr_giantdarkdoor_white"))) ||
+        (door->imageSpeed>0.0f && door->imageIndex>=1.0f)){
+       if(!schoolDoorBlack)bs_trace("NATIVE_GXM=border_schooldoor animation_started black=1");
+       schoolDoorBlack=1;
+     }
+   }
+ }
+ if((schoolDoorBlack && strcmp(room,"room_schooldoor")==0) ||
+    strcmp(room,"room_dw_castle_area_1")==0){
+   if(b->borderImage>0){nvgDeleteImage(b->vg,b->borderImage);b->borderImage=0;}
+   if(b->borderOldImage>0){nvgDeleteImage(b->vg,b->borderOldImage);b->borderOldImage=0;}
+   b->borderW=b->borderH=b->borderOldW=b->borderOldH=0;
+   b->borderPath[0]=0;
+   b->borderTransition=0.0f;
+   fromBlack=1;
+   return;
+ }
+
  if(VitaBorderRules_isMenuRoom(room)){
   if(strstr(room,"PLACE_MENU")!=NULL){chapterMenuSeen=1;gameplayBorders=0;}
   return;
@@ -102,6 +192,15 @@ static void bs_native_border_draw(BSGxmRenderer* b){
   }
  }
  if(VitaBorderRules_shouldBlankSurround(state.chapter,room,state.sceneFlags))return;
+ /* Tenna snap is signaled by the original GML SFX, not by the new room.
+  * Keep the TV border before snap and blue stars from the snap onward. */
+ if(g_vitaActiveChapter==3 && room &&
+    strcmp(room,"room_dw_snow_zone")==0){
+   extern int g_nativeCh3TennaSnap;
+   if(g_nativeCh3TennaSnap)
+      state.sceneFlags|=VITA_BORDER_SCENE_CH3_BLUE_STARS;
+   else state.sceneFlags|=VITA_BORDER_SCENE_CH3_TV_BLACK;
+ }
  VitaBorderDecision choice=VitaBorderRules_resolve(room,&state);
  const char* file=VitaBorderRules_filename(choice.asset);
  char desired[192]={0};
@@ -121,24 +220,58 @@ static void bs_native_border_draw(BSGxmRenderer* b){
  /* Native obj_border_controller knows live show_border/set_border changes.
   * It has priority over the static room name map whenever Better Borders is
   * disabled; including chapter 1 after the transition rooms. */
- if(!g_nativeBetterBorders&&controllerName&&strlen(controllerName)<95) {
+ if(g_vitaActiveChapter>=2 && controllerName&&strlen(controllerName)<95 &&
+    !(g_vitaActiveChapter==3 && room &&
+      strcmp(room,"room_dw_snow_zone")==0)) {
   bs_border_sprite_path(controllerName,desired,sizeof(desired));
   SceIoStat st;
   if(sceIoGetstat(desired,&st)<0)desired[0]=0;
  }
- if(!desired[0]&&file) {
-  if(g_nativeBetterBorders) {
-   const char* alt=g_vitaActiveChapter==1?"border1.png":
-                   g_vitaActiveChapter==2?"border2.png":"border3.png";
-   snprintf(desired,sizeof(desired),
-     "ux0:data/deltarune/deltarunevita/mods/Borders/%s",alt);
-   SceIoStat st;
-   if(sceIoGetstat(desired,&st)<0)desired[0]=0;
-  }
-  if(!desired[0])
-   snprintf(desired,sizeof(desired),
-     "ux0:data/deltarune/deltarunevita/borders/%s",file);
+ /* The original Tenna snap script switches to border_dw_blue_stars_0.
+  * Its live controller image must override the generic border3 mod,
+  * but only in the intended gameshow cutscene. */
+ extern int g_nativeCh3TennaSnap;
+ if(g_vitaActiveChapter==3 && room &&
+    strcmp(room,"room_dw_tv_cutscene1g")==0 &&
+    ((controllerName && strcmp(controllerName,"border_dw_blue_stars")==0) ||
+     g_nativeCh3TennaSnap)){
+    char blue[192];
+    bs_border_sprite_path("border_dw_blue_stars",blue,sizeof(blue));
+    SceIoStat st;
+    if(sceIoGetstat(blue,&st)>=0){
+        snprintf(desired,sizeof(desired),"%s",blue);
+        static unsigned report=0;
+        if(report++<3)bs_trace("NATIVE_GXM=ch3_tenna_blue_border source=scene_control");
+    }
  }
+ /* Chapter 1 Better Borders is region-specific, never globally border1.
+  * Ch2–5 use their own native GameMaker controller and resolver. */
+ int explicitNone=0;
+ if(g_vitaActiveChapter==1 && g_nativeBorderMode==1){
+    int custom=bs_ch1_custom_border(room,desired,sizeof(desired));
+    explicitNone=(custom==2);
+    if(custom==0 && g_nativeBetterBorders &&
+       bs_ch1_is_lowercase_room(room)){
+        const char*alt=NULL;
+        if(!strncmp(room,"room_cc",7))alt="border1.png";
+        else if(!strncmp(room,"room_field",10))alt="border2.png";
+        else if(!strncmp(room,"room_forest",11))alt="border3.png";
+        if(alt){
+            snprintf(desired,sizeof(desired),
+              "ux0:data/deltarune/deltarunevita/mods/Borders/%s",alt);
+            SceIoStat st;
+            if(sceIoGetstat(desired,&st)<0)desired[0]=0;
+        }
+    }
+    if(custom==0&&!desired[0])
+        snprintf(desired,sizeof(desired),
+          "ux0:data/deltarune/deltarunevita/borders/%s",
+          bs_ch1_default_border(room));
+ } else if(!desired[0]&&file){
+    snprintf(desired,sizeof(desired),
+      "ux0:data/deltarune/deltarunevita/borders/%s",file);
+ }
+ if(explicitNone)desired[0]=0;
  if(strcmp(desired,b->borderPath)!=0){
   /* Crossfade live border changes. Old texture is retained for the fade,
    * then freed; this also handles room transitions back to fallback art. */
@@ -149,8 +282,10 @@ static void bs_native_border_draw(BSGxmRenderer* b){
   b->borderOldImage=b->borderImage;
   b->borderOldW=b->borderW;b->borderOldH=b->borderH;
   b->borderImage=0;
-  b->borderTransition=b->borderOldImage>0?
-     (b->borderControllerCrossfade?b->borderControllerAlpha:0.0f):1.0f;
+  b->borderTransition=fromBlack?0.0f:(b->borderOldImage>0?
+     (b->borderControllerCrossfade?b->borderControllerAlpha:0.0f):1.0f);
+  if(fromBlack)bs_trace("NATIVE_GXM=border_castle_reveal fade_from_black=1");
+  fromBlack=0;
   b->borderW=b->borderH=0;
   snprintf(b->borderPath,sizeof(b->borderPath),"%s",desired);
   b->borderChanges++;
@@ -184,15 +319,21 @@ static void bs_native_border_draw(BSGxmRenderer* b){
  }
  if(b->borderControllerCrossfade && b->borderOldImage>0)
     b->borderTransition=b->borderControllerAlpha;
- if(b->borderOldImage>0 && b->borderTransition<1.0f) {
+ float borderMix=bs_border_clamp(b->borderTransition);
+ if(g_vitaActiveChapter==1 && !b->borderControllerCrossfade)
+    borderMix=borderMix*borderMix*(3.0f-2.0f*borderMix);
+ /* VitaGL compositing order: new border stays opaque BEHIND fading old.
+  * Drawing both with reciprocal half opacity darkened Chapter 1 midfade.
+  * Retain fade-in when entering from intentionally black surroundings. */
+ if(b->borderImage>0)
+    bs_image_rect(b,b->borderImage,b->borderW,b->borderH,
+       0,0,(float)b->borderW,(float)b->borderH,
+       0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT,
+       b->borderOldImage>0?1.0f:borderMix);
+ if(b->borderOldImage>0 && borderMix<1.0f)
     bs_image_rect(b,b->borderOldImage,b->borderOldW,b->borderOldH,
        0,0,(float)b->borderOldW,(float)b->borderOldH,
-       0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT,1.0f-b->borderTransition);
- }
- if(b->borderImage>0)
-  bs_image_rect(b,b->borderImage,b->borderW,b->borderH,
-     0,0,(float)b->borderW,(float)b->borderH,
-     0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT,b->borderTransition);
+       0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT,1.0f-borderMix);
  if(controller && g_nativeBorderMode==1){
      float a=bs_border_clamp(bs_border_inst_real(runner,controller,
           g_vitaActiveChapter==2?"border_alpha":"overlay_alpha",
@@ -214,11 +355,12 @@ static void bs_native_border_draw(BSGxmRenderer* b){
         nvgFillColor(b->vg,bs_col(0x0000ffu,red));nvgFill(b->vg);
      }
  }
- if(b->borderOldImage>0){
-   if(!b->borderControllerCrossfade)b->borderTransition+=1.0f/24.0f;
-   if(b->borderTransition>=1.0f){
-      nvgDeleteImage(b->vg,b->borderOldImage);
-      b->borderOldImage=0;b->borderTransition=1.0f;
+ if(b->borderTransition<1.0f && !b->borderControllerCrossfade)
+   b->borderTransition+=1.0f/24.0f;
+ if(b->borderTransition>=1.0f){
+   b->borderTransition=1.0f;
+   if(b->borderOldImage>0){
+     nvgDeleteImage(b->vg,b->borderOldImage);b->borderOldImage=0;
    }
  }
 }

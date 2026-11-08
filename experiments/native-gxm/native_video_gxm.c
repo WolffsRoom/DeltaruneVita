@@ -27,7 +27,7 @@ static SceGxmTexture texture;
 static int image=0,status=0,event=0,initialized=0,loop=0,closeRequested=0;
 static float volume=1.0f,duration=40874.167f,position=0;
 static uint32_t videoW=640,videoH=480,videoFrames=0;
-static uint64_t startUs=0,lastFetchUs=0,lastProgressUs=0;
+static uint64_t startUs=0,lastFetchUs=0,lastProgressUs=0,eofUs=0;
 static SceUID audioThread=-1;
 static volatile int audioThreadRunning=0;
 static int audioPort=-1;
@@ -226,11 +226,11 @@ int VitaVideo_open(const char*path){
     init.memoryReplacement.allocateTexture=avGpuAlloc;
     init.memoryReplacement.deallocateTexture=avGpuFree;
     init.basePriority=0xA0;init.autoStart=1;
-    /* VitaGL's validated cold-boot setup (vita_video.c VIDEO_BUFFERS): with
-     * only two buffers the decoder rewrote the frame the GPU was still
-     * sampling, so parts of the 960x544 intro flickered. Chapter videos keep
-     * the two-buffer producer/consumer setup, as on VitaGL. */
-    init.numOutputVideoFrameBuffers=strstr(source,"first_load")?5:2;
+    /* Keep the decoder from reusing a buffer while the GPU samples it.
+     * Two buffers were sufficient on VitaGL but not on the native queued
+     * GXM submit path: the 1280x720 Chapter 5 movie could show partial
+     * frames. Five matches the already validated first-load video. */
+    init.numOutputVideoFrameBuffers=5;
     player=sceAvPlayerInit(&init);
     if(!validPlayer(player)){
         avLog("player_init_failed",(int)player);
@@ -241,7 +241,7 @@ int VitaVideo_open(const char*path){
     sceAvPlayerSetLooping(player,loop);
     duration=strstr(source,"ch5_intro")?30333.333f:40874.167f;
     position=0;startUs=sceKernelGetProcessTimeWide();
-    lastFetchUs=0;lastProgressUs=startUs;
+    lastFetchUs=0;lastProgressUs=startUs;eofUs=0;
     status=1;
     audioFrames=0;audioThreadRunning=1;
     audioThread=sceKernelCreateThread("GXM_AV_Audio",avAudioThread,
@@ -260,7 +260,13 @@ bool VitaVideo_updateFrame(void){
     if(!player||!status||closeRequested)return false;
     if(status==3)return true;
     uint64_t now=sceKernelGetProcessTimeWide();
-    if(lastFetchUs&&now-lastFetchUs<33000u)return status==2;
+    /* Do not consume one decoded frame per game frame.  The Flowey source is
+     * 24 fps (728 frames / 30.33 s), while the runner commonly presents at
+     * 40-60 fps.  Polling it at the old ~30 fps interval exhausted the MP4
+     * well before its separate OGG soundtrack.  Pace Chapter 5 at the source
+     * cadence; other movies retain their established ~29.97 fps cadence. */
+    const uint64_t fetchIntervalUs=strstr(source,"ch5_intro")?41667ull:33367ull;
+    if(lastFetchUs&&now-lastFetchUs<fetchIntervalUs)return status==2;
     lastFetchUs=now;
     if(sceAvPlayerIsActive(player)){
         SceAvPlayerFrameInfo frame;memset(&frame,0,sizeof(frame));
@@ -287,9 +293,15 @@ bool VitaVideo_updateFrame(void){
             }
         }
     }else if(status==2){
-        avLog("end_of_stream",0);
-        VitaVideo_close();event=2;
-        return false;
+        /* Preserve the decoded final frame for the GML fade. AVPlayer becomes
+         * inactive immediately after returning it; dispatching video_end in
+         * that same tick used to cut the visible ending short. */
+        if(!eofUs){eofUs=now;position=duration;avLog("end_of_stream_hold",0);}
+        if(now-eofUs>=1000000ull){
+            avLog("end_of_stream",0);
+            VitaVideo_close();event=2;
+            return false;
+        }
     }
     /* SceAvPlayer may remain active forever if the decoder stalls. Keep
      * GameMaker from freezing permanently on black/caption-only screens.

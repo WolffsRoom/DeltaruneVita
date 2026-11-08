@@ -56,19 +56,57 @@ void DebugOverlay_selectNextInstance(Runner* runner, int direction) {
     }
 }
 
+/* Which instances the DEV collision map shows. GameMaker collisions ignore
+ * image visibility, and most colliders in DELTARUNE are invisible objects
+ * (obj_solidblock, obj_soliddark, obj_doorA, obj_trigger...), so visibility
+ * must not decide this. An instance without a mask or with an empty box
+ * cannot collide. obj_marker is the decoration helper behind scr_marker, also
+ * used for full-room fades; it stays hidden in this inspector only, and normal
+ * GameMaker collisions and room events remain unmodified. */
+static bool DebugOverlay_isSceneInspectable(Runner* runner, Instance* inst,
+                                             Sprite* sprite, const InstanceBBox* box,
+                                             bool forTouch) {
+    if (runner == nullptr || inst == nullptr || !inst->active ||
+        box == nullptr || !box->valid ||
+        box->right<=box->left || box->bottom<=box->top) return false;
+    DataWin* dw=runner->dataWin;
+    if(dw != nullptr && inst->objectIndex>=0 &&
+       (uint32_t)inst->objectIndex<dw->objt.count) {
+        const char* name=dw->objt.objects[inst->objectIndex].name;
+        if(name != nullptr && strcmp(name,"obj_marker")==0) return false;
+    }
+    /* Similar full-room pseudo-layers should not become finger targets, but
+     * they are still drawn. Keep small white-pixel interactables inspectable. */
+    if(forTouch && sprite != nullptr && sprite->name != nullptr &&
+       strcmp(sprite->name,"spr_pixel_white")==0 &&
+       ((int64_t)box->right-box->left>=1536 ||
+        (int64_t)box->bottom-box->top>=1536)) return false;
+    return true;
+}
+
 void DebugOverlay_selectInstanceAtPoint(Runner* runner, float worldX, float worldY) {
     if (runner == nullptr) return;
     int32_t count = (int32_t)arrlen(runner->instances);
-    int32_t bestIdx = -1;
-    repeat(count, i) {
-        Instance* inst = runner->instances[i];
-        if (!inst->active) continue;
-        InstanceBBox bbox = Collision_computeBBox(runner, inst);
-        if (!bbox.valid) continue;
-        if ((int32_t)worldX >= bbox.left && (int32_t)worldX <= bbox.right &&
-            (int32_t)worldY >= bbox.top && (int32_t)worldY <= bbox.bottom) {
-            bestIdx = (int32_t)i;
-            break;
+    int32_t bestIdx=-1;
+    uint64_t smallestArea=UINT64_MAX;
+    int32_t bestDepth=INT32_MIN;
+    repeat(count,i){
+        Instance* inst=runner->instances[i];
+        if(!inst || !inst->active)continue;
+        InstanceBBox bbox=Collision_computeBBox(runner,inst);
+        if(!DebugOverlay_isSceneInspectable(runner,inst,
+            Collision_getSprite(runner->dataWin,inst),&bbox,true))continue;
+        if(worldX < (float)bbox.left || worldX > (float)bbox.right ||
+           worldY < (float)bbox.top || worldY > (float)bbox.bottom)continue;
+        /* Background masks can cover half the screen, hiding the desired
+         * tiny item. Prefer the smallest overlapping drawable bbox, then
+         * resolve ties using GameMaker depth (larger depth draws earlier). */
+        uint64_t area=(uint64_t)(bbox.right-bbox.left+1)*
+                      (uint64_t)(bbox.bottom-bbox.top+1);
+        if(area<smallestArea||(area==smallestArea&&inst->depth<bestDepth)){
+            smallestArea=area;
+            bestDepth=inst->depth;
+            bestIdx=(int32_t)i;
         }
     }
     g_debugSelectedInstanceIndex = bestIdx;
@@ -91,18 +129,34 @@ void DebugOverlay_drawCollisionMasks(Runner* runner) {
     int32_t instanceCount = (int32_t) arrlen(runner->instances);
     if (g_debugSelectedInstanceIndex >= instanceCount) g_debugSelectedInstanceIndex = -1;
 
+    /* Rooms hold thousands of colliders, so skip the ones far from this view.
+     * One view of margin covers widescreen expansion; a rotated view or the
+     * free camera disables this. */
+    GMLCamera* cullCamera = Runner_getCameraForView(runner, (int32_t) runner->viewCurrent);
+    float freeCamZoom = runner->freeCamZoom;
+    bool cull = cullCamera != nullptr && cullCamera->viewAngle == 0.0f &&
+                (freeCamZoom <= 0.0f || freeCamZoom == 1.0f) &&
+                runner->freeCamPanX == 0.0f && runner->freeCamPanY == 0.0f;
+    float cullLeft = 0.0f, cullTop = 0.0f, cullRight = 0.0f, cullBottom = 0.0f;
+    if (cull) {
+        cullLeft = (float) cullCamera->viewX - (float) cullCamera->viewWidth;
+        cullTop = (float) cullCamera->viewY - (float) cullCamera->viewHeight;
+        cullRight = (float) cullCamera->viewX + 2.0f * (float) cullCamera->viewWidth;
+        cullBottom = (float) cullCamera->viewY + 2.0f * (float) cullCamera->viewHeight;
+    }
+
     repeat(instanceCount, i) {
         Instance* inst = runner->instances[i];
-        if (!inst->active) continue;
-
+        if (!inst || !inst->active) continue;
         Sprite* spr = Collision_getSprite(dataWin, inst);
         if (spr == nullptr) continue;
-
-        bool isSelected = ((int32_t)i == g_debugSelectedInstanceIndex);
-        bool hasPreciseMask = Collision_hasFrameMasks(spr);
-
         InstanceBBox bbox = Collision_computeBBox(runner, inst);
-        if (!bbox.valid) continue;
+        if (!DebugOverlay_isSceneInspectable(runner,inst,spr,&bbox,false))continue;
+        bool isSelected = ((int32_t)i == g_debugSelectedInstanceIndex);
+        if (cull && !isSelected &&
+            ((float) bbox.right < cullLeft || (float) bbox.left > cullRight ||
+             (float) bbox.bottom < cullTop || (float) bbox.top > cullBottom)) continue;
+        bool hasPreciseMask = Collision_hasFrameMasks(spr);
 
         if (isSelected) {
             // Highlight selected object in filled yellow + bright yellow outline

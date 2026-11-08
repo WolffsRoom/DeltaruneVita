@@ -17,6 +17,7 @@ extern void nvgxmSetColorWriteMask(NVGcontext *ctx,unsigned mask);
 #include "native_video_gxm.h"
 #endif
 #include <psp2/io/stat.h>
+#include <psp2/kernel/sysmem.h>
 #include <math.h>
 #include <string.h>
 #include <stddef.h>
@@ -63,6 +64,10 @@ typedef struct {
              snapshotAllocations, snapshotDrops;
     size_t snapshotPoolBytes;
     int activeTarget, initialized, frameIsActive;
+    /* All GameMaker offscreen surfaces render in local pixel coordinates.
+     * Never cache their NanoVG view matrices: room changes reuse surface IDs
+     * but change the camera. bs_switch_target derives the camera from the
+     * current View parameters when returning to application_surface. */
     int logicalW, logicalH, displayW, displayH, viewActive, guiActive;
     int blendMode, alphaEnable, blendEnable;
     int fogEnabled;
@@ -83,6 +88,10 @@ typedef struct {
     BSGxmVertex *primVerts;
     unsigned primCount, primCap;
     int primImage, primW, primH;
+    /* CH3 scene handoff: one independent 640x480 GPU snapshot to bridge
+     * the moment when Tenna/background room actors are recreated. */
+    int ch3TransitionImage, ch3TransitionFrames, ch3TransitionW, ch3TransitionH;
+    float ch3ScreenX,ch3ScreenY,ch3ScreenW,ch3ScreenH;
     unsigned long draws, missing, targetSwitches, worldDraws, snapshotCount, maskFallbacks;
     unsigned long offscreenCulls, spriteFontGlyphs;
     uint64_t tileIterationsAvoided, tiledCalls, tileIterationsExecuted;
@@ -122,6 +131,7 @@ static void bs_trace(const char* message) {
     sceIoClose(fd);
 }
 static int bs_alpha_uniform_visible(BSGxmRenderer* b,float alpha);
+static const char* bs_draw_object(Renderer*r);
 /* GML-reachable states the native path cannot reproduce yet: log each kind
  * once and skip the operation instead of aborting the game. */
 static void bs_soft_unsupported(const char* what) {
@@ -134,6 +144,12 @@ static void bs_soft_unsupported(const char* what) {
     bs_trace(line);
 }
 static int bs_valid(BSGxmRenderer* b) { return b && b->vg != NULL; }
+/* GML surface_set_target can request reuse of the previous framebuffer.
+ * Never accidentally paint the default screen during skipped target draws. */
+static int bs_skip_cached_surface(BSGxmRenderer*b) {
+    return b && b->base.runner && b->base.runner->vmContext &&
+           b->base.runner->vmContext->vitaSuppressSurfaceDraw;
+}
 static void bs_snapshot_sync(BSGxmRenderer* b,int cpuWait);
 void BSContractRenderer_bind(Renderer* r, NVGcontext* vg) { if(r) BR(r)->vg=vg; }
 static void bs_require_renderer(BSGxmRenderer* b,const char* call) {
@@ -449,6 +465,216 @@ static unsigned bs_prepare_sprite_pages(BSGxmRenderer*b,const char*name) {
 /* Defined in native_borders.inc. */
 static int bs_border_global(Runner* runner,const char* name,int def);
 static Instance* bs_border_first_object(Runner* runner,const char* name);
+/* Same list as GLLegacyRenderer_preloadChapterBattleCore: the first battle
+ * of a chapter otherwise uploads the party/UI atlases on its first combat
+ * frames, a visible hitch when the battle starts. */
+unsigned BSContractRenderer_preloadBattleCore(Renderer* r) {
+    BSGxmRenderer* b=BR(r);
+    if(!bs_valid(b)||!b->base.dataWin)return 0;
+    static const char* const core[]={
+        "spr_battlebg_0","spr_battlemsg","spr_battleblcon","spr_battlebox",
+        "spr_battleborder","spr_battlebar","spr_attackspot",
+        "spr_battletarget_triangle","spr_heart","spr_dodgeheart",
+        "spr_krisb_attackready","spr_susieb_attackready","spr_ralseib_attackready",
+        "spr_krisb_idle","spr_susieb_idle","spr_ralseib_idle",
+        "spr_krisb_idle_unarmed","spr_susieb_idle_unarmed",
+        "spr_susieb_attackready_unarmed","spr_susieb_attackready_unhappy",
+        "spr_hpslash","spr_numbersfontbig","spr_numbersfontsmall",
+        "spr_heartbreak","spr_heartshards","spr_tensionbar","spr_btact",
+        "spr_btfight","spr_btitem","spr_btspare","spr_btdefend","spr_bthalf",
+        "spr_battleblcon_long","spr_battleblcon_morelong","spr_charbt_heart",
+        "spr_battle_menu_glow","spr_tp_bubbles"
+    };
+    uint64_t start=sceKernelGetProcessTimeWide();
+    unsigned loaded=0;
+    /* Bounded: Chapter 5 logs showed 33 pages (3.3 s) here, which filled
+     * the texture budget before the save room's own atlases. */
+    for(unsigned i=0;i<sizeof(core)/sizeof(core[0])&&loaded<12u;i++)
+        loaded+=bs_prepare_sprite_pages(b,core[i]);
+    /* Chapter 3: move the 500-ms Tenna first-battle warmup out of the room
+     * transition, so it runs during chapter initialization instead. These
+     * atlases stay in the existing texture cache, with no duplicate upload. */
+    extern int g_vitaActiveChapter;
+    if(g_vitaActiveChapter==3){
+        static const char* const tennaIntro[]={
+            "spr_krisb_attackready","spr_susieb_attackready",
+            "spr_ralseib_attackready","spr_krisb_idle",
+            "spr_susieb_idle","spr_ralseib_idle",
+            "spr_susieb_idle_unarmed","spr_battlemsg",
+            "spr_battleblcon","spr_tensionbar",
+            "spr_btact","spr_btfight"
+        };
+        unsigned extra=0;
+        for(unsigned i=0;i<sizeof(tennaIntro)/sizeof(tennaIntro[0])&&extra<8u;i++)
+            extra+=bs_prepare_sprite_pages(b,tennaIntro[i]);
+        char prewarmLine[144];
+        snprintf(prewarmLine,sizeof(prewarmLine),
+          "NATIVE_GXM=ch3_tenna_boot_prewarm extra_pages=%u",extra);
+        bs_trace(prewarmLine);
+        loaded+=extra;
+    }
+    if(g_vitaActiveChapter==4){
+        /* The old Ch4 CastleTown trace incurred cold atlas uploads over
+         * multiple minutes, then stabilized. Warm a small set of landmark
+         * sprites once, during chapter loading, not the transition frame.
+         * Keep the cap low to avoid evicting the battle page cache. */
+        static const char* const castleTown[]={
+            "spr_castle_house","spr_castle_house_city","spr_castle_shop",
+            "spr_castle_shop_new","spr_castle_fountain","spr_castle_cafe",
+            "spr_castle_restaurant","spr_castle_bakery_base","spr_castle_torch"
+        };
+        unsigned town=0;
+        for(unsigned i=0;i<sizeof(castleTown)/sizeof(castleTown[0])&&town<8u;i++)
+            town+=bs_prepare_sprite_pages(b,castleTown[i]);
+        char warm[146];
+        snprintf(warm,sizeof(warm),
+          "NATIVE_GXM=ch4_castletown_preload atlas_pages=%u elapsed_ms=%llu",
+          town,(unsigned long long)((sceKernelGetProcessTimeWide()-start)/1000u));
+        bs_trace(warm);
+        loaded+=town;
+    }
+    if(g_vitaActiveChapter==2){
+        /* Queen Screen's huge Cyber World backdrop and Tasque encounters
+         * repeatedly fault cold atlas pages on first entry. Preparing up to
+         * six EXTRA unique tile pages during chapter startup moves the I/O
+         * and RGBA4444/GXM upload away from interactive battle frames.
+         * Budget remains deliberately small to avoid cache thrash. */
+        DataWin*dw=b->base.dataWin;
+        unsigned ch2Warm=0,roomCount=0,tileCandidates=0;
+        if(dw){
+            for(uint32_t k=0;k<dw->room.count && ch2Warm<6u;k++){
+                Room*room=&dw->room.rooms[k];
+                if(!room->name ||
+                   (strcmp(room->name,"room_dw_cyber_maze_queenscreen")!=0 &&
+                    strcmp(room->name,"room_dw_cyber_tasque_battle")!=0))
+                    continue;
+                if(!room->payloadLoaded)
+                    DataWin_loadRoomPayload(dw,(int32_t)k);
+                if(!room->payloadLoaded)continue;
+                roomCount++;
+                for(uint32_t j=0;j<room->tileCount && ch2Warm<6u;j++){
+                    RoomTile*tile=&room->tiles[j];
+                    int tp=Renderer_resolveObjectTPAGIndex(dw,tile);
+                    tileCandidates++;
+                    if(tp<0||(unsigned)tp>=b->originalTpagCount)continue;
+                    int page=dw->tpag.items[tp].texturePageId;
+                    bool was=page>=0&&(unsigned)page<b->pageCount &&
+                        b->pageImages[page]>0;
+                    if(bs_ensure_image(b,tp)>0 && !was)ch2Warm++;
+                }
+            }
+        }
+        loaded+=ch2Warm;
+        char details[170];
+        snprintf(details,sizeof(details),
+          "NATIVE_GXM=ch2_heavy_room_boot_prewarm pages=%u rooms=%u tiles=%u",
+          ch2Warm,roomCount,tileCandidates);
+        bs_trace(details);
+    }
+    char line[120];
+    snprintf(line,sizeof(line),"NATIVE_GXM=battle_core_prewarm pages=%u elapsed_ms=%llu",
+             loaded,(unsigned long long)((sceKernelGetProcessTimeWide()-start)/1000u));
+    bs_trace(line);
+    return loaded;
+}
+/* Prepare Castle Town atlases during Chapter 5 initialization/loading,
+ * NOT on the interactive castle approach. Logs showed each runtime upload
+ * stalled 54-167ms, causing 60->12FPS spikes as the player walked.
+ * A startup loading pause is preferable to repeated gameplay hitches. */
+unsigned BSContractRenderer_preloadChapter5CastleTown(Renderer*r){
+    BSGxmRenderer*b=BR(r);
+    if(!bs_valid(b)||!r||!r->dataWin)return 0;
+    DataWin*dw=r->dataWin;
+    static const char*const spriteNames[]={
+        "spr_castle_house","spr_castle_house_city",
+        "spr_castle_shop","spr_castle_shop_new",
+        "spr_castle_fountain","spr_castle_cafe",
+        "spr_castle_restaurant","spr_castle_bakery_base",
+        "spr_castle_torch","spr_castle_lamp",
+        "spr_castle_town","spr_castletown",
+        "spr_castleflag","spr_castle_water",
+        "spr_castle_fountain_front","spr_castle_house_window",
+        "spr_castle_door","spr_castle_bg","spr_castle_tree",
+        "spr_castle_fountain_water"
+    };
+    uint64_t start=sceKernelGetProcessTimeWide();
+    unsigned loaded=0,attempted=0;
+    for(unsigned i=0;i<sizeof(spriteNames)/sizeof(spriteNames[0]);i++){
+        if(loaded>=18)break;
+        loaded+=(unsigned)bs_prepare_sprite_pages(b,spriteNames[i]);
+        attempted++;
+    }
+    /* A name-only prewarm covers just six shared atlases. The cold
+     * Castle Town/TV corridor also loads room-specific tilemaps and actors:
+     * prepare their image pages while the chapter is loading, not when the
+     * player first walks through the door. Bound the atlas budget to avoid
+     * exhausting Vita RAM in Chapters 5's late-game large rooms. */
+    unsigned roomPages=0,rooms=0,roomTileCandidates=0;
+    for(uint32_t k=0;k<dw->room.count && loaded<22u;k++){
+        Room*room=&dw->room.rooms[k];
+        if(!room->name ||
+           (strcmp(room->name,"room_dw_castle_town")!=0 &&
+            strcmp(room->name,"room_dw_castle_tv")!=0))continue;
+        if(!room->payloadLoaded)
+            DataWin_loadRoomPayload(dw,(int32_t)k);
+        if(!room->payloadLoaded)continue;
+        rooms++;
+        for(uint32_t t=0;t<room->tileCount && loaded<22u;t++){
+            RoomTile*tile=&room->tiles[t];
+            int tpag=Renderer_resolveObjectTPAGIndex(dw,tile);
+            roomTileCandidates++;
+            if(tpag<0||(unsigned)tpag>=b->originalTpagCount)continue;
+            int page=dw->tpag.items[tpag].texturePageId;
+            int was=page>=0&&(unsigned)page<b->pageCount&&b->pageImages[page]>0;
+            if(bs_ensure_image(b,tpag)>0 && !was){loaded++;roomPages++;}
+        }
+    }
+    char msg[230];
+    snprintf(msg,sizeof(msg),
+      "NATIVE_GXM=ch5_castletown_boot_prewarm loaded=%u scanned=%u rooms=%u room_pages=%u tiles=%u elapsed_ms=%llu",
+      loaded,attempted,rooms,roomPages,roomTileCandidates,
+      (unsigned long long)((sceKernelGetProcessTimeWide()-start)/1000u));
+    bs_trace(msg);
+    return loaded;
+}
+/* Chapter 5 cold Castle Town: spread destination atlas preparation over
+ * frames in the castle approach. First entry previously took 419 ms; do
+ * not force all uploads into either side of the door transition. */
+void BSContractRenderer_ch5CastleWarmTick(Renderer*r){
+    BSGxmRenderer*b=BR(r);
+    if(!bs_valid(b)||!r||!r->runner||!r->runner->currentRoom)return;
+    extern int g_vitaActiveChapter;
+    const char*name=r->runner->currentRoom->name;
+    static int next=0,done=0;
+    if(g_vitaActiveChapter!=5||!name||strcmp(name,"room_dw_castle_area_1")!=0){
+        next=0;done=0;return;
+    }
+    static const char*const town[]={
+        "spr_castle_house","spr_castle_house_city",
+        "spr_castle_shop","spr_castle_shop_new",
+        "spr_castle_fountain","spr_castle_cafe",
+        "spr_castle_restaurant","spr_castle_bakery_base",
+        "spr_castle_torch","spr_castle_lamp",
+        "spr_castle_town","spr_castletown",
+        "spr_castleflag","spr_castle_water"
+    };
+    /* One sprite family every four presented frames. An upper bound keeps
+     * Castle Town's transition preparation from monopolizing RAM; different
+     * sprite names frequently share the same atlas page. */
+    if(next>=(int)(sizeof(town)/sizeof(town[0]))||done>=12)return;
+    uint64_t t=sceKernelGetProcessTimeWide();
+    int loaded=bs_prepare_sprite_pages(b,town[next]);
+    done+=loaded;
+    if(loaded>0||next==0){
+        char line[160];
+        snprintf(line,sizeof(line),
+          "NATIVE_GXM=ch5_castle_approach_prewarm sprite=%s pages=%d total=%d ms=%llu",
+          town[next],loaded,done,
+          (unsigned long long)((sceKernelGetProcessTimeWide()-t)/1000u));
+        bs_trace(line);
+    }
+    next++;
+}
 /* Called once after a room change, before the new room's first Step.
  * Mirrors Legacy-GL's CH3_TENNA_INTRO preparation: load only the party/UI
  * pages the battle draws on its first frames, never the whole boss. */
@@ -469,6 +695,39 @@ void BSContractRenderer_roomEntered(Renderer*r) {
                                           optiId).type==RVALUE_UNDEFINED)
             Instance_setSelfVar(r->runner->vmContext->globalScopeInstance,optiId,
                                 RValue_makeReal(1));
+    }
+    if(g_vitaActiveChapter==5 && room &&
+       strncmp(room,"room_town_",10)==0 && r->runner->vmContext){
+        /* obj_sunshadows can survive room transitions with static surfaces
+         * from the old room. Reusing a live surface ID bypasses the GML
+         * lazy generate_shadow_surface guard and leaves town shadows missing.
+         * Invalidate only its owned masks when a town room is entered. */
+        Instance* sun=bs_border_first_object(r->runner,"obj_sunshadows");
+        if(sun){
+            static const char* const maskVars[]={
+                "surf_static_shadows","surf_static_cutout",
+                "surf_static_hcutout","surf_dyna_shadows",
+                "surf_highlights","surf_resize"
+            };
+            unsigned resetCount=0;
+            for(unsigned i=0;i<sizeof(maskVars)/sizeof(maskVars[0]);i++){
+                int var=shget(r->runner->vmContext->varNameMap,maskVars[i]);
+                if(var<0)continue;
+                RValue old=Instance_getSelfVar(sun,var);
+                if(old.type==RVALUE_UNDEFINED)continue;
+                int surface=RValue_toInt32(old);
+                if(surface>=0 && surface!=r->runner->applicationSurfaceId &&
+                   r->vtable->surfaceExists(r,surface))
+                   r->vtable->surfaceFree(r,surface);
+                Instance_setSelfVar(sun,var,RValue_makeReal(-1.0));
+                resetCount++;
+            }
+            char info[165];
+            snprintf(info,sizeof(info),
+              "NATIVE_GXM=ch5_shadow_room_refresh room=%.65s reset=%u",
+              room,resetCount);
+            bs_trace(info);
+        }
     }
     if(g_vitaActiveChapter==5&&room&&strncmp(room,"room_dw_fcastle",15)==0){
         /* The Flowey tower draws nothing when global.opti_mode is 3 and
@@ -511,6 +770,24 @@ void BSContractRenderer_cacheMaintenance(Renderer*r) {
     int flowery=room&&strstr(room,"flowery")!=NULL;
     b->cacheBudget=VitaGpuRules_modernTextureCacheLimitBytes(
         g_vitaActiveChapter,room,flowery);
+    if(b->residentBytes<=b->cacheBudget)return;
+    /* Those limits were measured for VitaGL, whose textures share a fixed
+     * pool. GXM atlases live in free user memory: when it is plentiful
+     * (140 MiB in the Chapter 5 final battle), keep more pages resident
+     * instead of evicting and re-reading them on every scenery change,
+     * while always leaving 48 MiB free. Capped at 128 MiB. */
+    {
+        SceKernelFreeMemorySizeInfo info;
+        memset(&info,0,sizeof(info));info.size=sizeof(info);
+        if(sceKernelGetFreeMemorySize(&info)>=0){
+            const uint64_t reserve=48ULL*1024ULL*1024ULL;
+            uint64_t freeUser=(uint64_t)(info.size_user>0?info.size_user:0);
+            uint64_t extended=freeUser>reserve?
+                (uint64_t)b->residentBytes+(freeUser-reserve):0;
+            if(extended>128ULL*1024ULL*1024ULL)extended=128ULL*1024ULL*1024ULL;
+            if(extended>b->cacheBudget)b->cacheBudget=extended;
+        }
+    }
     if(b->residentBytes<=b->cacheBudget)return;
     int synchronized=0;
     while(b->residentBytes>b->cacheBudget){
@@ -650,10 +927,11 @@ static BSGxmVisible bs_visible_local(BSGxmRenderer*b) {
 }
 static void bs_tile_index_span(float origin,float step,float limit,
         float visibleMin,float visibleMax,int*start,int*end){
-    /* The original loop emits origin + k*step while < limit.
-     * Visibility bounds are padded by a tile to keep edge fragments.
-     * All calculations use double to avoid overflow/rounding near bounds.
-     */
+    /* Constrain repeats to the actual camera viewport. One complete tile
+     * of padding on each side is enough for atlas trimming and fractional
+     * camera motion. The previous TWO-tile halo emitted 30-50% extra tile
+     * calls for Chapter 2 Cyber World (600+ tiles/frame in the large room).
+     * Still use doubles to avoid overflow/rounding near boundaries. */
     if(!isfinite(origin)||!isfinite(step)||!isfinite(limit)||
        step<=0.0f||limit<=origin){*start=*end=0;return;}
     double total=ceil(((double)limit-origin)/step);
@@ -662,14 +940,15 @@ static void bs_tile_index_span(float origin,float step,float limit,
     if(!isfinite(visibleMin)||!isfinite(visibleMax)){
         *start=0;*end=n;return;
     }
-    double first=floor(((double)visibleMin-origin)/step)-2.0;
-    double last=ceil(((double)visibleMax-origin)/step)+2.0;
+    double first=floor(((double)visibleMin-origin)/step)-1.0;
+    double last=ceil(((double)visibleMax-origin)/step)+1.0;
     *start=(int)fmax(0.0,fmin((double)n,first));
     *end=(int)fmax((double)*start,fmin((double)n,last));
 }
 static void bs_image_rect(BSGxmRenderer* b,int image,int iw,int ih,
         float u,float v,float sw,float sh,
         float x,float y,float dw,float dh,float alpha) {
+    if(bs_skip_cached_surface(b))return;
     if (!image || iw<=0 || ih<=0 || sw<=0 || sh<=0 ||
         dw==0 || dh==0 || alpha<=0 || !bs_alpha_uniform_visible(b,alpha)) return;
     if(bs_image_offscreen(b,x,y,dw,dh))return;
@@ -683,8 +962,25 @@ static void bs_image_rect(BSGxmRenderer* b,int image,int iw,int ih,
 static void bs_image_tinted_impl(BSGxmRenderer* b,int image,int iw,int ih,
         float u,float v,float sw,float sh,float x,float y,float dw,float dh,
         uint32_t tint,float alpha,int visibleAlready) {
+    if(bs_skip_cached_surface(b))return;
     if(!image||sw<=0||sh<=0||dw==0||dh==0||alpha<=0 ||
        !bs_alpha_uniform_visible(b,alpha))return;
+    /* Chapter 4 Titan battle explicitly draws ghost wings / dissolving star
+     * under d3d_set_fog(true,c_black,0,1). Native GXM previously only
+     * tracked this state, resulting in SOLID WHITE silhouettes. Approximate
+     * the 0..1 full-fog color by tinting the sprite in the actual pass. Do
+     * not touch other chapters, town/world shaders or regular sprite alpha. */
+    extern int g_vitaActiveChapter;
+    if(g_vitaActiveChapter==4 && b->fogEnabled &&
+       b->base.runner && b->base.runner->currentRoom &&
+       b->base.runner->currentRoom->name &&
+       strcmp(b->base.runner->currentRoom->name,
+           "room_dw_churchc_titanclimb2_post")==0){
+        tint=b->fogColor;
+        static unsigned fogTrace=0;
+        if(fogTrace++<6)
+            bs_trace("NATIVE_GXM=ch4_titan_fog_tint applied=1 silhouette_preserved");
+    }
     if(!visibleAlready && bs_image_offscreen(b,x,y,dw,dh))return;
     NVGpaint paint=nvgImagePattern(b->vg,x-u*(dw/sw),y-v*(dh/sh),
                     iw*(dw/sw),ih*(dh/sh),0,image,1.0f);
@@ -701,6 +997,48 @@ static void bs_image_tinted(BSGxmRenderer* b,int image,int iw,int ih,
 static void bs_tpag_region(BSGxmRenderer* b,int idx,
      float sx,float sy,float sw,float sh,float x,float y,
      float dw,float dh,float angle,float pivotX,float pivotY,float alpha,uint32_t tint) {
+    if(bs_skip_cached_surface(b))return;
+    /* Ch5 Light World: GameMaker's self-shadow mask subtraction removes
+     * Kris's silhouette from the dynamic shadow overlay. On native GXM
+     * this left his color unchanged crossing under the static tree/building
+     * shade. Keep the mask over Kris and let the existing shd_shadowblend
+     * composite tint his sprite exactly where the shadow pixels are.
+     * Scope narrowly: town rooms, subtract blend, sunshadow mask target,
+     * current GML instance == obj_mainchara. Never touch normal sprites,
+     * other chapters, darkzone shading or offscreen dialog assets. */
+    extern int g_vitaActiveChapter;
+    if(g_vitaActiveChapter==5 && b->blendMode==bm_subtract &&
+       b->activeTarget>=0 && b->base.runner &&
+       b->base.runner->currentRoom && b->base.runner->vmContext){
+        const char*room=b->base.runner->currentRoom->name;
+        VMContext*vm=b->base.runner->vmContext;
+        Instance*actor=vm->currentInstance;
+        if(room&&strncmp(room,"room_town_",10)==0 &&
+           actor&&actor->objectIndex>=0 &&
+           (uint32_t)actor->objectIndex<b->base.dataWin->objt.count &&
+           strcmp(b->base.dataWin->objt.objects[actor->objectIndex].name,
+                  "obj_mainchara")==0){
+            Instance*sun=bs_border_first_object(b->base.runner,"obj_sunshadows");
+            if(sun){
+                int maskVar=shget(vm->varNameMap,"surf_dyna_shadows");
+                if(maskVar>=0){
+                    RValue mask=Instance_getSelfVar(sun,maskVar);
+                    if(mask.type!=RVALUE_UNDEFINED &&
+                       RValue_toInt32(mask)==b->activeTarget){
+                        /* Restore original GameMaker bm_subtract self-shadow
+                         * cutout instead of suppressing Kris' mask. The old
+                         * workaround made the actor's silhouette disappear
+                         * from the town shadow compositor. */
+                        static int lastLoggedRoom=-1;
+                        if(lastLoggedRoom!=b->base.runner->currentRoomIndex){
+                            lastLoggedRoom=b->base.runner->currentRoomIndex;
+                            bs_trace("NATIVE_GXM=ch5_kris_shadow_mask original_cutout=1 no_skip=1");
+                        }
+                    }
+                }
+            }
+        }
+    }
     /* In unrotated world/GUI draws, reject fully off-camera sprites BEFORE
      * decoding their TXTR atlas. This avoids hidden cache thrash in wide rooms.
      * Rotated sprites retain the conservative post-transform check. */
@@ -819,6 +1157,15 @@ static int bs_create_surface_slot(BSGxmRenderer* b,int id,int w,int h) {
     if (id<0 || id>=BS_MAX_SURFACES || w<1 || h<1 ||
         w>BS_MAX_SURFACE_EDGE || h>BS_MAX_SURFACE_EDGE) return 0;
     BSGxmSurface *s=&b->surfaces[id];
+    /* C2-12828 (room_dw_fcastle_ultradash): floor generation runs dozens of
+     * create/snapshot/free cycles before the first present, and retired
+     * surfaces keep their render target until then. The driver limit was hit,
+     * sceGxmCreateRenderTarget failed unchecked and sceGxmBeginScene rejected
+     * the NULL target. Reclaim early instead of waiting for a present. */
+    if(b->retiredCount>=16&&b->frameIsActive){
+        bs_snapshot_sync(b,1);
+        bs_release_retired(b);
+    }
     NVGXMtexture *t=gxmCreateTexture(w,h,SCE_GXM_TEXTURE_FORMAT_U8U8U8U8_ABGR,NULL);
     if (!t) return 0;
     NVGXMframebufferInitOptions o={0};
@@ -826,11 +1173,23 @@ static int bs_create_surface_slot(BSGxmRenderer* b,int id,int w,int h) {
     /* Original =1 was insufficient for the app surface reused across the
      * multi-pass Castle Town scene. A few native GXM passes can legitimately
      * target the same surface within a frame. */
-    o.scenesPerFrame=id==0?4:2;o.render_target=t;
+    o.scenesPerFrame=id==0?8:4;o.render_target=t;
     o.color_format=SCE_GXM_COLOR_FORMAT_A8B8G8R8;
     o.color_surface_type=SCE_GXM_COLOR_SURFACE_LINEAR;
     o.display_width=w;o.display_height=h;o.display_stride=(w+7)&~7;
     NVGXMframebuffer *fb=gxmCreateFramebuffer(&o);
+    if(fb&&!fb->gxm_render_target){
+        /* Retry once after reclaiming; otherwise report a normal failed
+         * surface_create so GML keeps running without a scene-less target. */
+        gxmDeleteFramebuffer(fb);fb=NULL;
+        if(b->retiredCount&&b->frameIsActive){
+            bs_snapshot_sync(b,1);
+            bs_release_retired(b);
+            fb=gxmCreateFramebuffer(&o);
+            if(fb&&!fb->gxm_render_target){gxmDeleteFramebuffer(fb);fb=NULL;}
+        }
+        bs_trace(fb?"NATIVE_GXM=render_target_reclaimed":"NATIVE_GXM=render_target_exhausted");
+    }
     if (!fb){gxmDeleteTexture(t);return 0;}
     int img=nvgxmCreateImageFromHandle(b->vg,&t->tex);
     if (img<=0){gxmDeleteFramebuffer(fb);gxmDeleteTexture(t);return 0;}
@@ -844,59 +1203,120 @@ static void bs_switch_target(BSGxmRenderer* b,int target) {
         bs_trace("NATIVE_GXM=surface_switch invalid_target skipped");
         return;
     }
-    /* Chapter 5 issues surface_set_target during Draw/View. GameMaker
-     * preserves the active camera viewport when changing the render target.
-     * The old native path aborted because NanoVG holds an active save stack.
-     * Save the view/GUI parameters, unwind that stack before nvgEndFrame,
-     * then reconstruct it in the new frame. bs_endView/endGUI will still
-     * restore exactly once as usual. */
+    /* The world View transform exists ONLY on application_surface.
+     * The shadow system itself draws at -camerax/-cameray into 320x240 and
+     * 640x480 offscreen targets. Applying the world View there applies the
+     * camera offset/scale twice and culls the generated shadows.
+     *
+     * In v0.79-9 the per-frame cached matrix was copied from the outgoing
+     * world target into the first shadow target, so it inherited the wrong
+     * projection. Room transitions expose the resulting zoom/culling bug.
+     *
+     * GXM/nanovg start a fresh state stack for each framebuffer switch.
+     * Reconstruct a deterministic View from the current Runner camera
+     * ONLY for the live application_surface; otherwise use local pixels.
+     * Both paths keep one nvgSave so the enclosing endView/endGUI restores
+     * the correct stack depth. */
     int wasView=b->viewActive,wasGui=b->guiActive;
+    int oldTarget=b->activeTarget;
     if(wasView||wasGui){
         nvgRestore(b->vg);
         b->viewActive=b->guiActive=0;
     }
     nvgEndFrame(b->vg);gxmEndFrame();
-    if(target>=0) {
-        BSGxmSurface *s=bs_surface(b,target);
-        gxmBeginFrameEx(s->fb,0);
-        nvgBeginFrame(b->vg,s->w,s->h,1);
+    /* CH3 Knight pointing cone combines two render-to-texture targets:
+     * surf (masked triangle) and starsurf (stars plus subtractive grating).
+     * The old source target is sampled by the next pass immediately. GXM
+     * queues the offscreen render; without a completion fence, read-after-
+     * write depends on background GPU load and can show an older mask (or
+     * the attack only after the background disappears). This barrier is
+     * intentionally isolated to the cone's nested target switches, not all
+     * battles or every room transition. GML draw depth stays unchanged. */
+    extern int g_vitaActiveChapter;
+    const char*owner=bs_draw_object(&b->base);
+    int app=b->base.runner?b->base.runner->applicationSurfaceId:-1;
+    if(g_vitaActiveChapter==3 && oldTarget>=0 && oldTarget!=app &&
+       owner && strcmp(owner,"obj_knight_pointing_cone")==0 &&
+       b->base.runner && b->base.runner->currentRoom &&
+       b->base.runner->currentRoom->name &&
+       strcmp(b->base.runner->currentRoom->name,"room_dw_snow_zone")==0){
+        NVGXMwindow*win=gxmGetWindow();
+        if(win && win->context){
+            g_gxmRenderStage="ch3_knight_surface_dependency";
+            sceGxmFinish(win->context);
+            g_gxmRenderStage=NULL;
+            static unsigned fenceCount=0;
+            if(fenceCount++<24u){
+                char msg[182];
+                snprintf(msg,sizeof(msg),
+                    "NATIVE_GXM=ch3_knight_surface_fence from=%d to=%d app=%d "
+                    "blend=%d alpha_test=%d reads_latest=1",
+                    oldTarget,target,app,b->blendMode,b->alphaEnable);
+                bs_trace(msg);
+            }
+        }
+    }
+    if(target>=0){
+        BSGxmSurface *surface=bs_surface(b,target);
+        gxmBeginFrameEx(surface->fb,0);
+        nvgBeginFrame(b->vg,surface->w,surface->h,1);
     }else{
         gxmBeginFrame();
         nvgBeginFrame(b->vg,DISPLAY_WIDTH,DISPLAY_HEIGHT,1);
     }
     b->activeTarget=target;
     ++b->targetSwitches;
+
+    int appTarget=b->base.runner?b->base.runner->applicationSurfaceId:-1;
+    int worldTarget=target>=0 && target==appTarget;
     if(wasView){
-        int x=b->viewX,y=b->viewY,w=b->viewW,h=b->viewH;
-        int px=b->portX,py=b->portY,pw=b->portW,ph=b->portH;
-        float angle=b->viewAngle;
-        if(w>0&&h>0&&pw>0&&ph>0){
-            nvgSave(b->vg);nvgScissor(b->vg,px,py,pw,ph);
-            nvgTranslate(b->vg,px,py);
-            nvgScale(b->vg,(float)pw/w,(float)ph/h);
-            if(angle!=0.0f){
-                nvgTranslate(b->vg,w*.5f,h*.5f);
-                nvgRotate(b->vg,-angle*BS_PI/180);
-                nvgTranslate(b->vg,-w*.5f,-h*.5f);
-            }
-            nvgTranslate(b->vg,-x,-y);b->viewActive=1;
-        }
-    }else if(wasGui){
-        int gw=b->guiW,gh=b->guiH,x=b->guiX,y=b->guiY;
-        int w=b->guiPortW,h=b->guiPortH;
         nvgSave(b->vg);
-        if(gw>0&&gh>0&&w>0&&h>0){
-            nvgScissor(b->vg,x,y,w,h);nvgTranslate(b->vg,x,y);
-            nvgScale(b->vg,(float)w/gw,(float)h/gh);
+        nvgResetTransform(b->vg);
+        nvgResetScissor(b->vg);
+        if(worldTarget && b->viewW>0 && b->viewH>0 &&
+            b->portW>0 && b->portH>0){
+            nvgScissor(b->vg,b->portX,b->portY,b->portW,b->portH);
+            nvgTranslate(b->vg,b->portX,b->portY);
+            nvgScale(b->vg,(float)b->portW/b->viewW,
+                      (float)b->portH/b->viewH);
+            if(b->viewAngle!=0.0f){
+                nvgTranslate(b->vg,b->viewW*.5f,b->viewH*.5f);
+                nvgRotate(b->vg,-b->viewAngle*BS_PI/180);
+                nvgTranslate(b->vg,-b->viewW*.5f,-b->viewH*.5f);
+            }
+            nvgTranslate(b->vg,-b->viewX,-b->viewY);
+        }
+        b->viewActive=1;
+    }else if(wasGui){
+        nvgSave(b->vg);
+        nvgResetTransform(b->vg);
+        nvgResetScissor(b->vg);
+        if(b->guiW>0&&b->guiH>0&&b->guiPortW>0&&b->guiPortH>0){
+            nvgScissor(b->vg,b->guiX,b->guiY,b->guiPortW,b->guiPortH);
+            nvgTranslate(b->vg,b->guiX,b->guiY);
+            nvgScale(b->vg,(float)b->guiPortW/b->guiW,
+                      (float)b->guiPortH/b->guiH);
         }
         b->guiActive=1;
     }
     if(wasView||wasGui){
-        static unsigned logged=0;
-        if(logged++<16)bs_trace(
-            "NATIVE_GXM=surface_switch inside_active_pass restore_camera=1");
+        static int reportedRoom=-999,reportedCount=0;
+        int room=b->base.runner?b->base.runner->currentRoomIndex:-1;
+        if(room!=reportedRoom){reportedRoom=room;reportedCount=0;}
+        if(reportedCount++<14){
+            char msg[230];
+            snprintf(msg,sizeof(msg),
+              "NATIVE_GXM=target_projection room=%d from=%d to=%d app=%d "
+              "mode=%s view=%d,%d,%dx%d port=%d,%d,%dx%d",
+              room,oldTarget,target,appTarget,
+              wasGui?"gui":(worldTarget?"world_camera":"surface_local"),
+              b->viewX,b->viewY,b->viewW,b->viewH,
+              b->portX,b->portY,b->portW,b->portH);
+            bs_trace(msg);
+        }
     }
 }
+
 static void bs_init(Renderer* r, DataWin* dw) {
     BSGxmRenderer* b=BR(r);
     r->dataWin=dw;
@@ -939,6 +1359,7 @@ static void bs_destroy(Renderer* r) {
             nvgDeleteImage(b->vg,b->snapshotPool[i].image);
     }
     if (b->vg) {
+        if(b->ch3TransitionImage>0)nvgDeleteImage(b->vg,b->ch3TransitionImage);
         if(b->borderImage>0)nvgDeleteImage(b->vg,b->borderImage);
         if(b->borderOldImage>0)nvgDeleteImage(b->vg,b->borderOldImage);
         for(unsigned i=0;i<b->pageCount;i++)
@@ -1005,15 +1426,28 @@ static void bs_endFrameEnd(Renderer* r) {
         nvgSave(b->vg);
         float ratio=fminf((float)b->displayW/s->w,(float)b->displayH/s->h);
         extern int g_nativeStretchFill;
-        float w=g_nativeStretchFill?b->displayW:s->w*ratio;
-        float h=g_nativeStretchFill?b->displayH:s->h*ratio;
+        int forceVideoFill=0;
+#ifdef NATIVE_GXM_VIDEO
+        /* Chapter 3 tennaIntroF1 is 640x480 authored INSIDE the game viewport.
+         * Full-host 960x544 presentation is exclusive to Chapter 5's intro. */
+        extern int g_vitaActiveChapter;
+        forceVideoFill=(g_vitaActiveChapter==5 && VitaVideo_isChapter5Intro() &&
+                        VitaVideo_hasDecodedFrame())?1:0;
+#endif
+        float w=(g_nativeStretchFill||forceVideoFill)?b->displayW:s->w*ratio;
+        float h=(g_nativeStretchFill||forceVideoFill)?b->displayH:s->h*ratio;
         extern int g_vitaDisplayZoom,g_vitaDisplayOffsetX,g_vitaDisplayOffsetY;
-        int zoom=g_vitaDisplayZoom;
+        int zoom=forceVideoFill?100:g_vitaDisplayZoom;
         if(zoom<25)zoom=25;
         if(zoom>200)zoom=200;
         w*=zoom/100.0f;h*=zoom/100.0f;
-        float destX=(b->displayW-w)*.5f+g_vitaDisplayOffsetX;
-        float destY=(b->displayH-h)*.5f+g_vitaDisplayOffsetY;
+        /* Chapter 5's console movie owns the full Vita framebuffer.  User
+         * screen calibration applies to the 4:3 game, never to this 16:9
+         * movie, otherwise offsets/cropping survive despite forceVideoFill. */
+        float destX=(b->displayW-w)*.5f+(forceVideoFill?0:g_vitaDisplayOffsetX);
+        float destY=(b->displayH-h)*.5f+(forceVideoFill?0:g_vitaDisplayOffsetY);
+        b->ch3ScreenX=destX;b->ch3ScreenY=destY;
+        b->ch3ScreenW=w;b->ch3ScreenH=h;
         /* Compositing safeguard: Tenna's light and other offscreen effects
          * can intentionally produce transparent pixels, but the VIDEO
          * framebuffer must not become a window into the Vita border.
@@ -1033,8 +1467,29 @@ static void bs_endFrameEnd(Renderer* r) {
                 sceGxmTextureSetMagFilter(&handle->tex,f);
             }
         }
-        bs_image_rect(b,s->image,s->w,s->h,0,0,s->w,s->h,
-                      destX,destY,w,h,1);
+        extern int g_nativeCrtTubeEnabled;
+        if(g_nativeCrtTubeEnabled && !forceVideoFill &&
+           s->w>0 && s->h>0 && w>0 && h>0){
+            /* Lightweight actual geometry distortion, no extra GPU target.
+             * A subtle 7px (at 960w) optical barrel curve is approximated by
+             * 24 horizontal source strips. At the screen's top/bottom the
+             * image is narrowed; center remains full width. Textures sample
+             * the same pixels, without CPU readback or expensive CRT GXP.
+             * GameMaker GUI remains outside this transform, deliberately. */
+            const int slices=24;
+            for(int i=0;i<slices;i++){
+                float v0=(float)i/slices,v1=(float)(i+1)/slices;
+                float ym=((float)i+0.5f)/slices*2.0f-1.0f;
+                float inset=w*0.0074f*ym*ym;
+                bs_image_rect(b,s->image,s->w,s->h,
+                    0,v0*s->h,s->w,(v1-v0)*s->h,
+                    destX+inset,destY+v0*h,w-2.0f*inset,
+                    (v1-v0)*h+0.15f,1);
+            }
+        }else{
+            bs_image_rect(b,s->image,s->w,s->h,0,0,s->w,s->h,
+                          destX,destY,w,h,1);
+        }
         nvgRestore(b->vg);
     }
 }
@@ -1046,13 +1501,20 @@ static void bs_beginView(Renderer* r,int32_t x,int32_t y,int32_t w,int32_t h,
     r->CPortX=px;r->CPortY=py;r->CPortW=pw;r->CPortH=ph;
     b->viewX=x;b->viewY=y;b->viewW=w;b->viewH=h;
     b->portX=px;b->portY=py;b->portW=pw;b->portH=ph;b->viewAngle=angle;
-    nvgSave(b->vg);nvgScissor(b->vg,px,py,pw,ph);
-    nvgTranslate(b->vg,px,py);nvgScale(b->vg,(float)pw/w,(float)ph/h);
-    if(angle!=0) {
-        nvgTranslate(b->vg,w*.5f,h*.5f);nvgRotate(b->vg,-angle*BS_PI/180);
-        nvgTranslate(b->vg,-w*.5f,-h*.5f);
+    /* Keep world camera only for application_surface. Offscreen shadows
+     * need local pixels and must not inherit world camera/scissor. */
+    nvgSave(b->vg);
+    int appId=r->runner?r->runner->applicationSurfaceId:-1;
+    if(b->activeTarget==appId && appId>=0){
+        nvgScissor(b->vg,px,py,pw,ph);
+        nvgTranslate(b->vg,px,py);nvgScale(b->vg,(float)pw/w,(float)ph/h);
+        if(angle!=0) {
+            nvgTranslate(b->vg,w*.5f,h*.5f);nvgRotate(b->vg,-angle*BS_PI/180);
+            nvgTranslate(b->vg,-w*.5f,-h*.5f);
+        }
+        nvgTranslate(b->vg,-x,-y);
     }
-    nvgTranslate(b->vg,-x,-y);b->viewActive=1;
+    b->viewActive=1;
 }
 static void bs_endView(Renderer* r) {
     BSGxmRenderer* b=BR(r);
@@ -1068,6 +1530,16 @@ static void bs_beginGUI(Renderer* r,int32_t gw,int32_t gh,int32_t x,int32_t y,
     BSGxmRenderer* b=BR(r);
     if(b->guiActive){bs_soft_unsupported("beginGUI_nested");nvgRestore(b->vg);b->guiActive=0;}
     if(target!=b->activeTarget)bs_switch_target(b,target);
+    /* World lighting shaders must NEVER leak onto the host GUI/menu pass,
+     * even when GameMaker skipped a reset following a surface switch. */
+    if(target==RENDER_TARGET_HOST_FRAMEBUFFER && r->currentShader>=0){
+        r->currentShader=-1;
+        nvgxmSelectRuntimeShader(b->vg,0);
+        nvgxmSetRuntimeShaderParams(b->vg,NULL);
+        static unsigned resetLogs=0;
+        if(resetLogs++<12)
+            bs_trace("NATIVE_GXM=gui_shader_isolation cleared_world_shader=1");
+    }
     b->guiW=gw;b->guiH=gh;b->guiX=x;b->guiY=y;
     b->guiPortW=w;b->guiPortH=h;
     nvgSave(b->vg);
@@ -1090,10 +1562,20 @@ static void bs_drawSprite(Renderer* r,int32_t idx,float x,float y,float ox,float
     if(idx<0 || (uint32_t)idx>=b->imageCount || !r->dataWin->tpag.items[idx].present)return;
     TexturePageItem *p=&r->dataWin->tpag.items[idx];
 
-    if(angle==0.0f && xs==1.0f && ys==1.0f){
+    if(angle==0.0f && xs>0.0f && ys>0.0f &&
+       isfinite(xs)&&isfinite(ys)&&isfinite(x)&&isfinite(y)){
+        /* Transform equivalence:
+         * translate(x,y) * scale(xs,ys) * (targetX-ox,targetY-oy)
+         * can be applied directly to the destination rectangle. Avoid
+         * nvgSave/Translate/Scale/Restore for each firework particle and
+         * the thousands of scaled sprites in Cyber World battles.
+         * Negative/mirrored scales and rotated sprites retain the old
+         * NanoVG matrix path to preserve their original appearance. */
         bs_tpag_region(b,idx,0,0,p->sourceWidth,p->sourceHeight,
-                       x+(float)p->targetX-ox,y+(float)p->targetY-oy,
-                       p->targetWidth,p->targetHeight,0,0,0,alpha,tint);
+                       x+((float)p->targetX-ox)*xs,
+                       y+((float)p->targetY-oy)*ys,
+                       p->targetWidth*xs,p->targetHeight*ys,
+                       0,0,0,alpha,tint);
         return;
     }
     nvgSave(b->vg);
@@ -1109,13 +1591,44 @@ static void bs_drawSpritePart(Renderer* r,int32_t idx,int32_t sx,int32_t sy,
     int32_t sw,int32_t sh,float x,float y,float xs,float ys,float angle,
     float pivotX,float pivotY,uint32_t tint,float alpha) {
     BSGxmRenderer* b=BR(r);
+    /* CH2 Fireworks: original GameMaker obj_cyber_shadowMaker_fireworks
+     * draws spr_blank_tile_white at image_alpha=0 into alpha-only writes
+     * (GPU blending disabled), clearing the rectangle alpha before
+     * applying the true alpha-shaped character sprites. Our generic
+     * image path intentionally skips alpha==0 and thus left the whole
+     * shadow rectangle opaque. Only in that precise mask configuration
+     * render an untextured transparent fill that WRITES alpha zero.
+     * The caller already clips each tile to the GML area boundaries. */
+    extern int g_vitaActiveChapter;
+    if(g_vitaActiveChapter==2 && alpha<=0.0f && sw>0 && sh>0 &&
+       xs>0.0f && ys>0.0f &&
+       b->writeA && !b->writeR && !b->writeG && !b->writeB &&
+       !b->blendEnable && b->base.runner && b->base.runner->currentRoom &&
+       b->base.runner->currentRoom->name &&
+       (!strcmp(b->base.runner->currentRoom->name,"room_dw_cyber_maze_fireworks")||
+        !strcmp(b->base.runner->currentRoom->name,"room_dw_cyber_post_music_boss_slide")) &&
+       bs_draw_object(r) &&
+       !strcmp(bs_draw_object(r),"obj_cyber_shadowMaker_fireworks")){
+        if(!bs_skip_cached_surface(b)){
+            nvgBeginPath(b->vg);
+            nvgRect(b->vg,x,y,sw*xs,sh*ys);
+            nvgFillColor(b->vg,nvgRGBA(255,255,255,0));
+            nvgFill(b->vg);
+            b->draws++;
+            static unsigned reported=0;
+            if(reported++<6)
+                bs_trace("NATIVE_GXM=ch2_fireworks_alpha_mask cleared_zero_alpha=1 silhouette_cutout=1");
+        }
+        return;
+    }
 
     if(idx<0||(uint32_t)idx>=b->imageCount)return;
     bs_tpag_region(b,idx,sx,sy,sw,sh,x,y,sw*xs,sh*ys,angle,pivotX,pivotY,alpha,tint);
 }
 static void bs_drawRectangle(Renderer* r,float x1,float y1,float x2,float y2,
                              uint32_t color,float alpha,bool outline) {
-    BSGxmRenderer* b=BR(r);nvgBeginPath(b->vg);nvgRect(b->vg,x1,y1,x2-x1,y2-y1);
+    BSGxmRenderer* b=BR(r);if(bs_skip_cached_surface(b))return;
+    nvgBeginPath(b->vg);nvgRect(b->vg,x1,y1,x2-x1,y2-y1);
     if(outline){nvgStrokeColor(b->vg,bs_col(color,alpha));nvgStrokeWidth(b->vg,1);nvgStroke(b->vg);}
     else{nvgFillColor(b->vg,bs_col(color,alpha));nvgFill(b->vg);}
     b->draws++;
@@ -1176,13 +1689,22 @@ static void bs_drawRectangleColor(Renderer* r,float x1,float y1,float x2,float y
 }
 static void bs_drawLine(Renderer* r,float x1,float y1,float x2,float y2,
                         float w,uint32_t c,float a) {
-    BSGxmRenderer* b=BR(r);nvgBeginPath(b->vg);nvgMoveTo(b->vg,x1,y1);
+    BSGxmRenderer* b=BR(r);if(bs_skip_cached_surface(b))return;
+    if(!isfinite(x1)||!isfinite(y1)||!isfinite(x2)||!isfinite(y2))return;
+    /* CH3 Board/Sax draws many growing-path segments into 640x480
+     * surfaces. Discard ONLY segments fully beyond the visible buffer
+     * (with 4px stroke safety margin), before building NanoVG paths. */
+    float minx=fminf(x1,x2)-4.0f,miny=fminf(y1,y2)-4.0f;
+    float maxx=fmaxf(x1,x2)+4.0f,maxy=fmaxf(y1,y2)+4.0f;
+    if(bs_image_offscreen(b,minx,miny,maxx-minx,maxy-miny))return;
+    nvgBeginPath(b->vg);nvgMoveTo(b->vg,x1,y1);
     nvgLineTo(b->vg,x2,y2);nvgStrokeWidth(b->vg,w>0?w:1);
     nvgStrokeColor(b->vg,bs_col(c,a));nvgStroke(b->vg);b->draws++;
 }
 static void bs_drawTriangle(Renderer* r,float x1,float y1,float x2,float y2,float x3,float y3,
                            uint32_t c1,uint32_t c2,uint32_t c3,float a,bool outline) {
     BSGxmRenderer* b=BR(r);
+    if(bs_skip_cached_surface(b))return;
     if(!isfinite(x1)||!isfinite(y1)||!isfinite(x2)||!isfinite(y2)||
        !isfinite(x3)||!isfinite(y3)||!isfinite(a))return;
     float e12=(x1-x2)*(x1-x2)+(y1-y2)*(y1-y2);
@@ -1239,6 +1761,12 @@ static void bs_drawLineColor(Renderer* r,float x1,float y1,float x2,float y2,
                             float width,uint32_t c1,uint32_t c2,float a){
     if(c1==c2){bs_drawLine(r,x1,y1,x2,y2,width,c1,a);return;}
     BSGxmRenderer*b=BR(r);
+    if(bs_skip_cached_surface(b))return;
+    if(!isfinite(x1)||!isfinite(y1)||!isfinite(x2)||!isfinite(y2))return;
+    float guard=fmaxf(4.0f,width*0.5f+2.0f);
+    float minx=fminf(x1,x2)-guard,miny=fminf(y1,y2)-guard;
+    float maxx=fmaxf(x1,x2)+guard,maxy=fmaxf(y1,y2)+guard;
+    if(bs_image_offscreen(b,minx,miny,maxx-minx,maxy-miny))return;
     nvgBeginPath(b->vg);nvgMoveTo(b->vg,x1,y1);nvgLineTo(b->vg,x2,y2);
     nvgStrokeWidth(b->vg,width>0?width:1);
     NVGpaint gradient=nvgLinearGradient(b->vg,x1,y1,x2,y2,
@@ -1247,6 +1775,26 @@ static void bs_drawLineColor(Renderer* r,float x1,float y1,float x2,float y2,
 }
 static void bs_clearScreen(Renderer* r,uint32_t color,float alpha) {
     BSGxmRenderer* b=BR(r);
+    if(bs_skip_cached_surface(b))return;
+    /* GameMaker draw_clear_alpha(black,0) MUST reset the destination alpha
+     * to zero. Ordinary source-over does not clear anything when src alpha=0,
+     * leaving stale shadow/petal masks in CH5 and opaque circles in CH3.
+     * Draw with SRC=ONE,DST=ZERO, independent of camera/scissor.
+     * NanoVG saves/restores blend factors per draw. */
+    if(b->activeTarget>=0 && alpha<=0.0f){
+        nvgSave(b->vg);
+        nvgResetTransform(b->vg);
+        nvgResetScissor(b->vg);
+        nvgGlobalCompositeBlendFuncSeparate(b->vg,
+            NVG_ONE,NVG_ZERO,NVG_ONE,NVG_ZERO);
+        nvgBeginPath(b->vg);
+        nvgRect(b->vg,0,0,b->surfaces[b->activeTarget].w,
+                b->surfaces[b->activeTarget].h);
+        nvgFillColor(b->vg,bs_col(color,0));
+        nvgFill(b->vg);b->draws++;
+        nvgRestore(b->vg);
+        return;
+    }
     bs_drawRectangle(r,0,0,b->activeTarget>=0?b->surfaces[b->activeTarget].w:DISPLAY_WIDTH,
       b->activeTarget>=0?b->surfaces[b->activeTarget].h:DISPLAY_HEIGHT,color,alpha,false);
 }
@@ -1266,6 +1814,31 @@ static void bs_surface_create_failed(int w,int h,const char*why) {
 }
 static int32_t bs_createSurface(Renderer* r,int32_t w,int32_t h) {
     BSGxmRenderer* b=BR(r);bs_require_renderer(b,"createSurface_unbound");
+    /* 7000x2120 Chapter 5 cliff shadow mask exceeds the Vita GXM 4096px
+     * per-axis limit. This is a dimension constraint, not GPU OOM.
+     * Reject before searching slots; report accurately for future tiling. */
+    if(w<1||h<1||w>BS_MAX_SURFACE_EDGE||h>BS_MAX_SURFACE_EDGE){
+        bs_surface_create_failed(w,h,"unsupported_dimensions");
+        return -1;
+    }
+    /* CH5 cliff sunshadows requests 3200x2800 (about 34 MiB ABGR).
+     * In the long 2026-11-01 session CDRAM had only 28 MiB free, so
+     * repeated sceGxm texture allocation attempts cannot succeed.
+     * Reject before reaching the allocator; keep the original size for
+     * potential later retry when enough space is available. */
+    if((uint64_t)((w+7)&~7)*(uint64_t)h*4ull > 24ull*1024ull*1024ull){
+        SceKernelFreeMemorySizeInfo mem={0};
+        mem.size=sizeof(mem);
+        if(sceKernelGetFreeMemorySize(&mem)>=0){
+            uint64_t required=(uint64_t)((w+7)&~7)*(uint64_t)h*4ull;
+            uint64_t available=mem.size_cdram>0?(uint64_t)mem.size_cdram:0ull;
+            const uint64_t reserve=4ull*1024ull*1024ull;
+            if(available<=reserve || required>available-reserve){
+                bs_surface_create_failed(w,h,"cd_ram_budget");
+                return -1;
+            }
+        }
+    }
     for(int id=0;id<BS_MAX_SURFACES;id++){
         if(!b->surfaces[id].live){
             if(bs_create_surface_slot(b,id,w,h))return id;
@@ -1326,29 +1899,141 @@ static void bs_surfaceResize(Renderer* r,int32_t id,int32_t w,int32_t h){
 static void bs_drawSurface(Renderer* r,int32_t id,int32_t sx,int32_t sy,
   int32_t sw,int32_t sh,float x,float y,float xs,float ys,float angle,uint32_t tint,float a) {
     BSGxmRenderer* b=BR(r);
+    if(bs_skip_cached_surface(b))return;
 #ifdef NATIVE_GXM_VIDEO
     if(id==VITA_VIDEO_SURFACE_ID){
+        /* Ch5 Garden movie must be composited LAST onto the host display,
+         * not painted into the GameMaker application surface where video
+         * can be overwritten by room UI, black letterbox or shader layers. */
+        if(VitaVideo_isChapter5Intro()){
+            static unsigned routed=0;
+            if(routed++<5)
+                bs_trace("NATIVE_GXM=ch5_video deferred_to_topmost_host_layer");
+            return;
+        }
         int img=VitaVideo_image();
         float vw=VitaVideo_getWidth(),vh=VitaVideo_getHeight();
-        /* GameMaker draw_surface passes sw=sh=-1 to request the FULL
-         * source surface. The old guard discarded ALL video draws. */
-        if(sw<=0)sw=(int)vw-sx;
-        if(sh<=0)sh=(int)vh-sy;
+        /* Do not interpret the 640x480 pseudo-surface rectangle as a crop of
+         * a 1280x720 movie. Sample the complete frame and fit it to the
+         * current application target. */
+        sx=sy=0;sw=(int)vw;sh=(int)vh;
         if(img>0&&vw>0&&vh>0&&sw>0&&sh>0){
             static int traced=0;
             if(traced++<5)bs_trace("NATIVE_GXM=video draw_surface video_frame_to_nvg=1");
-            nvgSave(b->vg);nvgTranslate(b->vg,x,y);
-            if(angle!=0)nvgRotate(b->vg,-angle*BS_PI/180);
+            /* The PC GML fallback asks for draw_surface_ext(movie,0,60,.5,.5).
+             * Its position/scale are for a 640x480 windowed preview, not the
+             * full-screen Vita movie. The earlier GXM translation preserved
+             * y=60 and clipped the last part of every frame; draw in target
+             * coordinates, independently of the room camera/scissor. */
+            nvgSave(b->vg);
+            nvgResetTransform(b->vg);
+            nvgResetScissor(b->vg);
+            float dw=640.0f,dh=480.0f;
+            BSGxmSurface*target=bs_surface(b,b->activeTarget);
+            if(target){dw=(float)target->w;dh=(float)target->h;}
             bs_image_tinted(b,img,(int)vw,(int)vh,sx,sy,sw,sh,
-                             0,0,sw*xs,sh*ys,tint,a);
+                             0,0,dw,dh,tint,a);
             nvgRestore(b->vg);
         }
         return;
     }
 #endif
+    /* The sakura transition's Draw End overlays surf_view1 even in
+     * stage 0, before that auxiliary camera contains a valid picture.
+     * The pink primary view is already complete: never black it out.
+     * Stage 1+ still composites the real secondary petals view. */
+    if(b->base.runner && b->base.runner->currentRoom &&
+       b->base.runner->currentRoom->name &&
+       strcmp(b->base.runner->currentRoom->name,
+              "room_dw_garden_floradinnencounter")==0 &&
+       b->base.runner->vmContext){
+        VMContext*ctx=b->base.runner->vmContext;
+        Instance*inst=ctx->currentInstance;
+        if(inst && inst->objectIndex>=0 &&
+           (uint32_t)inst->objectIndex<b->base.runner->dataWin->objt.count){
+            const char*name=b->base.runner->dataWin->objt.objects[inst->objectIndex].name;
+            if(name && strcmp(name,"obj_sakurafubuki_new")==0){
+                int surfId=shget(ctx->varNameMap,"surf_view1");
+                int stageId=shget(ctx->varNameMap,"transition_stage");
+                if(surfId>=0&&stageId>=0){
+                    int sf=RValue_toInt32(Instance_getSelfVar(inst,surfId));
+                    int stage=RValue_toInt32(Instance_getSelfVar(inst,stageId));
+                    extern int g_vitaCh5FloradinnSecondaryReady;
+                    if(sf==id && (stage==0 || !g_vitaCh5FloradinnSecondaryReady)){
+                        static int once=0;
+                        if(!once++)bs_trace("NATIVE_GXM=ch5_floradinn empty_sakura_overlay_skipped");
+                        return;
+                    }
+                }
+            }
+        }
+    }
     BSGxmSurface* s=bs_surface(b,id);
     if(!s)return;
     if(b->activeTarget==id){bs_soft_unsupported("drawSurface_feedback");return;}
+    {
+        extern int g_vitaActiveChapter;
+        const char*owner=bs_draw_object(r);
+        if(g_vitaActiveChapter==3 && owner &&
+           strcmp(owner,"obj_knight_pointing_cone")==0 &&
+           r->runner && r->runner->currentRoom &&
+           r->runner->currentRoom->name &&
+           strcmp(r->runner->currentRoom->name,"room_dw_snow_zone")==0){
+            static unsigned composites=0;
+            if(composites++<30u){
+                char msg[208];
+                snprintf(msg,sizeof(msg),
+                    "NATIVE_GXM=ch3_knight_cone_composite src=%d size=%dx%d "
+                    "dest=%d blend=%d src_alpha=%.3f x=%.1f y=%.1f",
+                    id,s->w,s->h,b->activeTarget,b->blendMode,a,x,y);
+                bs_trace(msg);
+            }
+        }
+    }
+    /* draw_surface/draw_surface_ext pass sw=sh=-1 for "the whole surface"
+    * (the video branch above already handled it). Treating -1 as a size
+    * dropped every such draw, including the Chapter 5 Flowey tower. */
+    if(sw<=0)sw=s->w-sx;
+    if(sh<=0)sh=s->h-sy;
+    if(sw<=0||sh<=0)return;
+    {
+        /* Flowey tower trace: the trunk is built from 360x360 slices and
+         * 240x720 front/back surfaces. */
+        static unsigned towerDraws=0;
+        int towerSurface=(s->w==360&&s->h==360)||(s->w==240&&s->h==720);
+        if(towerSurface&&towerDraws<48&&(towerDraws++%4)==0){
+            char line[220];
+            snprintf(line,sizeof(line),
+              "NATIVE_GXM=tower_draw src=%d size=%dx%d part=%d,%d,%dx%d at=%.1f,%.1f "
+              "scale=%.3f,%.3f target=%d shader=%d tint=%06X alpha=%.2f",
+              id,s->w,s->h,sx,sy,sw,sh,x,y,xs,ys,b->activeTarget,r->currentShader,
+              (unsigned)tint,a);
+            bs_trace(line);
+        }
+    }
+    /* Record the actual shadow image, uniforms and placement once per room.
+     * The shader may compile successfully while its offscreen source is empty
+     * or displaced. This diagnostic is intentionally bounded. */
+    if(r->currentShader>=0&&r->dataWin&&
+       (uint32_t)r->currentShader<r->dataWin->shdr.count){
+        const char *name=r->dataWin->shdr.shaders[r->currentShader].name;
+        if(name&&strcmp(name,"shd_shadowblend")==0){
+            static int shadowRoom=-999,shadowReported=0;
+            int currentRoom=r->runner?r->runner->currentRoomIndex:-1;
+            if(currentRoom!=shadowRoom){shadowRoom=currentRoom;shadowReported=0;}
+            if(shadowReported++<5){
+                const float*shader=b->shaderValues[r->currentShader];
+                char msg[245];
+                snprintf(msg,sizeof(msg),
+                 "NATIVE_GXM=shadow_composite room=%d src=%d size=%dx%d "
+                 "target=%d at=%.1f,%.1f scale=%.2f,%.2f draw_a=%.3f "
+                 "col=%.2f,%.2f,%.2f,%.2f",
+                 currentRoom,id,s->w,s->h,b->activeTarget,
+                 x,y,xs,ys,a,shader[0],shader[1],shader[2],shader[3]);
+                bs_trace(msg);
+            }
+        }
+    }
     nvgSave(b->vg);nvgTranslate(b->vg,x,y);nvgRotate(b->vg,-angle*BS_PI/180);
     bs_image_tinted(b,s->image,s->w,s->h,sx,sy,sw,sh,
                     0,0,sw*xs,sh*ys,tint,a);
@@ -1370,7 +2055,8 @@ static void bs_drawSurfaceColor(Renderer* r,int32_t id,int32_t sx,int32_t sy,
 }
 static void bs_drawSurfaceTiled(Renderer* r,int32_t id,float x,float y,float xs,float ys,
                                float rw,float rh,uint32_t tint,float a) {
-    BSGxmRenderer* b=BR(r);BSGxmSurface* s=bs_surface(b,id);
+    BSGxmRenderer* b=BR(r);if(bs_skip_cached_surface(b))return;
+    BSGxmSurface* s=bs_surface(b,id);
     if(!s || xs==0 || ys==0)return;
     float tw=fabsf(s->w*xs),th=fabsf(s->h*ys);
     if(tw<.01f||th<.01f)return;
@@ -1378,10 +2064,10 @@ static void bs_drawSurfaceTiled(Renderer* r,int32_t id,float x,float y,float xs,
     nvgScissor(b->vg,0,0,rw,rh);
     BSGxmVisible vis=bs_visible_local(b);
     int x0=0,x1=0,y0=0,y1=0;
-    bs_tile_index_span(x,tw,rw,vis.valid?vis.minX-tw:-INFINITY,
-                       vis.valid?vis.maxX+tw:INFINITY,&x0,&x1);
-    bs_tile_index_span(y,th,rh,vis.valid?vis.minY-th:-INFINITY,
-                       vis.valid?vis.maxY+th:INFINITY,&y0,&y1);
+    bs_tile_index_span(x,tw,rw,vis.valid?vis.minX:-INFINITY,
+                       vis.valid?vis.maxX:INFINITY,&x0,&x1);
+    bs_tile_index_span(y,th,rh,vis.valid?vis.minY:-INFINITY,
+                       vis.valid?vis.maxY:INFINITY,&y0,&y1);
     int totalX=0,totalY=0;
     bs_tile_index_span(x,tw,rw,-INFINITY,INFINITY,&totalX,&totalY);
     int fullX=totalY;
@@ -1413,7 +2099,17 @@ static void bs_surfaceCopy(Renderer* r,int32_t dest,int32_t dx,int32_t dy,
     if(!bs_surface_valid(b,dest)||!bs_surface_valid(b,src))return;
     if(dest==src){bs_soft_unsupported("surfaceCopy_self");return;}
     int prev=b->activeTarget;
-    if(prev==src){bs_soft_unsupported("surfaceCopy_active_source");return;}
+    if(prev==src){
+        /* The game legally copies a currently bound source surface into
+         * a different one. Finish the source render and fence the producer
+         * before sampling it on the destination. Previously skipped
+         * entirely, leaving black/missing transitions in Chapters 1/3/5.
+         * Deliberately slow correctness path only when source is active. */
+        bs_snapshot_sync(b,1);
+        static unsigned activeCopies=0;
+        if(activeCopies++<8)
+            bs_trace("NATIVE_GXM=surface_copy_active_source recovered=1 fenced=1");
+    }
     bs_switch_target(b,dest);
     if(!part){sx=0;sy=0;sw=b->surfaces[src].w;sh=b->surfaces[src].h;}
     bs_image_rect(b,b->surfaces[src].image,b->surfaces[src].w,b->surfaces[src].h,
@@ -1442,6 +2138,9 @@ static void bs_snapshot_sync(BSGxmRenderer *b,int cpuWait) {
     nvgBeginFrame(b->vg,w,h,1.0f);
     if(b->viewActive){
         nvgSave(b->vg);
+        /* Snapshot resume also isolates camera from auxiliary shadow masks. */
+        int app=b->base.runner?b->base.runner->applicationSurfaceId:-1;
+        if(b->activeTarget==app && app>=0){
         nvgScissor(b->vg,b->portX,b->portY,b->portW,b->portH);
         nvgTranslate(b->vg,b->portX,b->portY);
         nvgScale(b->vg,(float)b->portW/b->viewW,(float)b->portH/b->viewH);
@@ -1451,6 +2150,7 @@ static void bs_snapshot_sync(BSGxmRenderer *b,int cpuWait) {
             nvgTranslate(b->vg,-b->viewW*.5f,-b->viewH*.5f);
         }
         nvgTranslate(b->vg,-b->viewX,-b->viewY);
+        }
     }
     if(b->guiActive){
         nvgSave(b->vg);
@@ -1464,6 +2164,79 @@ static void bs_snapshot_sync(BSGxmRenderer *b,int cpuWait) {
     if(!b->blendEnable) nvgGlobalCompositeBlendFunc(b->vg,NVG_ONE,NVG_ZERO);
     else if(b->blendMode==bm_add) nvgGlobalCompositeOperation(b->vg,NVG_LIGHTER);
     else nvgGlobalCompositeOperation(b->vg,NVG_SOURCE_OVER);
+}
+/* Capture only genuine Chapter 3 scenery changes (not arbitrary DEV jumps).
+ * Preserve the last fully rendered application surface for a few frames so
+ * Tenna's unchanged sprite does not vanish between two GML scene owners.
+ * The producer GXM pass is fenced, and an independent image is retained. */
+int BSContractRenderer_ch3Capture(Renderer*r) {
+    BSGxmRenderer*b=BR(r);
+    if(!b || !b->frameIsActive || !b->vg || !r->runner)return 0;
+    BSGxmSurface*s=bs_surface(b,r->runner->applicationSurfaceId);
+    if(!s||!s->texture||!s->texture->data||!s->fb||
+       s->w<1||s->h<1||s->w>960||s->h>512)return 0;
+    bs_snapshot_sync(b,0);
+    int tw=bs_pot(s->w), th=bs_pot(s->h);
+    int image=nvgCreateImageRGBA(b->vg,tw,th,NVG_IMAGE_NEAREST,NULL);
+    if(image<=0)return 0;
+    NVGXMtexture*dest=nvgxmImageHandle(b->vg,image);
+    if(!dest||!dest->data){nvgDeleteImage(b->vg,image);return 0;}
+    int code=sceGxmTransferCopy((uint32_t)s->w,(uint32_t)s->h,0,0,
+        SCE_GXM_TRANSFER_COLORKEY_NONE,
+        SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR,SCE_GXM_TRANSFER_LINEAR,
+        s->texture->data,0,0,(int)(((s->w+7)&~7)*4),
+        SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR,SCE_GXM_TRANSFER_LINEAR,
+        dest->data,0,0,(int)(((tw+7)&~7)*4),
+        s->fb->gxm_color_surfaces[s->fb->gxm_back_buffer_index].sync_object,
+        SCE_GXM_TRANSFER_FRAGMENT_SYNC,NULL);
+    if(code<0){
+        nvgDeleteImage(b->vg,image);
+        char msg[120];snprintf(msg,sizeof(msg),
+            "NATIVE_GXM=ch3_scene_handoff capture_failed=0x%08x",(unsigned)code);
+        bs_trace(msg);return 0;
+    }
+    sceGxmTransferFinish();
+    if(b->ch3TransitionImage>0) {
+        /* The previous bridge might still be in a queued GPU draw. */
+        {g_gxmRenderStage="gpu_finish";sceGxmFinish(gxmGetWindow()->context);g_gxmRenderStage=NULL;}
+        nvgDeleteImage(b->vg,b->ch3TransitionImage);
+    }
+    b->ch3TransitionImage=image;b->ch3TransitionW=s->w;b->ch3TransitionH=s->h;
+    b->ch3TransitionFrames=0;
+    bs_trace("NATIVE_GXM=ch3_scene_handoff captured=1 gpu=1");
+    return 1;
+}
+void BSContractRenderer_ch3Activate(Renderer*r) {
+    BSGxmRenderer*b=BR(r);
+    if(!b||b->ch3TransitionImage<=0)return;
+    b->ch3TransitionFrames=10;
+    /* Never leak the outgoing rainbow/CRT program to the new room. */
+    r->currentShader=-1;
+    nvgxmSelectRuntimeShader(b->vg,0);
+    nvgxmSetRuntimeShaderParams(b->vg,NULL);
+    bs_trace("NATIVE_GXM=ch3_scene_handoff fade_frames=10 shader_reset=1");
+}
+void BSContractRenderer_ch3Draw(Renderer*r) {
+    BSGxmRenderer*b=BR(r);
+    if(!b||!b->frameIsActive||b->activeTarget!=-1||
+       b->ch3TransitionFrames<=0||b->ch3TransitionImage<=0||
+       b->ch3TransitionW<=0||b->ch3TransitionH<=0)return;
+    float alpha=(float)b->ch3TransitionFrames/10.0f;
+    float x=b->ch3ScreenX,y=b->ch3ScreenY;
+    float w=b->ch3ScreenW,h=b->ch3ScreenH;
+    if(w<=0||h<=0){x=160;y=32;w=640;h=480;}
+    /* POT padded image: scale so only the 640x480 source is sampled. */
+    int tw=bs_pot(b->ch3TransitionW),th=bs_pot(b->ch3TransitionH);
+    nvgSave(b->vg);
+    nvgResetTransform(b->vg);nvgResetScissor(b->vg);
+    nvgxmSelectRuntimeShader(b->vg,0);
+    nvgGlobalCompositeOperation(b->vg,NVG_SOURCE_OVER);
+    NVGpaint paint=nvgImagePattern(b->vg,x,y,w*(float)tw/b->ch3TransitionW,
+                  h*(float)th/b->ch3TransitionH,0,b->ch3TransitionImage,alpha);
+    nvgBeginPath(b->vg);nvgRect(b->vg,x,y,w,h);
+    nvgFillPaint(b->vg,paint);nvgFill(b->vg);
+    nvgRestore(b->vg);
+    --b->ch3TransitionFrames;
 }
 static int bs_grow_tpag_cache(BSGxmRenderer *b,unsigned target) {
     if(target<=b->imageCount)return 1;
@@ -1496,9 +2269,33 @@ static int32_t bs_createSpriteFromSurface(Renderer* r,int32_t id,int32_t x,int32
     (void)removeback; /* Matches existing GL runner's unimplemented option. */
     (void)smooth;
     BSGxmSurface *src=bs_surface(b,id);
-    if(!src || x<0 || y<0 || w<=0 || h<=0 || w>1024 || h>1024 ||
+    /* Chapter 4 TV rooms generate a starry_wall_sprite 1080-1440px wide.
+     * The legacy 1024px guard returned -1, causing the original GML to
+     * retry sprite_create_from_surface EVERY frame, waste GPU transfers,
+     * leak vine sprites and eventually exhaust the 512 dynamic slots.
+     * Permit power-of-two padded snapshots up to the GXM texture limit. */
+    if(!src || x<0 || y<0 || w<=0 || h<=0 ||
+       w>BS_MAX_EDGE || h>BS_MAX_EDGE ||
        x>src->w-w || y>src->h-h) return -1;
+    if(b->dynamicSprites>=512u){
+        /* Previous implementation still performed GPU copy before this
+         * eventual hard-limit failure. Reject before synchronizing GPU. */
+        static unsigned exhausted=0;
+        if(exhausted++==0)
+            bs_trace("NATIVE_GXM=snapshot_dynamic_limit preflight=1 cap=512");
+        return -1;
+    }
     const int tw=bs_pot(w),th=bs_pot(h);
+    if(w>1024 || h>1024){
+        static unsigned larger=0;
+        if(larger++<8){
+            char diag[160];
+            snprintf(diag,sizeof(diag),
+              "NATIVE_GXM=snapshot_large_rect size=%dx%d padded=%dx%d",
+              w,h,tw,th);
+            bs_trace(diag);
+        }
+    }
     /* The sprite is a SNAPSHOT and must retain its texels after the source
      * surface is subsequently redrawn. Keep a private image per capture. */
     const uint64_t snapshotStartedUs=sceKernelGetProcessTimeWide();
@@ -1536,21 +2333,43 @@ static int32_t bs_createSpriteFromSurface(Renderer* r,int32_t id,int32_t x,int32
     if(img>0){
         NVGXMtexture *dst=nvgxmImageHandle(b->vg,img);
         if(dst && dst->data && src->texture && src->texture->data){
-            transferStatus=sceGxmTransferCopy(
-               (uint32_t)w,(uint32_t)h,0,0,
-               SCE_GXM_TRANSFER_COLORKEY_NONE,
-               SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR,
-               SCE_GXM_TRANSFER_LINEAR,src->texture->data,
-               (uint32_t)x,(uint32_t)y,(int32_t)(((src->w+7)&~7)*4),
-               SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR,
-               SCE_GXM_TRANSFER_LINEAR,dst->data,
-               0,0,(int32_t)(((tw+7)&~7)*4),
-               src->fb ? src->fb->gxm_color_surfaces[
-                   src->fb->gxm_back_buffer_index].sync_object : NULL,
-               SCE_GXM_TRANSFER_FRAGMENT_SYNC,NULL);
-            if(transferStatus>=0){
+            /* A 1879x560 battle-highlight snapshot previously failed the
+             * single GXM transfer (0x805B0003) and cost ~305ms on the CPU
+             * fallback. Split oversized GPU copies into conservative
+             * <=960x512 subrectangles. This avoids large-transfer limits
+             * while keeping a complete immutable destination snapshot.
+             * If any tile fails, retain the proven synchronized CPU path. */
+            int tileOK=1;
+            const int maxTransferW=960,maxTransferH=512;
+            const int srcPitch=(int)(((src->w+7)&~7)*4);
+            const int dstPitch=(int)(((tw+7)&~7)*4);
+            for(int ty=0;ty<h && tileOK;ty+=maxTransferH){
+                int partH=h-ty<maxTransferH?h-ty:maxTransferH;
+                for(int tx=0;tx<w;tx+=maxTransferW){
+                    int partW=w-tx<maxTransferW?w-tx:maxTransferW;
+                    transferStatus=sceGxmTransferCopy(
+                       (uint32_t)partW,(uint32_t)partH,0,0,
+                       SCE_GXM_TRANSFER_COLORKEY_NONE,
+                       SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR,
+                       SCE_GXM_TRANSFER_LINEAR,src->texture->data,
+                       (uint32_t)(x+tx),(uint32_t)(y+ty),srcPitch,
+                       SCE_GXM_TRANSFER_FORMAT_U8U8U8U8_ABGR,
+                       SCE_GXM_TRANSFER_LINEAR,dst->data,
+                       (uint32_t)tx,(uint32_t)ty,dstPitch,
+                       src->fb ? src->fb->gxm_color_surfaces[
+                           src->fb->gxm_back_buffer_index].sync_object : NULL,
+                       SCE_GXM_TRANSFER_FRAGMENT_SYNC,NULL);
+                    if(transferStatus<0){tileOK=0;break;}
+                }
+            }
+            if(tileOK){
                 sceGxmTransferFinish();
                 copied=1;
+                if(w>maxTransferW || h>maxTransferH){
+                    static unsigned logged=0;
+                    if(logged++<12)
+                        bs_trace("NATIVE_GXM=snapshot_large_gpu_tiles result=ok size_gt_960x512");
+                }
             }
         }
     }
@@ -1741,6 +2560,29 @@ static int32_t bs_gpuGetBlendMode(Renderer* r){return BR(r)->blendMode;}
  * GXM blend equations are compiled into a fragment-patcher variant;
  * per-draw equations must be captured at NanoVG call-creation time.
  */
+static const char* bs_draw_object(Renderer*r){
+ if(!r||!r->runner||!r->runner->vmContext||!r->dataWin)return NULL;
+ int id=r->runner->vmContext->currentEventObjectIndex;
+ if(id<0||(uint32_t)id>=r->dataWin->objt.count)return NULL;
+ return r->dataWin->objt.objects[id].name;
+}
+static int bs_prophecy_owner(Renderer*r){
+ extern int g_vitaActiveChapter;
+ const char*o=bs_draw_object(r);
+ return g_vitaActiveChapter==4&&o&&
+    (!strcmp(o,"obj_dw_church_prophecy")||
+     !strcmp(o,"obj_dw_church_prophecy_custom"));
+}
+static int bs_noelle_owner(Renderer*r){
+ extern int g_vitaActiveChapter;
+ if(g_vitaActiveChapter!=4||!r||!r->runner||!r->runner->currentRoom)return 0;
+ const char*o=bs_draw_object(r);
+ const char*room=r->runner->currentRoom->name;
+ return o&&room&&strstr(room,"noellehouse")&&
+  (!strcmp(o,"obj_noellehouse_main_overlay")||
+   !strcmp(o,"obj_noellehouse_kris_overlay")||
+   !strcmp(o,"obj_noellehouse_basement_overlay"));
+}
 static void bs_gpuSetBlendMode(Renderer* r,int32_t mode) {
     BSGxmRenderer*b=BR(r);
     b->blendMode=mode;
@@ -1766,7 +2608,15 @@ static void bs_gpuSetBlendMode(Renderer* r,int32_t mode) {
         nvgGlobalCompositeOperation(b->vg,NVG_LIGHTER);
     }else if(mode==bm_subtract){
         nvgxmSetBlendEquation(b->vg,SCE_GXM_BLEND_FUNC_ADD,SCE_GXM_BLEND_FUNC_ADD);
-        nvgGlobalCompositeBlendFuncSeparate(b->vg,
+        if(bs_prophecy_owner(r) && b->activeTarget>=0){
+            /* Prophecy's black icon/text masks must subtract by sprite
+             * texel ALPHA. SRC_COLOR is black and punches nothing. */
+            nvgGlobalCompositeBlendFuncSeparate(b->vg,
+                NVG_ZERO,NVG_ONE_MINUS_SRC_ALPHA,
+                NVG_ZERO,NVG_ONE_MINUS_SRC_ALPHA);
+            static unsigned logged=0;
+            if(logged++<8)bs_trace("NATIVE_GXM=ch4_prophecy alpha_mask_subtract=1");
+        }else nvgGlobalCompositeBlendFuncSeparate(b->vg,
             NVG_ZERO,NVG_ONE_MINUS_SRC_COLOR,
             NVG_ZERO,NVG_ONE_MINUS_SRC_COLOR);
     }else if(mode==bm_reverse_subtract){
@@ -1811,8 +2661,15 @@ static int bs_factor(int f){
 static void bs_gpuSetBlendModeExt(Renderer* r,int32_t sr,int32_t dr,int32_t sa,int32_t da) {
     BSGxmRenderer*b=BR(r);
     r->blendFactors=(BlendFactors){sr,dr,sa,da};b->blendMode=bm_complex;
-    nvgGlobalCompositeBlendFuncSeparate(b->vg,bs_factor(sr),bs_factor(dr),
-                                                   bs_factor(sa),bs_factor(da));
+    if(bs_noelle_owner(r) && sr==bm_src_alpha && dr==bm_dest_alpha &&
+       b->activeTarget>=0){
+        /* Keep Noelle/Dess rooms visible: an alpha=0 fullscreen
+         * destination-alpha multiply previously blacked the screen. */
+        nvgGlobalCompositeOperation(b->vg,NVG_SOURCE_OVER);
+        static unsigned logged=0;
+        if(logged++<8)bs_trace("NATIVE_GXM=ch4_noelle alpha_blackout_guard=1");
+    }else nvgGlobalCompositeBlendFuncSeparate(b->vg,
+              bs_factor(sr),bs_factor(dr),bs_factor(sa),bs_factor(da));
 }
 static void bs_gpuSetBlendEnable(Renderer* r,bool enabled) {
     BSGxmRenderer*b=BR(r);b->blendEnable=enabled;
@@ -1901,7 +2758,8 @@ static int bs_native_shader_tag(Renderer*r,int32_t id) {
     if(!strcmp(shader->name,"shd_alpha"))return 5;
     if(!strcmp(shader->name,"shd_brightness_to_alpha"))return 6;
     if(!strcmp(shader->name,"shd_forcefullalpha"))return 7;
-    if(!strcmp(shader->name,"shd_shadowblend"))return 8;
+    if(!strcmp(shader->name,"shd_shadowblend")||
+       !strcmp(shader->name,"shd_shadowblend_evening"))return 8;
     if(!strcmp(shader->name,"shd_forcecolour"))return 9;
     if(!strcmp(shader->name,"shd_shoujo"))return 10;
     if(!strcmp(shader->name,"shd_lut"))return 11;
@@ -1909,6 +2767,21 @@ static int bs_native_shader_tag(Renderer*r,int32_t id) {
     if(!strcmp(shader->name,"shd_castlereflect_layerblend"))return 13;
     /* Chapter 3 board camera: grayscale except the sand palette. */
     if(!strcmp(shader->name,"shd_grayscalesand"))return 14;
+    /* Chapter 5 Flowey tower: trunk slices and their cylinder mapping. */
+    if(!strcmp(shader->name,"shd_tower"))return 15;
+    if(!strcmp(shader->name,"shd_depthmap"))return 16;
+    if(!strcmp(shader->name,"shd_screen_blend"))return 20;
+    if(!strcmp(shader->name,"shd_rainbow"))return 21;
+    if(!strcmp(shader->name,"shd_crt"))return 22;
+    if(!strcmp(shader->name,"shd_overlay_blend"))return 23;
+    if(!strcmp(shader->name,"shd_chromakey"))return 24;
+    if(!strcmp(shader->name,"shd_hue"))return 25;
+    if(!strcmp(shader->name,"shd_rgb_yiq_shift"))return 25;
+    if(!strcmp(shader->name,"shd_petalcut"))return 18;
+    if(!strcmp(shader->name,"shd_luminosity_to_transparency"))return 19;
+    if(!strcmp(shader->name,"shd_pal_swapper")||
+       !strcmp(shader->name,"shd_pal_html_surface")||
+       !strcmp(shader->name,"shd_pal_html_sprite"))return 17;
     return 0;
 }
 static void bs_gpuSetShader(Renderer*r,int32_t id){
@@ -1934,15 +2807,28 @@ static void bs_gpuSetShader(Renderer*r,int32_t id){
     }
     extern int g_nativeGxpAvailable;
     int shaderTag=g_nativeGxpAvailable?bs_native_shader_tag(r,id):0;
+    /* CH5 crash containment: old v0.79-9 entered room_torhouse_sepia
+     * successfully; v0.80-18 ended in this room immediately after the
+     * new overlay shader activated. Disable ONLY this shader in this room
+     * until runtime GPU logs rule out the program as a crash contributor.
+     * The room will use its original unmodified GameMaker drawing order. */
+    if(shaderTag==23 && r->runner && r->runner->currentRoom &&
+       r->runner->currentRoom->name &&
+       strcmp(r->runner->currentRoom->name,"room_torhouse_sepia")==0){
+        shaderTag=0;
+        static unsigned guarded=0;
+        if(guarded++<4)
+            bs_trace("NATIVE_GXM=ch5_torhouse_overlay_guard mode=fixed_gxm_fallback pending_runtime_validation=1");
+    }
     if(shaderTag&&!((nvgxmRuntimeShaderMask(b->vg)>>(shaderTag-1))&1u))
         shaderTag=0;
     nvgxmSelectRuntimeShader(b->vg,shaderTag);
     if(shaderTag){
         const float*uniforms=(id>=0&&id<256)?b->shaderValues[id]:NULL;
         nvgxmSetRuntimeShaderParams(b->vg,uniforms);
-        if(shaderTag==13||shaderTag==14)
+        if(shaderTag==13||shaderTag==14||shaderTag==15||shaderTag==17||shaderTag==21)
             nvgxmSetRuntimeShaderVectors(b->vg,b->shaderVectors[id]);
-        static int logged[15]={0};
+        static int logged[26]={0}; /* GXP tags 1..25; v0.80-14 had an undersized [21]. */
         if(logged[shaderTag]++<8){
             char message[165];snprintf(message,sizeof(message),
              "NATIVE_GXM=shader_effect id=%d gxp=%.72s mode=runtime",
@@ -1992,6 +2878,11 @@ static const char* bs_native_shader_uniform(int tag){
     if(tag==11)return "strength";
     if(tag==12)return "shadowheight";
     if(tag==14)return "sandcol";
+    if(tag==17)return "u_paletteId";
+    if(tag==18)return "lineTop";
+    if(tag==21)return "u_time";
+    if(tag==24)return "key_color";
+    if(tag==25)return "u_Position";
     return NULL;
 }
 static int32_t bs_shaderGetUniform(Renderer*r,int32_t id,char*name){
@@ -2001,8 +2892,28 @@ static int32_t bs_shaderGetUniform(Renderer*r,int32_t id,char*name){
     int tag=bs_native_shader_tag(r,id);
     const char*expected=bs_native_shader_uniform(tag);
     if(expected&&strcmp(name,expected)==0)return ((id+1)<<4)|1;
+    if(tag==18 && strcmp(name,"lineBottom")==0)return ((id+1)<<4)|2;
+    if(tag==21 && strcmp(name,"u_speed")==0)return ((id+1)<<4)|2;
+    if(tag==21 && strcmp(name,"u_uv")==0)return ((id+1)<<4)|3;
+    if(tag==22 && strcmp(name,"time")==0)return ((id+1)<<4)|1;
+    if(tag==25 && strcmp(name,"shift")==0)return ((id+1)<<4)|1;
+    if(tag==24 && strcmp(name,"similarity")==0)return ((id+1)<<4)|2;
     if(tag==10 && strcmp(name,"appSurfWidth")==0)return ((id+1)<<4)|2;
     if(tag==12 && strcmp(name,"pos_y")==0)return ((id+1)<<4)|2;
+    /* Slots 7..10 write one component of gameParams. */
+    if(tag==15){
+        if(strcmp(name,"rotation")==0)return ((id+1)<<4)|7;
+        if(strcmp(name,"height")==0)return ((id+1)<<4)|8;
+        if(strcmp(name,"scale")==0)return ((id+1)<<4)|9;
+        if(strcmp(name,"face")==0)return ((id+1)<<4)|10;
+        if(strcmp(name,"texel")==0)return ((id+1)<<4)|3;
+        if(strcmp(name,"blendCol")==0)return ((id+1)<<4)|4;
+    }
+    if(tag==16){
+        if(strcmp(name,"top")==0)return ((id+1)<<4)|7;
+        if(strcmp(name,"thickness")==0)return ((id+1)<<4)|8;
+        if(strcmp(name,"modifier")==0)return ((id+1)<<4)|9;
+    }
     if(tag==14){
         if(strcmp(name,"sand1")==0)return ((id+1)<<4)|3;
         if(strcmp(name,"sand2")==0)return ((id+1)<<4)|4;
@@ -2015,6 +2926,10 @@ static int32_t bs_shaderGetUniform(Renderer*r,int32_t id,char*name){
         if(strcmp(name,"u_mask_surface_uvs")==0)return ((id+1)<<4)|5;
         if(strcmp(name,"u_bounds")==0)return ((id+1)<<4)|6;
     }
+    if(tag==17){
+        if(strcmp(name,"u_Uvs")==0)return ((id+1)<<4)|3;
+        if(strcmp(name,"u_pixelSize")==0)return ((id+1)<<4)|4;
+    }
     return -1;
 }
 static int32_t bs_shaderGetSamplerIndex(Renderer*r,int32_t id,char*name){
@@ -2026,6 +2941,7 @@ static int32_t bs_shaderGetSamplerIndex(Renderer*r,int32_t id,char*name){
         if(strcmp(name,"texStars")==0)return 3;
     }
     if(tag==11 && strcmp(name,"lut_tex")==0)return 1;
+    if(tag==17 && strcmp(name,"u_palTexture")==0)return 1;
     if(tag==13){
         if(strcmp(name,"u_object_surface")==0)return 1;
         if(strcmp(name,"u_mask_surface")==0)return 2;
@@ -2037,13 +2953,14 @@ static void bs_shader_uniform_write(Renderer*r,int32_t handle,
     BSGxmRenderer*b=BR(r);
     if(!b||!values||count==0)return;
     int slot=handle&15;
-    if(slot<1||slot>6)return;
+    if(slot<1||slot>10)return;
     int asset=(handle>>4)-1;
     if(asset<0||asset>=256)return;
     int tag=bs_native_shader_tag(r,asset);
-    if(tag==12||tag==13){
-        static unsigned logReflectWrites=0;
-        if(logReflectWrites++<32){
+    if(tag==12||tag==13||tag==15||tag==16||tag==17){
+        static unsigned logReflectWrites=0,logTowerWrites=0;
+        unsigned* counter=tag>=15?&logTowerWrites:&logReflectWrites;
+        if((*counter)++<32){
             char trace[190];
             snprintf(trace,sizeof(trace),
               "NATIVE_GXM=reflect_uniform asset=%d tag=%d slot=%d count=%u "
@@ -2054,7 +2971,26 @@ static void bs_shader_uniform_write(Renderer*r,int32_t handle,
             bs_trace(trace);
         }
     }
-    if((tag==13||tag==14) && slot>=3 &&slot<=6){
+    if(slot>=7&&slot<=10){
+        if(isfinite(values[0]))b->shaderValues[asset][slot-7]=values[0];
+        b->shaderUniformWrites++;
+        if(r->currentShader==asset&&b->vg)
+            nvgxmSetRuntimeShaderParams(b->vg,b->shaderValues[asset]);
+        return;
+    }
+    if(tag==21 && slot==3){
+        /* Preserve real GameMaker UV bounds, not an invented frequency.
+         * Source sprite can occupy only a part of its texture atlas. */
+        if(count>=2 && isfinite(values[0]) && isfinite(values[1])){
+            b->shaderVectors[asset][0]=values[0];
+            b->shaderVectors[asset][1]=values[1];
+            b->shaderUniformWrites++;
+            if(r->currentShader==asset&&b->vg)
+                nvgxmSetRuntimeShaderVectors(b->vg,b->shaderVectors[asset]);
+        }
+        return;
+    }
+    if((tag==13||tag==14||tag==15||tag==17) && slot>=3 &&slot<=6){
         if(count>4)count=4;
         for(unsigned i=0;i<count;i++)
             if(isfinite(values[i]))b->shaderVectors[asset][(slot-3)*4+i]=values[i];
@@ -2065,8 +3001,13 @@ static void bs_shader_uniform_write(Renderer*r,int32_t handle,
     }
     if(slot>2||!bs_native_shader_uniform(tag))return;
     if(slot==2){
-        if(tag!=10 && tag!=12)return;
-        if(isfinite(values[0]))b->shaderValues[asset][1]=values[0];
+        if(tag!=10 && tag!=12 && tag!=18 && tag!=21 && tag!=24)return;
+        if(tag==18){
+            if(isfinite(values[0]))b->shaderValues[asset][2]=values[0];
+            if(count>1 && isfinite(values[1]))b->shaderValues[asset][3]=values[1];
+        }else if(tag==24){
+            if(isfinite(values[0]))b->shaderValues[asset][3]=values[0];
+        }else if(isfinite(values[0]))b->shaderValues[asset][1]=values[0];
     }else{
         if(count>4)count=4;
         for(unsigned i=0;i<count;i++)
@@ -2182,8 +3123,24 @@ static void bs_text(Renderer *r,const char* text,float x,float y,float xs,float 
     const int32_t textLen=(int32_t)strlen(text);
     float rowHeight=separation<0.0f?TextUtils_lineStride(f):separation/fontScaleY;
     float totalHeight=(float)TextUtils_countLines(text,textLen)*rowHeight;
-    nvgSave(b->vg);nvgTranslate(b->vg,x,y);nvgRotate(b->vg,-angle*BS_PI/180);
-    nvgScale(b->vg,xs*fontScaleX,ys*fontScaleY);
+    nvgSave(b->vg);
+    /* Text is already an exact atlas bitmap. NanoVG's geometric AA fringe
+     * was blending away the bottom pixel of each dialogue line on native
+     * GXM, particularly at 1x pixel scale. Keep sprite and gradient AA
+     * unchanged; disable only the font glyph rectangle's path fringe. */
+    nvgShapeAntiAlias(b->vg,0);
+    /* Pixel-font battle speech must sample complete rows. Subpixel text
+     * origins produce half-texel raster boundaries on 1x RGBA4444 GXM;
+     * align bitmap-font positions at axis-aligned integer scales only.
+     * Fractional-scale/rotated text keeps original geometry. */
+    const float scaleX=xs*fontScaleX,scaleY=ys*fontScaleY;
+    if((f->isSpriteFont||f->antiAliasing==0)&&fabsf(angle)<0.001f &&
+       fabsf(scaleX-roundf(scaleX))<0.001f &&
+       fabsf(scaleY-roundf(scaleY))<0.001f) {
+        x=roundf(x);y=roundf(y);
+    }
+    nvgTranslate(b->vg,x,y);nvgRotate(b->vg,-angle*BS_PI/180);
+    nvgScale(b->vg,scaleX,scaleY);
     if(r->drawValign==1)nvgTranslate(b->vg,0,-totalHeight*.5f);
     else if(r->drawValign==2)nvgTranslate(b->vg,0,-totalHeight);
     const float cyStart=-(float)f->ascenderOffset;
@@ -2263,6 +3220,7 @@ static void bs_drawTextColor(Renderer*r,const char*s,float x,float y,float xs,fl
 static void bs_drawSpriteTiled(Renderer*r,int32_t idx,float ox,float oy,
    float x,float y,float xs,float ys,bool tx,bool ty,float rw,float rh,uint32_t color,float a){
     BSGxmRenderer*b=BR(r);
+    if(bs_skip_cached_surface(b))return;
     if(idx<0||(uint32_t)idx>=b->imageCount)return;
     TexturePageItem *p=&r->dataWin->tpag.items[idx];
     if(!xs||!ys)return;
@@ -2271,10 +3229,13 @@ static void bs_drawSpriteTiled(Renderer*r,int32_t idx,float ox,float oy,
     nvgSave(b->vg);nvgScissor(b->vg,0,0,rw,rh);
     float maxX=tx?rw:x+tw,maxY=ty?rh:y+th;
     BSGxmVisible vis=bs_visible_local(b);
-    /* Room sprite source may extend beyond its bounding tile because of
-     * origin/trim; include that full extent in the conservative padding. */
-    float padX=fabsf(p->sourceWidth*xs)+fabsf(ox*xs)+2.0f*tw+3.0f;
-    float padY=fabsf(p->sourceHeight*ys)+fabsf(oy*ys)+2.0f*th+3.0f;
+    /* Bounding tile step is already covered by the span helper's halo.
+     * Only the sprite's trim difference and origin may protrude beyond a
+     * normal tile; the old FULL sourceWidth padding generated extra 1-2
+     * columns/rows for every tiled call, particularly the 900-draw
+     * Queen Screen room. Conservatively retain trim/origin + 3px. */
+    float padX=fabsf((p->sourceWidth-p->boundingWidth)*xs)+fabsf(ox*xs)+3.0f;
+    float padY=fabsf((p->sourceHeight-p->boundingHeight)*ys)+fabsf(oy*ys)+3.0f;
     int x0=0,x1=0,y0=0,y1=0,total=0,fullX=0,fullY=0;
     bs_tile_index_span(x,tw,maxX,vis.valid?vis.minX-padX:-INFINITY,
                        vis.valid?vis.maxX+padX:INFINITY,&x0,&x1);
@@ -2298,10 +3259,12 @@ static void bs_drawTiledPart(Renderer*r,int32_t idx,int32_t sx,int32_t sy,
     nvgSave(b->vg);nvgScissor(b->vg,x,y,w,h);
     BSGxmVisible vis=bs_visible_local(b);
     int x0=0,x1=0,y0=0,y1=0,total=0,fullX=0,fullY=0;
+    /* The tile span function adds one tile of guard itself. A second full
+     * tile here duplicates offscreen instances on every textured layer. */
     bs_tile_index_span(x,(float)sw,x+w,
-        vis.valid?vis.minX-sw:-INFINITY,vis.valid?vis.maxX+sw:INFINITY,&x0,&x1);
+        vis.valid?vis.minX:-INFINITY,vis.valid?vis.maxX:INFINITY,&x0,&x1);
     bs_tile_index_span(y,(float)sh,y+h,
-        vis.valid?vis.minY-sh:-INFINITY,vis.valid?vis.maxY+sh:INFINITY,&y0,&y1);
+        vis.valid?vis.minY:-INFINITY,vis.valid?vis.maxY:INFINITY,&y0,&y1);
     bs_tile_index_span(x,(float)sw,x+w,-INFINITY,INFINITY,&total,&fullX);
     bs_tile_index_span(y,(float)sh,y+h,-INFINITY,INFINITY,&total,&fullY);
     b->tiledCalls++;
@@ -2392,6 +3355,25 @@ static void bs_prim_flush(Renderer*r,int32_t type){
     BSGxmRenderer*b=BR(r);
     const BSGxmVertex*v=b->primVerts;
     unsigned n=b->primCount;
+    /* Track missing Knight geometry independently of unrelated effects:
+     * GML may build/submit an attack but only draw part of it if primitive
+     * kind or vertex count is wrong. Keep traces bounded to prevent log I/O
+     * itself from causing lag in the Chapter 3 fight. */
+    if(bs_cache_chapter(r->dataWin)==3 && r->runner && r->runner->currentRoom &&
+       r->runner->currentRoom->name &&
+       strcmp(r->runner->currentRoom->name,"room_dw_snow_zone")==0){
+        static unsigned traceCount=0;
+        if(traceCount++<24u){
+            char message[160];
+            snprintf(message,sizeof(message),
+                     "NATIVE_GXM=ch3_knight_primitive kind=%d vertices=%u textured=%d tri_count=%u",
+                     type,n,b->primImage>0,
+                     type==PRIMITIVE_TRIANGLES?n/3u:
+                     type==PRIMITIVE_TRIANGLE_STRIP||type==PRIMITIVE_TRIANGLE_FAN?
+                     (n>2?n-2:0):0);
+            bs_trace(message);
+        }
+    }
     switch(type){
     case PRIMITIVE_POINTS:
         for(unsigned i=0;i<n;i++)
@@ -2411,7 +3393,13 @@ static void bs_prim_flush(Renderer*r,int32_t type){
         for(unsigned i=0;i+2<n;i+=3)bs_prim_triangle(r,&v[i],&v[i+1],&v[i+2]);
         break;
     case PRIMITIVE_TRIANGLE_STRIP:
-        for(unsigned i=0;i+2<n;i++)bs_prim_triangle(r,&v[i],&v[i+1],&v[i+2]);
+        /* GL_TRIANGLE_STRIP alternates vertex winding on each triangle.
+         * Manual NanoVG triangles must do the same, otherwise the Knight
+         * mesh can be culled/erased by inconsistent facing. */
+        for(unsigned i=0;i+2<n;i++){
+            if(i&1u)bs_prim_triangle(r,&v[i+1],&v[i],&v[i+2]);
+            else bs_prim_triangle(r,&v[i],&v[i+1],&v[i+2]);
+        }
         break;
     case PRIMITIVE_TRIANGLE_FAN:
         for(unsigned i=1;i+1<n;i++)bs_prim_triangle(r,&v[0],&v[i],&v[i+1]);
@@ -2476,6 +3464,16 @@ static void bs_drawVertexBuffer(Renderer*r,VertexBuffer*buff,int32_t prim,
     if(count<0||count>total-offset)count=total-offset;
     b->primCount=0;
     if(uv>=0)bs_prim_bind_texture(b,tex);else b->primImage=0;
+    if((bs_cache_chapter(r->dataWin)==3||bs_cache_chapter(r->dataWin)==4)){
+        static unsigned reports=0;
+        if(reports++<40 || reports%1000==0){
+            char msg[182];snprintf(msg,sizeof(msg),
+              "NATIVE_GXM=knight_vertex_submit chapter=%d prim=%d vertices=%d tex=0x%08x resolved=%d uv=%d color=%d",
+              bs_cache_chapter(r->dataWin),(int)prim,(int)count,
+              (unsigned)tex,b->primImage,uv,col);
+            bs_trace(msg);
+        }
+    }
     for(int32_t i=offset;i<offset+count;i++){
         const uint8_t*vx=buff->data+(size_t)i*fmt->stride;
         const VertexElement*pe=&fmt->elements[pos];
@@ -2533,6 +3531,13 @@ static void bs_drawSpritePos(Renderer*r,int32_t idx,float x1,float y1,float x2,f
     float crossA=(x2-x1)*(y3-y1)-(y2-y1)*(x3-x1);
     float crossB=(x3-x1)*(y4-y1)-(y3-y1)*(x4-x1);
     if(fabsf(crossA)<=0.00001f && fabsf(crossB)<=0.00001f)return;
+    if(crossA<0.0f && b->base.runner && b->base.runner->currentRoom &&
+       b->base.runner->currentRoom->name &&
+       strncmp(b->base.runner->currentRoom->name,"room_town_",10)==0){
+        static unsigned flippedShadowsReported=0;
+        if(flippedShadowsReported++<12)
+            bs_trace("NATIVE_GXM=ch5_town_shadow_quad inverted_winding=1 gpu_winding_corrected=1");
+    }
     /* Check all four corners BEFORE texture upload; no visible pixel is
      * rejected for camera rotation, shearing or negative scaling. */
     float t[6],xmin=0,xmax=0,ymin=0,ymax=0;
@@ -2565,6 +3570,27 @@ static void bs_drawSpritePos(Renderer*r,int32_t idx,float x1,float y1,float x2,f
     float v0=((unsigned)idx<b->originalTpagCount?tp->sourceY:0)/ih;
     float u1=u0+tp->sourceWidth/iw,v1=v0+tp->sourceHeight/ih;
     const float uv[8]={u0,v0,u1,v0,u1,v1,u0,v1};
+    /* CH5 town sunshadow: cast the actor's real alpha through original
+     * GameMaker draw_shadowcast/sprite_pos geometry, never a fake oval. */
+    if(b->base.runner&&b->base.runner->currentRoom &&
+       b->base.runner->currentRoom->name &&
+       strncmp(b->base.runner->currentRoom->name,"room_town_",10)==0 &&
+       b->base.runner->vmContext&&b->base.runner->vmContext->currentInstance &&
+       b->base.runner->vmContext->currentInstance->objectIndex>=0 &&
+       (uint32_t)b->base.runner->vmContext->currentInstance->objectIndex<
+        b->base.dataWin->objt.count &&
+       strcmp(b->base.dataWin->objt.objects[
+        b->base.runner->vmContext->currentInstance->objectIndex].name,
+        "obj_mainchara")==0 && b->activeTarget>=0){
+        static unsigned reported=0;
+        if(reported++<12){
+            char line[196];
+            snprintf(line,sizeof(line),
+              "NATIVE_GXM=ch5_town_player_shadow projected_quad=1 target=%d page=%d alpha=%.2f bounds=%.1f,%.1f-%.1f,%.1f",
+              b->activeTarget,idx,alpha,xmin,ymin,xmax,ymax);
+            bs_trace(line);
+        }
+    }
     nvgDrawImageQuad(b->vg,img,xy,uv,bs_clamp01(alpha));
     b->draws++;
 }
@@ -2572,7 +3598,10 @@ static void bs_drawSpritePos(Renderer*r,int32_t idx,float x1,float y1,float x2,f
 unsigned long BSContractRenderer_lastFrameDraws(Renderer* r) {
     return r?BR(r)->draws:0;
 }
-void BSContractRenderer_frameStart(Renderer* r) { BSGxmRenderer *b=BR(r); b->frameIsActive=1; b->activeTarget=-1; b->viewActive=b->guiActive=0; }
+void BSContractRenderer_frameStart(Renderer* r) {
+    BSGxmRenderer *b=BR(r);
+    b->frameIsActive=1;b->activeTarget=-1;b->viewActive=b->guiActive=0;
+}
 
 void BSContractRenderer_metrics(Renderer *r, char *out, unsigned cap) {
     if(!r || !out || cap==0)return;

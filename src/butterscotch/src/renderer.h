@@ -246,6 +246,8 @@ struct Renderer {
     int32_t currentShader;
     BlendFactors blendFactors;
     int32_t cameraCurrent;
+    bool quadBatchWindow; // Chapter 4 tower Draw event: Legacy-GL may queue surface sprites (Vita).
+    bool quadBatchPartWindow; // DEVICE_MENU Draw event: Legacy-GL may queue draw_*_part quads (Vita).
 };
 
 // ===[ Shared Helpers (platform-agnostic) ]===

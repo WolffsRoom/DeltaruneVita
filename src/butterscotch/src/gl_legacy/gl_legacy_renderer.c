@@ -113,10 +113,54 @@ static void* vitaAcquireTextureStaging(size_t bytes) {
     return vitaTextureStagingBase;
 }
 
-static void vitaReleaseTexturePayload(void* payload, bool uploaded) {
+/* v0.80-58: VitaGL can copy a compressed upload with sceGxmTransferCopy, which
+ * still reads the source after the call returns, so the payload used to be freed
+ * after glFinish. Mid-frame that waited for the whole GPU backlog: about 150 ms
+ * for a single 64x64 page in the Chapter 5 final battle. A heap payload now waits
+ * a few frames instead; only the shared staging block, or a full queue, still
+ * fences. */
+#define VITA_DEFERRED_PAYLOAD_SLOTS 48
+#define VITA_DEFERRED_PAYLOAD_FRAMES 6U
+#define VITA_DEFERRED_PAYLOAD_BYTES (24U * 1024U * 1024U)
+typedef struct { void* data; size_t bytes; uint32_t frame; } VitaDeferredPayload;
+static VitaDeferredPayload vitaDeferredPayloads[VITA_DEFERRED_PAYLOAD_SLOTS];
+static size_t vitaDeferredPayloadBytes = 0;
+static uint32_t vitaDeferredPayloadFrame = 0;
+
+static void vitaDrainDeferredPayloads(bool all) {
+    for (int i = 0; i < VITA_DEFERRED_PAYLOAD_SLOTS; ++i) {
+        VitaDeferredPayload* slot = &vitaDeferredPayloads[i];
+        if (slot->data == nullptr) continue;
+        if (!all && vitaDeferredPayloadFrame - slot->frame < VITA_DEFERRED_PAYLOAD_FRAMES) continue;
+        free(slot->data);
+        vitaDeferredPayloadBytes -= slot->bytes;
+        slot->data = nullptr;
+    }
+}
+
+static void vitaReleaseTexturePayloadSized(void* payload, bool uploaded, size_t bytes) {
     if (payload == nullptr) return;
-    if (uploaded) glFinish();
+    if (uploaded && payload != vitaTextureStagingBase && bytes != 0 &&
+        vitaDeferredPayloadBytes + bytes <= VITA_DEFERRED_PAYLOAD_BYTES) {
+        for (int i = 0; i < VITA_DEFERRED_PAYLOAD_SLOTS; ++i) {
+            VitaDeferredPayload* slot = &vitaDeferredPayloads[i];
+            if (slot->data != nullptr) continue;
+            slot->data = payload;
+            slot->bytes = bytes;
+            slot->frame = vitaDeferredPayloadFrame;
+            vitaDeferredPayloadBytes += bytes;
+            return;
+        }
+    }
+    if (uploaded) {
+        glFinish();
+        vitaDrainDeferredPayloads(true);
+    }
     if (payload != vitaTextureStagingBase) free(payload);
+}
+
+static void vitaReleaseTexturePayload(void* payload, bool uploaded) {
+    vitaReleaseTexturePayloadSized(payload, uploaded, 0);
 }
 
 static void vitaTextureLog(uint32_t pageId, int w, int h, GLint maxTextureSize, const char* phase);
@@ -132,12 +176,21 @@ static bool vitaPreparedTextureExists(const DataWin* dw, uint32_t pageId);
 // pages by active region avoids carrying several 8 MiB RGBA4444 pages into
 // Cyber rooms that only need their PVR-safe content.
 static int vitaCh2TexturePolicyRegion = 0;
+/* Active only around Mansion east 3F/projection/teacup and acid tunnel.
+ * Both v0.80-17 and v0.80-25 VitaGL GPU dumps end after RGBA4444 atlas
+ * uploads in these rooms, with RAM/PHY staging close to exhausted. */
+static bool vitaCh2MansionGpuGuard = false;
+static unsigned vitaCh2MansionUploadBurst = 0;
 static bool vitaFloweryBattleMemoryMode = false;
+static bool vitaFcastleLargeSurfaceMode = false;
+static bool vitaPvrRamMode = false;
+#define VITA_FCASTLE_COMPACT_SURFACE_PIXELS 500000
 static bool vitaChapter3TvMemoryMode = false;
 static bool vitaChapter3BoardMinigameMode = false;
 static bool vitaChapter3PerformanceSurfaceMode = false;
 static bool vitaChapter3GreenRoomMode = false;
 static bool vitaChapter5CastleApproachMode = false;
+static bool vitaCh5FcastleYellowblueHeavy=false;
 static bool vitaNativeVideoMemoryMode = false;
 static bool vitaCouchOverworldMemoryMode = false;
 static bool vitaCh2CyberIntroMemoryMode = false;
@@ -209,6 +262,36 @@ static bool vitaPixelCriticalPage(const DataWin* dw, uint32_t pageId) {
     // (was variant-only), so BC3 never touches glyph/textbox pages regardless
     // of language.
     if (vitaSemanticFontOrUiPage(dw, pageId)) return true;
+
+    // The chapter logo and the Chapter 5 shoujo effect sample fine gradients
+    // and masks; the Aggressive profile's BC3 blocks broke that opening on the
+    // v0.80-48 test. Keep them lossless when the R444 page is available.
+    {
+        static const DataWin* logoScanned = nullptr;
+        static bool* logoPages = nullptr;
+        if (logoScanned != dw) {
+            free(logoPages);
+            logoPages = (bool*)calloc(dw->txtr.count, sizeof(bool));
+            logoScanned = dw;
+            for (uint32_t i = 0; logoPages != nullptr && i < dw->sprt.count; ++i) {
+                const Sprite* sprite = &dw->sprt.sprites[i];
+                if (sprite->name == nullptr || sprite->tpagIndices == nullptr) continue;
+                if (strncmp(sprite->name, "IMAGE_LOGO", 10) != 0 &&
+                    strcmp(sprite->name, "spr_shoujogradient") != 0 &&
+                    strcmp(sprite->name, "spr_bubl") != 0 &&
+                    strcmp(sprite->name, "spr_stars_2") != 0) continue;
+                for (uint32_t frame = 0; frame < sprite->textureCount; ++frame) {
+                    int32_t tpag = sprite->tpagIndices[frame];
+                    if (tpag < 0 || (uint32_t)tpag >= dw->tpag.count) continue;
+                    int16_t page = dw->tpag.items[tpag].texturePageId;
+                    if (page >= 0 && (uint32_t)page < dw->txtr.count) logoPages[page] = true;
+                }
+            }
+        }
+        if (logoPages != nullptr && pageId < dw->txtr.count && logoPages[pageId] &&
+            vitaPreparedTextureExists(dw, pageId))
+            return true;
+    }
 
     if (vitaTextureChapter(dw) == 2) {
         static const char* exactBackgrounds[] = {
@@ -327,8 +410,42 @@ static bool vitaPvrRequiresLosslessCompanion(const DataWin* dw, uint32_t pageId)
 
 extern int g_vitaTextureFormatProfile;
 
+/* v0.80-54: some prepared BC3 pages hold only red and green, with alpha always
+ * opaque (52 of 802 in the PT-BR Chapter 4, and others in Chapters 1-5). White
+ * becomes yellow, opaque black becomes green and transparent pixels become
+ * opaque, which the Aggressive profile showed in room_dw_castle_area_1. They are
+ * rejected when read, so the page falls back to its lossless copy. */
+extern void VitaProbe_logLine(const char* text);
+static const DataWin* vitaBrokenBc3Owner = nullptr;
+static uint8_t* vitaBrokenBc3Pages = nullptr;
+
+static bool vitaBc3PageLostChannels(const uint8_t* data, size_t size) {
+    const size_t blocks = size / 16U;
+    if (blocks == 0) return false;
+    const size_t step = blocks > 2000U ? blocks / 2000U : 1U;
+    for (size_t i = 0; i < blocks; i += step) {
+        const uint8_t* block = data + i * 16U;
+        // Both alpha endpoints opaque, and neither colour endpoint has any blue.
+        if (block[0] != 255U || block[1] != 255U || (block[8] & 31U) != 0U || (block[10] & 31U) != 0U)
+            return false;
+    }
+    return true;
+}
+
+static void vitaMarkBc3PageBroken(const DataWin* dw, uint32_t pageId) {
+    if (vitaBrokenBc3Owner != dw) {
+        free(vitaBrokenBc3Pages);
+        vitaBrokenBc3Pages = (uint8_t*)calloc(dw->txtr.count, 1U);
+        vitaBrokenBc3Owner = dw;
+    }
+    if (vitaBrokenBc3Pages != nullptr) vitaBrokenBc3Pages[pageId] = 1U;
+}
+
 static bool vitaPvrTextureAllowed(const DataWin* dw, uint32_t pageId) {
     if (!g_vitaPvrEnabled || dw == nullptr || pageId >= dw->txtr.count)
+        return false;
+
+    if (vitaBrokenBc3Owner == dw && vitaBrokenBc3Pages != nullptr && vitaBrokenBc3Pages[pageId])
         return false;
 
     // Translated fonts and dialogue frames always stay in RGBA4444
@@ -484,6 +601,14 @@ static bool vitaReadPvr(const DataWin* dw, uint32_t pageId,
         return false;
     }
     sceIoClose(fd);
+    if (bc3 && vitaBc3PageLostChannels(data, (size_t)expected)) {
+        vitaReleaseTexturePayload(data, false);
+        vitaMarkBc3PageBroken(dw, pageId);
+        char brokenLine[96];
+        snprintf(brokenLine, sizeof(brokenLine), "VITAGL_BC3_PAGE_REJECTED page=%u reason=no_blue_no_alpha", pageId);
+        VitaProbe_logLine(brokenLine);
+        return false;
+    }
     *payload = data;
     *payloadSize = (uint32_t)expected;
     *width = (int)w;
@@ -874,7 +999,26 @@ static bool vitaTextureCacheIsComplete(const DataWin* dw) {
     return true;
 }
 
+/* v0.80-55: one pass per chapter, language and texture profile re-encodes the
+ * broken pages (see vitaBc3PageLostChannels) from data.win with the encoder below.
+ * This marker records that the pass finished, so later boots skip it. */
+static void vitaBc3AuditPath(const DataWin* dw, char* output, size_t outputSize) {
+    char dir[224];
+    vitaPvrDir(dw, dir, sizeof(dir));
+    snprintf(output, outputSize, "%s/bc3-audit-v1-p%d.vtc", dir, g_vitaTextureFormatProfile);
+}
+
+static bool vitaBc3AuditDone(const DataWin* dw) {
+    if (dw == nullptr || !g_vitaPvrEnabled || g_vitaTextureFormatProfile == 1) return true;
+    char path[256];
+    vitaBc3AuditPath(dw, path, sizeof(path));
+    SceIoStat stat;
+    return sceIoGetstat(path, &stat) >= 0;
+}
+
 bool GLLegacyRenderer_textureCacheIsComplete(const DataWin* dw) {
+    // A pending repair uses the normal loading screen and preparation path.
+    if (!vitaBc3AuditDone(dw)) return false;
     // Aggressive means every BC3-eligible page must exist before gameplay.
     // Font/UI pages remain lossless and are covered by the normal R444 set.
     if (g_vitaTextureFormatProfile == 2)
@@ -984,10 +1128,94 @@ static void vitaSavePreparedTexture(const DataWin* dw, const Texture* txtr, uint
 extern volatile int g_vitaTexturePrepareAbortForMinigame;
 #endif
 
+/* Reads eight spread-out runs of blocks, so checking a whole chapter stays cheap.
+ * Pages written by this game's encoder have no PVR metadata and are skipped: only
+ * files made on a PC carry it. A false positive only re-encodes a page correctly. */
+static bool vitaBc3FileLooksBroken(const DataWin* dw, uint32_t pageId) {
+    char path[256];
+    vitaPvrPath(dw, pageId, path, sizeof(path));
+    SceUID fd = sceIoOpen(path, SCE_O_RDONLY, 0);
+    if (fd < 0 && vitaTextureCacheVariant(dw)[0] != '\0' && !vitaVariantPageDiffers(dw, pageId)) {
+        vitaPvrBasePath(dw, pageId, path, sizeof(path));
+        fd = sceIoOpen(path, SCE_O_RDONLY, 0);
+    }
+    if (fd < 0) return false;
+    uint8_t header[52];
+    uint64_t format = 0;
+    uint32_t metadata = 0;
+    bool broken = sceIoRead(fd, header, sizeof(header)) == sizeof(header);
+    if (broken) {
+        memcpy(&format, header + 8, 8);
+        memcpy(&metadata, header + 48, 4);
+        broken = format == VITA_PVR_BC3_DXT5_FORMAT && metadata != 0U;
+    }
+    if (broken) {
+        const SceOff fileSize = sceIoLseek(fd, 0, SCE_SEEK_END);
+        const SceOff dataOffset = 52 + (SceOff)metadata;
+        const uint32_t blocks = fileSize > dataOffset ? (uint32_t)((fileSize - dataOffset) / 16) : 0U;
+        broken = blocks != 0U;
+        uint8_t run[1024];
+        for (uint32_t i = 0; broken && i < 8U; ++i) {
+            const uint32_t first = (uint32_t)((uint64_t)blocks * i / 8U);
+            uint32_t count = blocks - first;
+            if (count > sizeof(run) / 16U) count = sizeof(run) / 16U;
+            broken = sceIoLseek(fd, dataOffset + (SceOff)first * 16, SCE_SEEK_SET) >= 0 &&
+                     sceIoRead(fd, run, count * 16U) == (int)(count * 16U) &&
+                     vitaBc3PageLostChannels(run, count * 16U);
+        }
+    }
+    sceIoClose(fd);
+    return broken;
+}
+
+// False when the preparation has to stop for the minigame worker, or a page failed.
+static bool vitaRepairBrokenBc3Pages(DataWin* dw, VitaTexturePrepareProgress progress, void* user) {
+    const bool gm2022_5 = DataWin_isVersionAtLeast(dw, 2022, 5, 0, 0);
+    uint32_t found = 0, repaired = 0;
+    bool finished = true;
+    for (uint32_t pageId = 0; pageId < dw->txtr.count; ++pageId) {
+        if (progress != nullptr && (pageId & 31U) == 0U) progress(pageId, dw->txtr.count, user);
+#ifdef PLATFORM_VITA
+        if (g_vitaTexturePrepareAbortForMinigame) return false;
+#endif
+        if (vitaBrokenBc3Owner == dw && vitaBrokenBc3Pages != nullptr) vitaBrokenBc3Pages[pageId] = 0U;
+        if (!vitaPvrTextureAllowed(dw, pageId) || !vitaBc3FileLooksBroken(dw, pageId)) continue;
+        found++;
+        Texture* txtr = &dw->txtr.textures[pageId];
+        int w = 0, h = 0;
+        DataWin_loadTxtrIfNeeded(dw, pageId);
+        uint8_t* pixels = ImageDecoder_decodeToRgba(txtr->blobData, (size_t)txtr->blobSize, gm2022_5, &w, &h);
+        const bool ok = pixels != nullptr && w > 0 && h > 0 &&
+                        vitaGenerateBc3Pvr(dw, pageId, w, h, pixels, progress, user);
+        free(pixels);
+        if (!txtr->mapped) {
+            free(txtr->blobData);
+            txtr->blobData = nullptr;
+        }
+        if (ok) repaired++;
+        else finished = false;
+    }
+    char line[96];
+    snprintf(line, sizeof(line), "VITAGL_BC3_REPAIR found=%u repaired=%u pages=%u", found, repaired, dw->txtr.count);
+    VitaProbe_logLine(line);
+    return finished;
+}
+
 uint32_t GLLegacyRenderer_prepareTextureCache(DataWin* dw,
                                               VitaTexturePrepareProgress progress,
                                               void* user) {
     if (dw == nullptr || dw->txtr.count == 0) return 0;
+    if (!vitaBc3AuditDone(dw)) {
+        if (vitaRepairBrokenBc3Pages(dw, progress, user)) {
+            char auditPath[256];
+            vitaBc3AuditPath(dw, auditPath, sizeof(auditPath));
+            SceUID auditFd = sceIoOpen(auditPath, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
+            if (auditFd >= 0) sceIoClose(auditFd);
+        }
+#ifdef PLATFORM_VITA
+        if (g_vitaTexturePrepareAbortForMinigame) return 0;
+#endif
+    }
     // Keep R444 and BC3 side by side on disk. The user can switch profiles
     // live, and deleting the lossless companion here made Native mode trust a
     // stale complete.vtc while its actual page file had already disappeared.
@@ -1013,13 +1241,17 @@ uint32_t GLLegacyRenderer_prepareTextureCache(DataWin* dw,
         bool needsBc3 = vitaPvrTextureAllowed(dw, pageId) &&
                         (vitaBc3ForceRegenerate ||
                          vitaPvrTextureEncodedBytes(dw, pageId) == 0);
-        uint16_t* cached = needsBc3 ? nullptr :
-            vitaLoadPreparedTexture(dw, txtr, pageId, &w, &h);
-        if (cached != nullptr) {
-            free(cached);
+        /* A partially completed R444 cache may contain hundreds of MB of
+         * valid converted pages. Previous preflight read+allocated EVERY
+         * full page into RAM and immediately freed it, wasting SD I/O
+         * and causing long loading after a format switch or interrupted
+         * generation. Check header+file size only; the regular GPU loader
+         * still reads and validates the actual pixels when needed. */
+        bool ready = !needsBc3 && vitaPreparedTextureExists(dw, pageId);
+        if(ready){
             prepared++;
-            vitaTextureLog(pageId, w, h, 4096, "preload_cache_hit");
-        } else {
+            vitaTextureLog(pageId, 0, 0, 4096, "preload_header_hit");
+        }else{
             vitaTextureLog(pageId, 0, 0, 4096, "preload_decode_begin");
             DataWin_loadTxtrIfNeeded(dw, pageId);
             uint8_t* pixels = ImageDecoder_decodeToRgba(txtr->blobData, (size_t)txtr->blobSize,
@@ -1036,12 +1268,17 @@ uint32_t GLLegacyRenderer_prepareTextureCache(DataWin* dw,
                 // same commercial atlas a second time.
                 uint16_t* packed = (uint16_t*)pixels;
                 for (uint64_t i = 0; i < pixelCount; ++i) {
-                    const uint8_t* src = &pixels[i * 4ULL];
-                    uint16_t alpha4 = src[3] == 0 ? 0 : (uint16_t)((src[3] + 15U) >> 4);
-                    if (alpha4 > 15U) alpha4 = 15U;
-                    packed[i] = (uint16_t)(((uint16_t)(src[0] >> 4) << 12) |
-                                           ((uint16_t)(src[1] >> 4) << 8) |
-                                           ((uint16_t)(src[2] >> 4) << 4) | alpha4);
+                    /* RGBA8888 byte order -> native R4G4B4A4.
+                     * One aligned 32-bit read instead of four separate
+                     * channel reads. The original alpha round-up and
+                     * saturation semantics are preserved exactly. */
+                    uint32_t px = ((const uint32_t*)pixels)[i];
+                    uint32_t alpha8 = px >> 24;
+                    uint32_t alpha4 = alpha8 ? (alpha8 + 15U) >> 4 : 0U;
+                    if(alpha4>15U)alpha4=15U;
+                    packed[i]=(uint16_t)(((px&0xf0U)<<8) |
+                                 ((px&0xf000U)>>4) |
+                                 ((px&0xf00000U)>>16) | alpha4);
                     // A 4096x4096 lossless page can spend several seconds in
                     // this CPU conversion. Yield a redraw roughly every 256K
                     // pixels so the 750 ms loading animation does not freeze.
@@ -1092,6 +1329,10 @@ uint32_t GLLegacyRenderer_prepareTextureCache(DataWin* dw,
 static void vitaTextureLog(uint32_t pageId, int w, int h, GLint maxTextureSize, const char* phase) {
     extern int g_vitaProbeLoggingEnabled;
     if (!g_vitaProbeLoggingEnabled) return;
+    if(phase!=NULL && strncmp(phase,"preload_",8)==0 &&
+       (pageId%16u)!=0u &&
+       (strcmp(phase,"preload_decode_skipped")!=0))
+        return;
     char line[160];
     int length = snprintf(line, sizeof(line), "TXTR page=%u size=%dx%d max=%d phase=%s\n",
                           pageId, w, h, (int) maxTextureSize, phase);
@@ -1126,7 +1367,10 @@ typedef struct Vita2DVertex {
 // 0/1/2, so select the matching generic-array path while one is active.
 static bool vitaCustomShaderActive = false;
 
+static void vitaQuadBatchFlush(void);
+
 static void vitaEnable2DArrays(const Vita2DVertex* vertices) {
+    vitaQuadBatchFlush(); // Queued quads must reach the GPU before any other draw.
     if (vitaCustomShaderActive) {
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
@@ -1170,6 +1414,45 @@ static void vitaDrawQuad(const Vita2DVertex vertices[4]) {
         firstDraw = false;
     }
     vitaDisable2DArrays();
+}
+
+/* v0.80-49: Chapter 4 towers submit ~900 tile sprites per frame, each one a
+ * full enable/pointer/draw/disable cycle in VitaGL (about 50 ms per frame in the
+ * v0.80-48 log). While Renderer.quadBatchWindow is set, glDrawSprite queues
+ * quads that share a texture on the surface target. The window is only open for
+ * the tower's Draw event and nothing but sprites is drawn on that surface, so
+ * blend state cannot change between queued quads; every other draw, a target
+ * change and the end of the window flush first. */
+#define VITA_QUAD_BATCH_MAX 1024
+static Vita2DVertex vitaQuadBatch[VITA_QUAD_BATCH_MAX * 4];
+static GLushort vitaQuadBatchIndices[VITA_QUAD_BATCH_MAX * 6];
+static int vitaQuadBatchCount = 0;
+static GLuint vitaQuadBatchTexture = 0;
+static bool vitaQuadBatchFlushing = false;
+
+static void vitaQuadBatchFlush(void) {
+    if (vitaQuadBatchCount == 0 || vitaQuadBatchFlushing) return;
+    if (vitaQuadBatchIndices[1] == 0) {
+        for (int i = 0; i < VITA_QUAD_BATCH_MAX; i++) {
+            GLushort* q = &vitaQuadBatchIndices[i * 6];
+            GLushort v = (GLushort)(i * 4);
+            q[0] = v; q[1] = v + 1; q[2] = v + 2;
+            q[3] = v; q[4] = v + 2; q[5] = v + 3;
+        }
+    }
+    GLsizei quads = vitaQuadBatchCount;
+    vitaQuadBatchCount = 0;
+    vitaQuadBatchFlushing = true;
+    GLint bound = 0;
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+    if ((GLuint)bound != vitaQuadBatchTexture)
+        glBindTexture(GL_TEXTURE_2D, vitaQuadBatchTexture);
+    vitaEnable2DArrays(vitaQuadBatch);
+    glDrawElements(GL_TRIANGLES, quads * 6, GL_UNSIGNED_SHORT, vitaQuadBatchIndices);
+    vitaDisable2DArrays();
+    if ((GLuint)bound != vitaQuadBatchTexture)
+        glBindTexture(GL_TEXTURE_2D, (GLuint)bound);
+    vitaQuadBatchFlushing = false;
 }
 
 #define VITA_IMMEDIATE_MAX_VERTICES 262144
@@ -1517,6 +1800,11 @@ static void glInit(Renderer* renderer, DataWin* dataWin) {
 #endif
     }
 #endif
+    /* v0.80-49: GameMaker's default alpha test reference is GREATER 0, while GL
+     * starts at ALWAYS. obj_sprhighlight's darkness pass (bm_zero, bm_src_color)
+     * relies on it: transparent texels otherwise multiply the scene by black and
+     * paint a dark rectangle around each character. */
+    glAlphaFunc(GL_GREATER, 0.0f);
     gl->glTextures = (GLuint *)safeMalloc(gl->textureCount * sizeof(GLuint));
     gl->textureWidths = (int32_t *)safeMalloc(gl->textureCount * sizeof(int32_t));
     gl->textureHeights = (int32_t *)safeMalloc(gl->textureCount * sizeof(int32_t));
@@ -1767,6 +2055,10 @@ static void glBeginFrame(Renderer* renderer, int32_t gameW, int32_t gameH, int32
     gl->textureFrame++;
     if (gl->textureFrame == 0) gl->textureFrame = 1;
 #ifdef PLATFORM_VITA
+    vitaDeferredPayloadFrame++;
+    vitaDrainDeferredPayloads(false);
+#endif
+#ifdef PLATFORM_VITA
     // Screen-filter changes are live. Update only atlas textures that are
     // already resident; future uploads receive the same policy normally.
     // This avoids a chapter restart, cache regeneration or texture reupload.
@@ -1989,7 +2281,11 @@ static void glEndFrameEnd(Renderer* renderer) {
     GLCommon_endLetterboxBlit(gl->surfaceWidth[appId], gl->surfaceHeight[appId], gl->gameW, gl->gameH, gl->windowW, gl->windowH, 0);
 }
 
-static void glRendererFlush(MAYBE_UNUSED Renderer* renderer) {}
+static void glRendererFlush(MAYBE_UNUSED Renderer* renderer) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush();
+#endif
+}
 
 static void glClearScreen(MAYBE_UNUSED Renderer* renderer, uint32_t color, float alpha) {
     float r = (float) BGR_R(color) / 255.0f;
@@ -2011,6 +2307,18 @@ static void glClearScreen(MAYBE_UNUSED Renderer* renderer, uint32_t color, float
 // 112 MiB graphics pool for framebuffers, VitaGL bookkeeping and console
 // borders. A 104 MiB texture limit left under 8 MiB free and Chapter 5 crashed
 // while replacing a 2048x2048 atlas at about 101 MiB resident.
+/* Cliff climbing rooms can transiently add wind/parallax sprites and new
+ * sunshadow surfaces to a working set that already occupied 78 MiB VRAM in
+ * the hardware log. Guard only THESE rooms: other Chapters and large CH5
+ * town/Flowery working sets retain their existing measured budgets. */
+static bool vitaCh5CliffGpuReserve = false;
+/* These two rooms show sustained missing/evicted atlas pages in v0.80-28
+ * hardware logs. They need a different admission policy from the
+ * cliff air-tube rooms where the more conservative 20 MiB reserve guards
+ * against a GPU freeze. Do not change the air-tube safety policy. */
+static bool vitaCh5CliffAttackOrWind=false;
+static bool vitaCh5SethMinibossEntry=false;
+static bool vitaCh5FestivalEntry=false;
 static uint64_t vitaTextureCacheLimit(void) {
     extern int g_vitaActiveChapter;
     // Surfaces, the console border and VitaGL bookkeeping are not included in
@@ -2032,6 +2340,22 @@ static uint64_t vitaTextureCacheLimit(void) {
     // atlas counter. A late 8 MiB RGBA4444 upload previously passed the 88 MiB
     // atlas test with only 7.7 MiB of VitaGL VRAM left and crashed. Bound its
     // atlas working set independently from the rest of Chapter 5.
+    /* CH5 Cliffs: the 2026-11-01 VitaGL trace shows the wind/air tube
+     * room growing from 29 MiB to 85 MiB VRAM after room entry, while the
+     * prior room briefly had <1 MiB spare. Reserve more space than generic
+     * Chapter 5 for temporary wind/parallax surfaces. No texture quality
+     * reduction, just earlier stale-atlas eviction. */
+    if(g_vitaActiveChapter==5 && vitaCh5FcastleYellowblueHeavy)
+        /* This 221-room platform stage uses forcecolour/pal-swap, parallax
+         * and large tile-floor Draw. Its first GPU frame took ~2 seconds on
+         * physical Vita, with 13 surfaces live and GPU staging only ~2MiB.
+         * Restrict resident atlases before a new moving-camera working set
+         * can exhaust driver memory. */
+        return 60ULL*1024ULL*1024ULL;
+    if(g_vitaActiveChapter==5 && vitaCh5CliffAttackOrWind)
+        return 68ULL * 1024ULL * 1024ULL;
+    if (g_vitaActiveChapter == 5 && vitaCh5CliffGpuReserve)
+        return 60ULL * 1024ULL * 1024ULL;
     if (g_vitaActiveChapter == 5 && vitaFloweryBattleMemoryMode)
         // Flowery's transient render surfaces use RGBA4444 on Vita. That
         // recovers roughly 13 MiB and lets the measured 17-19 page BC3
@@ -2049,6 +2373,8 @@ static uint64_t vitaTextureCacheLimit(void) {
     // trace reached 103 MiB of atlases with only 6.5 MiB left in VitaGL and
     // crashed during that copy.  Keep a mansion-only reserve; Cyber/Castle
     // retain the larger working set required by their measured atlases.
+    if (g_vitaActiveChapter == 2 && vitaCh2MansionGpuGuard)
+        return 84ULL * 1024ULL * 1024ULL;
     if (g_vitaActiveChapter == 2 && vitaCh2TexturePolicyRegion == 4)
         return 92ULL * 1024ULL * 1024ULL;
     // Chapter 2 page 25/26 must use the lossless RGBA4444 path because their
@@ -2097,6 +2423,43 @@ static uint64_t vitaTextureCacheLimit(void) {
 // and crash during the next compressed upload. Keep a measured reserve only
 // in this battle; other rooms retain their established cache behaviour.
 static bool vitaTextureUploadHasPhysicalHeadroom(uint64_t uploadBytes) {
+    if(vitaCh5FcastleYellowblueHeavy){
+        const uint64_t freeVram=(uint64_t)vglMemFree(VGL_MEM_VRAM);
+        const uint64_t freeRam=(uint64_t)vglMemFree(VGL_MEM_RAM);
+        const uint64_t freePhy=(uint64_t)vglMemFree(VGL_MEM_SLOW);
+        /* Do not let the first parallax/camera-driven atlas upload claim
+         * the driver's last command-buffer and FBO memory. A deferred page
+         * is retried by the existing bounded LRU logic on later frames. */
+        return freeVram>=uploadBytes+20ULL*1024ULL*1024ULL &&
+               freeRam+freePhy>=2ULL*1024ULL*1024ULL;
+    }
+    if(vitaCh2MansionGpuGuard){
+        /* More conservative than the generic CH2 atlas-only limit: RGB
+         * staging, FBOs and the next command buffer are not tracked in
+         * residentTextureBytes. If below reserve, evict first; never
+         * submit an allocation with <2MiB spare in PHY. */
+        uint64_t freeVram=vglMemFree(VGL_MEM_VRAM);
+        uint64_t freePhy=vglMemFree(VGL_MEM_SLOW);
+        return freeVram>=uploadBytes+18ULL*1024ULL*1024ULL &&
+               freePhy>=2ULL*1024ULL*1024ULL;
+    }
+    if(vitaCh5CliffAttackOrWind){
+        /* v0.80-28: R444 atlases 4/13/69/70/123 etc waited 180 frames in
+         * Kawkaw Dash and Twirlflower Wind although the captured free VRAM
+         * was 22-25 MiB. Admit visible pages with the same 6/8 MiB reserve
+         * proven in Flowery so multiple Kawkaw attacks and cliff ground/party
+         * pages do not get deferred or evicted mid-attack. */
+        const uint64_t reserve = uploadBytes <= 2ULL * 1024ULL * 1024ULL ?
+                                 6ULL * 1024ULL * 1024ULL : 8ULL * 1024ULL * 1024ULL;
+        return (uint64_t)vglMemFree(VGL_MEM_VRAM)>=uploadBytes+reserve;
+    }
+    if (vitaCh5CliffGpuReserve) {
+        /* Compact RGBA4 cliff surfaces cut surface VRAM in half (~9.7 MiB saved);
+         * a 10 MiB physical reserve leaves ample space for command buffers
+         * without starving visible ground/character atlases. */
+        const uint64_t reserve = 10ULL*1024ULL*1024ULL;
+        return (uint64_t)vglMemFree(VGL_MEM_VRAM) >= uploadBytes+reserve;
+    }
     if (vitaFloweryBattleMemoryMode) {
         // The v0.77-14 Vita trace kept 12.4-15.9 MiB free while repeatedly
         // replacing 2 MiB 1024px pages. Requiring a full 12 MiB reserve for
@@ -2104,7 +2467,12 @@ static bool vitaTextureUploadHasPhysicalHeadroom(uint64_t uploadBytes) {
         // caused the tower/decoration atlases to alternate every few frames.
         // Eight MiB still blocks a risky 8 MiB atlas at that pressure, while
         // allowing two more 2 MiB battle pages to remain resident.
-        const uint64_t reserve = 8ULL * 1024ULL * 1024ULL;
+        // v0.80-46 stayed pinned at ~10 MiB free with 37-46 MiB of atlases, so
+        // this gate, not the 68 MiB atlas limit, was bounding the working set.
+        // Ordinary 2 MiB pages may go down to 6 MiB free; the risky 8 MiB
+        // pages described above keep the full margin.
+        const uint64_t reserve = uploadBytes <= 2ULL * 1024ULL * 1024ULL ?
+                                 6ULL * 1024ULL * 1024ULL : 8ULL * 1024ULL * 1024ULL;
         return (uint64_t)vglMemFree(VGL_MEM_VRAM) >= uploadBytes + reserve;
     }
     if (vitaChapter3TvMemoryMode) {
@@ -2139,6 +2507,92 @@ static uint16_t* vitaCpuTextureCacheGet(GLLegacyRenderer* gl, uint32_t pageId, i
     return nullptr;
 }
 
+#define VITA_FLOWERY_RAM_RETIRE_SLOTS 8
+static uint16_t* vitaFloweryRamRetiring[VITA_FLOWERY_RAM_RETIRE_SLOTS];
+static uint32_t vitaFloweryRamRetiringFrame[VITA_FLOWERY_RAM_RETIRE_SLOTS];
+
+// Leaving the Flowery battle: return the extra RAM before the next room loads.
+static void vitaCpuTextureCacheReleaseFlowery(GLLegacyRenderer* gl) {
+    glFinish();
+    for (int i = 0; i < VITA_CPU_TEXTURE_CACHE_SLOTS; ++i) {
+        free(gl->cpuTextureCachePixels[i]);
+        gl->cpuTextureCachePixels[i] = nullptr;
+    }
+    for (int i = 0; i < VITA_FLOWERY_RAM_RETIRE_SLOTS; ++i) {
+        free(vitaFloweryRamRetiring[i]);
+        vitaFloweryRamRetiring[i] = nullptr;
+    }
+    fprintf(stderr, "VITAGL_CH5_FLOWERY_RAM_CACHE=released ramhit=%u\n",
+            (unsigned int)gl->vitaTextureRamHits);
+}
+
+// The final battle and the Cliff wind rooms cycle BC3 atlases: 620 uploads in
+// the v0.80-48 battle log, each one reading the memory card and then waiting for
+// the GPU so the read buffer could be reused. Keep payloads in RAM for these
+// rooms. glCompressedTexImage2D copies synchronously and a retained buffer is
+// never overwritten, so a retained upload needs neither the read nor the fence.
+#define VITA_PVR_RAM_SLOTS 32
+#define VITA_PVR_RAM_BYTES (24ULL * 1024ULL * 1024ULL)
+#define VITA_PVR_DISK_READS_PER_FRAME 2U
+typedef struct {
+    uint8_t* data;
+    uint32_t size;
+    uint32_t page;
+    int w, h;
+    uint64_t format;
+    uint32_t stamp;
+} VitaPvrRamEntry;
+static VitaPvrRamEntry vitaPvrRam[VITA_PVR_RAM_SLOTS];
+static uint64_t vitaPvrRamTotal = 0;
+static uint32_t vitaPvrRamClock = 0;
+static uint32_t vitaPvrDiskFrame = UINT32_MAX;
+static uint32_t vitaPvrDiskReads = 0;
+
+static VitaPvrRamEntry* vitaPvrRamFind(uint32_t pageId) {
+    for (int i = 0; i < VITA_PVR_RAM_SLOTS; ++i)
+        if (vitaPvrRam[i].data != nullptr && vitaPvrRam[i].page == pageId) {
+            vitaPvrRam[i].stamp = ++vitaPvrRamClock;
+            return &vitaPvrRam[i];
+        }
+    return nullptr;
+}
+
+// Returns the retained copy, or nullptr when it does not fit.
+static uint8_t* vitaPvrRamStore(uint32_t pageId, const uint8_t* payload, uint32_t size,
+                                int w, int h, uint64_t format) {
+    if ((uint64_t)size > VITA_PVR_RAM_BYTES) return nullptr;
+    VitaPvrRamEntry* slot = nullptr;
+    for (;;) {
+        VitaPvrRamEntry* oldest = nullptr;
+        slot = nullptr;
+        for (int i = 0; i < VITA_PVR_RAM_SLOTS; ++i) {
+            if (vitaPvrRam[i].data == nullptr) { if (slot == nullptr) slot = &vitaPvrRam[i]; continue; }
+            if (oldest == nullptr || vitaPvrRam[i].stamp < oldest->stamp) oldest = &vitaPvrRam[i];
+        }
+        if (slot != nullptr && vitaPvrRamTotal + size <= VITA_PVR_RAM_BYTES) break;
+        if (oldest == nullptr) return nullptr;
+        vitaPvrRamTotal -= oldest->size;
+        free(oldest->data); // Copies are synchronous, so nothing still reads this.
+        oldest->data = nullptr;
+    }
+    uint8_t* copy = (uint8_t*)malloc(size);
+    if (copy == nullptr) return nullptr;
+    memcpy(copy, payload, size);
+    *slot = (VitaPvrRamEntry){copy, size, pageId, w, h, format, ++vitaPvrRamClock};
+    vitaPvrRamTotal += size;
+    return copy;
+}
+
+static void vitaPvrRamRelease(GLLegacyRenderer* gl) {
+    for (int i = 0; i < VITA_PVR_RAM_SLOTS; ++i) {
+        free(vitaPvrRam[i].data);
+        vitaPvrRam[i].data = nullptr;
+    }
+    vitaPvrRamTotal = 0;
+    fprintf(stderr, "VITAGL_PVR_RAM_CACHE=released ramhit=%u\n",
+            (unsigned int)gl->vitaTextureRamHits);
+}
+
 static uint16_t* vitaCpuTextureCacheStore(GLLegacyRenderer* gl, uint32_t pageId,
                                           uint16_t* pixels, int w, int h) {
     // A full 2048x2048 RGBA4444 page costs 8 MiB. The mansion acid-loop trace
@@ -2151,11 +2605,20 @@ static uint16_t* vitaCpuTextureCacheStore(GLLegacyRenderer* gl, uint32_t pageId,
     // reported existing pages as missing after malloc failed. Keep disk cache
     // as the authoritative cache and release staging pixels after each GPU
     // upload in these chapters.
-    if (gl->vitaSevereRoomTextures || vitaTextureChapter(gl->base.dataWin) >= 3)
+    // Exception: the Flowery battle cycles a small set of 2 MiB 1024px pages.
+    // The v0.80-46 log (539 LRU evictions) shows each reload blocking Draw for
+    // 160-200 ms, consistent with re-reading the page from the memory card,
+    // while about 29 MiB of system memory stayed free. Keep up to eight of
+    // these pages (16 MiB) in RAM for this room only; 2048px pages still go to
+    // disk. See vitaCpuTextureCacheReleaseFlowery for the exit path.
+    bool floweryCacheable = vitaFloweryBattleMemoryMode && w <= 1024 && h <= 1024;
+    if ((gl->vitaSevereRoomTextures || vitaTextureChapter(gl->base.dataWin) >= 3) &&
+        !floweryCacheable)
         return pixels;
+    int activeSlots = floweryCacheable ? VITA_CPU_TEXTURE_CACHE_SLOTS : 1;
     int slot = -1;
     uint32_t oldest = UINT32_MAX;
-    for (int i = 0; i < VITA_CPU_TEXTURE_CACHE_SLOTS; ++i) {
+    for (int i = 0; i < activeSlots; ++i) {
         if (gl->cpuTextureCachePixels[i] == nullptr) { slot = i; break; }
         if (gl->cpuTextureCacheStamp[i] < oldest) {
             oldest = gl->cpuTextureCacheStamp[i];
@@ -2163,8 +2626,39 @@ static uint16_t* vitaCpuTextureCacheStore(GLLegacyRenderer* gl, uint32_t pageId,
         }
     }
     if (slot < 0) return pixels;
-    free(gl->cpuTextureCachePixels[slot]);
-    gl->cpuTextureCachePixels[slot] = pixels;
+    // The persistent staging block is reused for the next page, so it cannot
+    // be retained. Keep a private copy and leave the caller's pointer alone:
+    // vitaReleasePreparedPixels still fences and keeps the staging block.
+    uint16_t* retained = pixels;
+    if (floweryCacheable && (void*)pixels == vitaTextureStagingBase) {
+        size_t bytes = (size_t)w * (size_t)h * sizeof(uint16_t);
+        retained = (uint16_t*)malloc(bytes);
+        if (retained == nullptr) return pixels; // The disk cache stays authoritative.
+        memcpy(retained, pixels, bytes);
+    }
+    if (floweryCacheable && gl->cpuTextureCachePixels[slot] != nullptr) {
+        // VitaGL can still be consuming an earlier upload from this buffer.
+        // Delay the free instead of adding a GPU fence to every cache miss.
+        int free_slot = -1;
+        for (int i = 0; i < VITA_FLOWERY_RAM_RETIRE_SLOTS; ++i) {
+            if (vitaFloweryRamRetiring[i] != nullptr &&
+                gl->textureFrame - vitaFloweryRamRetiringFrame[i] > 8U) {
+                free(vitaFloweryRamRetiring[i]);
+                vitaFloweryRamRetiring[i] = nullptr;
+            }
+            if (vitaFloweryRamRetiring[i] == nullptr && free_slot < 0) free_slot = i;
+        }
+        if (free_slot >= 0) {
+            vitaFloweryRamRetiring[free_slot] = gl->cpuTextureCachePixels[slot];
+            vitaFloweryRamRetiringFrame[free_slot] = gl->textureFrame;
+        } else {
+            glFinish();
+            free(gl->cpuTextureCachePixels[slot]);
+        }
+    } else {
+        free(gl->cpuTextureCachePixels[slot]);
+    }
+    gl->cpuTextureCachePixels[slot] = retained;
     gl->cpuTextureCachePage[slot] = pageId;
     gl->cpuTextureCacheWidth[slot] = w;
     gl->cpuTextureCacheHeight[slot] = h;
@@ -2260,6 +2754,12 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
             gl->textureLastEvictedFrame[i] != 0 &&
             gl->textureFrame - gl->textureLastEvictedFrame[i] <= 30U)
             continue;
+        // Bringing back a 2048px page costs 8 MiB, which forces out about four
+        // active 1024px pages. The v0.80-46 log shows page 0 cycling this way.
+        // Keep it while it was used in the last 30 seconds.
+        if (vitaFloweryBattleMemoryMode && gl->textureWidths[i] >= 2048 &&
+            age <= 900U)
+            continue;
         // Camera visibility belongs to an individual quad, not to its atlas.
         // A single 2048 page can contain distant scenery, the visible player,
         // dialogue and UI simultaneously. Treating the first off-camera quad
@@ -2297,6 +2797,13 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
         // The explicitly promoted UI/effect pages remain pinned by the room
         // manifest, so ordinary small phase pages only need a short grace.
         if (smallPage) {
+            /* Unlike town, Kawkaw/Wind rapidly rotates through dozens of
+             * small sprite/effect atlases. A 1800-frame protection kept stale
+             * pages resident for a full minute, forcing live attack textures
+             * into the 3/15/60/180 frame retry ladder. Retain 16 frames,
+             * while semantic/pinned UI pages stay permanently protected. */
+            if(vitaCh5CliffAttackOrWind)protectedAge=16U;
+            else {
             // RectPOT intentionally creates many 64-512px pages. Keeping all
             // of them protected for 30 seconds accumulated old cutscene art,
             // while the LRU recycled the currently visible 1024px TV pages.
@@ -2306,6 +2813,7 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
                 protectedAge += vitaChapter3TvMemoryMode ? 120U : 300U;
             else
                 protectedAge += vitaFloweryBattleMemoryMode ? 30U : 1800U;
+            }
         }
         if (age <= protectedAge) continue;
         if (gl->textureLastUsedFrame[i] < oldestFrame) {
@@ -2326,10 +2834,16 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
                 if (i == protectedPage || gl->texturePinned[i] || !gl->textureLoaded[i]) continue;
                 bool smallPage = gl->textureWidths[i] <= 512 && gl->textureHeights[i] <= 512;
                 uint32_t age = gl->textureFrame - gl->textureLastUsedFrame[i];
+                // The battle log shows 2048px pages uploaded and evicted within
+                // the same frame. Defer the request instead of that loop.
+                if (vitaPvrRamMode && age == 0) continue;
+                if (vitaFloweryBattleMemoryMode && pass == 0 &&
+                    gl->textureWidths[i] >= 2048 && age <= 900U) continue;
                 // Prefer replacing a large stale page first. If every large
                 // page belongs to the active scene, the second pass may reclaim
                 // an old RectPOT page instead of making visible art disappear.
-                if (smallPage && (pass == 0 || age <= 120U)) continue;
+                if (smallPage && (pass == 0 ||
+                    age <= (vitaCh5CliffAttackOrWind?16U:120U))) continue;
                 if (g_vitaActiveChapter == 2 && i == 28U &&
                     vitaTextureCacheVariant(gl->base.dataWin)[0] != '\0' &&
                     gl->textureFrame - gl->textureLastUsedFrame[i] <= 600U)
@@ -2405,6 +2919,8 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
 // scene. Evict the selected stale page itself instead of feeding it back to
 // the runtime LRU as a protected page (the old code consequently removed an
 // unrelated destination page and made rooms change appearance on revisits).
+static bool vitaBatchRoomTrimActive = false;
+
 static bool vitaEvictSpecificTexturePage(GLLegacyRenderer* gl, uint32_t victim) {
     if (gl == nullptr || victim >= gl->originalTexturePageCount ||
         gl->texturePinned[victim] || !gl->textureLoaded[victim] ||
@@ -2426,9 +2942,9 @@ static bool vitaEvictSpecificTexturePage(GLLegacyRenderer* gl, uint32_t victim) 
     // it.  Chapter 3 then crashed immediately after the first destination PVR
     // upload.  There is no useful frame to preserve here: finish the previous
     // room and reclaim the allocation before admitting destination textures.
-    glFinish();
+    if (!vitaBatchRoomTrimActive) glFinish();
     glDeleteTextures(1, &oldTexture);
-    vglForceGarbageCollection();
+    if (!vitaBatchRoomTrimActive) vglForceGarbageCollection();
     glGenTextures(1, &gl->glTextures[victim]);
     gl->textureLoaded[victim] = false;
     gl->textureWidths[victim] = 0;
@@ -2443,6 +2959,8 @@ static bool vitaEvictSpecificTexturePage(GLLegacyRenderer* gl, uint32_t victim) 
 }
 #endif
 
+static bool vitaCh5CliffUploadGuard=false;
+static unsigned vitaCh5CliffUploadBurst=0;
 bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId) {
     if (gl->textureLoaded[pageId]) {
         if (pageId < gl->originalTexturePageCount) gl->textureLastUsedFrame[pageId] = gl->textureFrame;
@@ -2518,6 +3036,7 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
                 uint16_t delay = gl->texturePinned[pageId] ? 1U :
                                  previous == 0 ? 3U :
                                  previous <= 3U ? 15U :
+                                 vitaFloweryBattleMemoryMode ? 30U :
                                  previous <= 15U ? 60U : 180U;
                 gl->textureRetryDelayFrames[pageId] = delay;
                 gl->textureRetryAfterFrame[pageId] = gl->textureFrame + delay;
@@ -2538,7 +3057,46 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
     uint64_t pvrFormat = 0;
     // PVR is authoritative whenever present. All accepted pages are native
     // PVRTC2 and can be uploaded without decoding or CPU-side conversion.
-    if (vitaReadPvr(dw, pageId, &pvrPayload, &pvrPayloadSize, &pvrW, &pvrH, &pvrFormat)) {
+    bool pvrRetained = false;
+    bool pvrAvailable = false;
+    if (vitaPvrRamMode) {
+        VitaPvrRamEntry* cachedPvr = vitaPvrRamFind(pageId);
+        if (cachedPvr != nullptr) {
+            pvrPayload = cachedPvr->data;
+            pvrPayloadSize = cachedPvr->size;
+            pvrW = cachedPvr->w;
+            pvrH = cachedPvr->h;
+            pvrFormat = cachedPvr->format;
+            pvrRetained = pvrAvailable = true;
+            gl->vitaTextureRamHits++;
+        } else if (vitaPvrTextureAllowed(dw, pageId)) {
+            // A scene change asks for many pages in one frame. Spread the card
+            // reads over a few frames instead of freezing for over a second.
+            if (vitaPvrDiskFrame != gl->textureFrame) {
+                vitaPvrDiskFrame = gl->textureFrame;
+                vitaPvrDiskReads = 0;
+            }
+            bool roomAsset = gl->textureRoomPreload != nullptr && gl->textureRoomPreload[pageId];
+            if (vitaPvrDiskReads >= VITA_PVR_DISK_READS_PER_FRAME && !roomAsset &&
+                !gl->texturePinned[pageId] && gl->textureRetryAfterFrame != nullptr) {
+                gl->textureRetryAfterFrame[pageId] = gl->textureFrame + 1U;
+                gl->textureLoaded[pageId] = false;
+                return false;
+            }
+            vitaPvrDiskReads++;
+        }
+    }
+    if (!pvrAvailable)
+        pvrAvailable = vitaReadPvr(dw, pageId, &pvrPayload, &pvrPayloadSize, &pvrW, &pvrH, &pvrFormat);
+    if (pvrAvailable && vitaPvrRamMode && !pvrRetained) {
+        uint8_t* retained = vitaPvrRamStore(pageId, pvrPayload, pvrPayloadSize, pvrW, pvrH, pvrFormat);
+        if (retained != nullptr) {
+            vitaReleaseTexturePayload(pvrPayload, false);
+            pvrPayload = retained;
+            pvrRetained = true;
+        }
+    }
+    if (pvrAvailable) {
         uint64_t cacheLimit = vitaTextureCacheLimit();
         while (gl->residentTextureBytes + pvrPayloadSize > cacheLimit ||
                !vitaTextureUploadHasPhysicalHeadroom(pvrPayloadSize)) {
@@ -2558,7 +3116,7 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
             // Compressed uploads are asynchronous in VitaGL as well. Fence
             // before freeing/reusing the source or later atlases can overwrite
             // sprites still being copied by GXM.
-            vitaReleaseTexturePayload(pvrPayload, true);
+            if (!pvrRetained) vitaReleaseTexturePayloadSized(pvrPayload, true, pvrPayloadSize);
             if (pvrError == GL_NO_ERROR) {
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, vitaTextureFilter());
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, vitaTextureFilter());
@@ -2574,7 +3132,7 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
             }
             vitaTextureLog(pageId, pvrW, pvrH, 4096, "pvr_upload_failed");
         } else {
-            vitaReleaseTexturePayload(pvrPayload, false);
+            if (!pvrRetained) vitaReleaseTexturePayload(pvrPayload, false);
             gl->textureLoaded[pageId] = false;
             gl->vitaTextureDeferred++;
             if (gl->textureRetryDelayFrames != nullptr) {
@@ -2582,6 +3140,7 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
                 uint16_t delay = gl->texturePinned[pageId] ? 1U :
                                  previous == 0 ? 3U :
                                  previous <= 3U ? 15U :
+                                 vitaFloweryBattleMemoryMode ? 30U :
                                  previous <= 15U ? 60U : 180U;
                 gl->textureRetryDelayFrames[pageId] = delay;
                 gl->textureRetryAfterFrame[pageId] = gl->textureFrame + delay;
@@ -2598,6 +3157,7 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
     }
 #endif
 #ifdef PLATFORM_VITA
+    bool vitaRuntimeDecodeFallback = false;
     if (preparedPixels == nullptr) {
         if (vitaTextureChapter(dw) == 0) {
             // The launcher data.win is version-stamped during preparation,
@@ -2616,12 +3176,29 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
                 gl->textureLoaded[pageId] = true;
                 gl->textureWidths[pageId] = 0;
                 gl->textureHeights[pageId] = 0;
-            } else {
+                return false;
+            }
+            // complete.vtc is trusted without opening every page, so a page missing from the
+            // card stayed absent for the whole session, retried forever (Chapter 1 PT-BR page 0
+            // left room_castle_town without its textures). Decode it once from data.win and
+            // persist it below, so this hitch happens one time only and the next boot is
+            // clean. At most one such decode per frame keeps a whole missing set from
+            // stacking up into one long stall.
+            static uint8_t vitaRuntimeDecodeTried[4096 / 8];
+            static uint32_t vitaRuntimeDecodeFrame = UINT32_MAX;
+            bool alreadyTried = pageId >= 4096U ||
+                                (vitaRuntimeDecodeTried[pageId / 8U] & (1U << (pageId % 8U))) != 0;
+            if (alreadyTried || vitaRuntimeDecodeFrame == (uint32_t)gl->textureFrame) {
                 gl->textureLoaded[pageId] = false;
                 if (gl->textureRetryAfterFrame != nullptr)
-                    gl->textureRetryAfterFrame[pageId] = gl->textureFrame + 180U;
+                    gl->textureRetryAfterFrame[pageId] = gl->textureFrame + (alreadyTried ? 180U : 3U);
+                return false;
             }
-            return false;
+            vitaRuntimeDecodeTried[pageId / 8U] |= (uint8_t)(1U << (pageId % 8U));
+            vitaRuntimeDecodeFrame = (uint32_t)gl->textureFrame;
+            vitaRuntimeDecodeFallback = true;
+            vitaTextureLog(pageId, txtr->textureWidth, txtr->textureHeight, 4096,
+                           "runtime_decode_fallback_once");
         }
     }
 #endif
@@ -2632,8 +3209,38 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
         pixels = ImageDecoder_decodeToRgba(txtr->blobData, (size_t) txtr->blobSize, gm2022_5, &w, &h);
         if (pixels == nullptr) {
             fprintf(stderr, "GL: Failed to decode TXTR page %u\n", pageId);
+#ifdef PLATFORM_VITA
+            if (vitaRuntimeDecodeFallback) {
+                vitaTextureLog(pageId, txtr->textureWidth, txtr->textureHeight, 4096,
+                               "runtime_decode_fallback_failed");
+                gl->textureLoaded[pageId] = false;
+                if (gl->textureRetryAfterFrame != nullptr)
+                    gl->textureRetryAfterFrame[pageId] = gl->textureFrame + 180U;
+            }
+#endif
             return false;
         }
+#ifdef PLATFORM_VITA
+        if (vitaRuntimeDecodeFallback && w > 0 && h > 0) {
+            size_t packedBytes = (size_t)w * (size_t)h * sizeof(uint16_t);
+            uint16_t* packed = (uint16_t*)malloc(packedBytes);
+            if (packed != nullptr) {
+                const uint32_t* rgba = (const uint32_t*)pixels;
+                for (size_t i = 0; i < (size_t)w * (size_t)h; ++i) {
+                    /* Same RGBA8888 -> R4G4B4A4 mapping as the boot-time preparer. */
+                    uint32_t px = rgba[i];
+                    uint32_t alpha8 = px >> 24;
+                    uint32_t alpha4 = alpha8 ? (alpha8 + 15U) >> 4 : 0U;
+                    if (alpha4 > 15U) alpha4 = 15U;
+                    packed[i] = (uint16_t)(((px & 0xf0U) << 8) | ((px & 0xf000U) >> 4) |
+                                           ((px & 0xf00000U) >> 16) | alpha4);
+                }
+                vitaSavePreparedTexture(dw, txtr, pageId, w, h, packed);
+                free(packed);
+                vitaTextureLog(pageId, w, h, 4096, "runtime_decode_fallback_persisted");
+            }
+        }
+#endif
         if (!txtr->mapped) {
             free(txtr->blobData);
             txtr->blobData = nullptr;
@@ -2680,6 +3287,7 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
             uint16_t delay = gl->texturePinned[pageId] ? 1U :
                              previous == 0 ? 3U :
                              previous <= 3U ? 15U :
+                             vitaFloweryBattleMemoryMode ? 30U :
                              previous <= 15U ? 60U : 180U;
             gl->textureRetryDelayFrames[pageId] = delay;
             gl->textureRetryAfterFrame[pageId] = gl->textureFrame + delay;
@@ -2732,10 +3340,20 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
 #ifdef PLATFORM_VITA
     if (fullColor) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        if(vitaCh2MansionGpuGuard || vitaCh5CliffUploadGuard)glFinish();
         free(pixels);
         pixels = nullptr;
     } else {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4, gpuPackedPixels);
+        /* VitaGL may consume client pixels asynchronously. PVR upload
+         * already fences before releasing its buffer; apply identical
+         * lifetime protection in the two dump-confirmed GPU crash areas.
+         * Keep this local to avoid unnecessary stalls elsewhere. */
+        if(vitaCh2MansionGpuGuard || vitaCh5CliffUploadGuard){
+            glFinish();
+            if(vitaCh2MansionGpuGuard && ++vitaCh2MansionUploadBurst<=12U)
+                fprintf(stderr,"VITAGL_CH2_GPU_GUARD=rgba_upload_fenced page=%u size=%dx%d\n",pageId,w,h);
+        }
         if (gpuPackedPixels != packedPixels) free(gpuPackedPixels);
         if (pixels != nullptr) free(pixels);
         else vitaReleasePreparedPixels(gl, packedPixels);
@@ -2775,6 +3393,15 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
     bool is_pot = ((w & (w - 1)) == 0) && ((h & (h - 1)) == 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, is_pot ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+#endif
+#ifdef PLATFORM_VITA
+    if(vitaCh5CliffUploadGuard && ++vitaCh5CliffUploadBurst>=3u){
+        glFinish();
+        vitaCh5CliffUploadBurst=0;
+        static unsigned fenceReports=0;
+        if(fenceReports++<24u)fprintf(stderr,
+          "VITAGL_CH5_CLIFF=texture_batch_fenced page=%u\n",pageId);
+    }
 #endif
     fprintf(stderr, "GL: Loaded TXTR page %u (%dx%d)\n", pageId, w, h);
     return true;
@@ -2870,9 +3497,18 @@ static uint32_t vitaEnsureSpritePagesByName(GLLegacyRenderer* gl,
             int16_t pageId = dw->tpag.items[tpagIndex].texturePageId;
             if (pageId < 0 || (uint32_t)pageId >= gl->originalTexturePageCount)
                 continue;
-            bool wasLoaded = gl->textureLoaded[pageId];
-            if (GLLegacyRenderer_ensureTextureLoaded(gl, (uint32_t)pageId) &&
-                !wasLoaded) loaded++;
+            bool wasLoaded=gl->textureLoaded[pageId];
+#ifdef PLATFORM_VITA
+            extern void VitaProbe_pumpLoadingScreen(void);
+            VitaProbe_pumpLoadingScreen();
+#endif
+            if(GLLegacyRenderer_ensureTextureLoaded(gl,(uint32_t)pageId) &&
+               !wasLoaded)loaded++;
+#ifdef PLATFORM_VITA
+            /* Yield between *actual atlas-page uploads* instead of waiting
+             * until an entire multi-page sprite has finished decoding. */
+            VitaProbe_pumpLoadingScreen();
+#endif
         }
         break;
     }
@@ -2958,13 +3594,30 @@ uint32_t GLLegacyRenderer_preloadChapterBattleCore(GLLegacyRenderer* gl) {
         "spr_smallchecker_idle", "spr_smallchecker_hurt",
         "spr_blockguy_part", "spr_blockguy_part_hurt"
     };
+    /* VitaGL cached Chapter 4 boot spent ~4.46s uploading battle pages
+     * before the player even reached the first story scene. Native GXM
+     * avoids this full speculative battle set. Keep the essential shared
+     * first-battle UI, then leave unrelated Ch1/2 enemies lazy in CH4.
+     * Other chapters retain their previous prewarm policy. */
+    const uint32_t allCoreCount=(uint32_t)
+        (sizeof(battleCore)/sizeof(battleCore[0]));
+    const uint32_t coreCount=g_vitaActiveChapter==4?
+        (allCoreCount<25U?allCoreCount:25U):allCoreCount;
+    if(g_vitaActiveChapter==4)
+        fprintf(stderr,"VITAGL_CH4_BOOT=bounded_battle_preload %u_of_%u sprites\n",
+                coreCount,allCoreCount);
     uint32_t loaded = 0;
-    for (uint32_t i = 0; i < sizeof(battleCore) / sizeof(battleCore[0]); ++i) {
+    for (uint32_t i = 0; i < coreCount; ++i) {
 #ifdef PLATFORM_VITA
         extern void VitaProbe_pumpLoadingScreen(void);
         VitaProbe_pumpLoadingScreen();
 #endif
         loaded += vitaEnsureSpritePagesByName(gl, battleCore[i]);
+#ifdef PLATFORM_VITA
+        extern void VitaProbe_reportBattlePreloadProgress(uint32_t,uint32_t);
+        VitaProbe_reportBattlePreloadProgress(i+1,coreCount);
+        VitaProbe_pumpLoadingScreen();
+#endif
         // Preload behind the chapter loading screen, but do not make battle
         // atlases immortal. Chapter 3 accumulated 93 pinned pages this way;
         // room_board_1 then had no legal victim and alternated pages 0/2 in a
@@ -2981,6 +3634,12 @@ uint32_t GLLegacyRenderer_preloadChapterBattleCore(GLLegacyRenderer* gl) {
 void GLLegacyRenderer_trimTextureCacheForRoomChange(GLLegacyRenderer* gl, uint64_t targetBytes, bool includeSmallPages) {
     if (gl == nullptr || gl->residentTextureBytes <= targetBytes) return;
     const bool purgeForNativeVideo = targetBytes == 0;
+#ifdef PLATFORM_VITA
+    bool evictedAny = false;
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glFinish();
+    vitaBatchRoomTrimActive = true;
+#endif
     for (uint32_t i = 0; i < gl->originalTexturePageCount; ++i) {
         if (gl->residentTextureBytes <= targetBytes) break;
         if (gl->texturePinned[i] || !gl->textureLoaded[i]) continue;
@@ -3014,8 +3673,16 @@ void GLLegacyRenderer_trimTextureCacheForRoomChange(GLLegacyRenderer* gl, uint64
             gl->textureWidths[i] <= 512 && gl->textureHeights[i] <= 512) continue;
         extern int g_vitaActiveChapter;
         if (g_vitaActiveChapter == 5 && (i == 30 || i == 55)) continue;
+#ifdef PLATFORM_VITA
+        if (vitaEvictSpecificTexturePage(gl, i)) evictedAny = true;
+#else
         vitaEvictSpecificTexturePage(gl, i);
+#endif
     }
+#ifdef PLATFORM_VITA
+    vitaBatchRoomTrimActive = false;
+    if (evictedAny) vglForceGarbageCollection();
+#endif
 }
 
 void GLLegacyRenderer_collectRetiredTexturesForRoomChange(GLLegacyRenderer* gl) {
@@ -3047,6 +3714,34 @@ void GLLegacyRenderer_collectRetiredTexturesForRoomChange(GLLegacyRenderer* gl) 
 void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
     if (gl == nullptr || room == nullptr || !room->payloadLoaded || gl->textureRoomRequired == nullptr) return;
     extern int g_vitaActiveChapter;
+#ifdef PLATFORM_VITA
+    /* The cliff-specific cache reserve follows the currently entering room;
+     * do not leave it enabled for Town, the intro or Flowery. */
+    vitaCh5FestivalEntry=g_vitaActiveChapter==5 && room->name &&
+        (strcmp(room->name,"room_town_mid")==0 ||
+         strcmp(room->name,"room_town_north")==0);
+    vitaCh5FcastleYellowblueHeavy=g_vitaActiveChapter==5 &&
+        room->name && strcmp(room->name,"room_dw_fcastle_yellowblue")==0;
+    if(vitaCh5FcastleYellowblueHeavy)
+        fprintf(stderr,
+          "VITAGL_CH5_FCASTLE_GPU_GUARD=active room=room_dw_fcastle_yellowblue atlas_limit_mib=60 vram_reserve_mib=20\n");
+    vitaCh5CliffGpuReserve=(g_vitaActiveChapter==5 && room->name &&
+                           strncmp(room->name,"room_dw_cliff_",14)==0);
+    vitaCh5CliffAttackOrWind=g_vitaActiveChapter==5 && room->name &&
+        (strcmp(room->name,"room_dw_cliff_kawkawdash")==0 ||
+         strcmp(room->name,"room_dw_cliff_cutdown_tutorial")==0 ||
+         strcmp(room->name,"room_dw_cliff_twirlflowerwind")==0 ||
+         strcmp(room->name,"room_dw_cliff_twirlflowerplatforming")==0);
+    if(vitaCh5CliffAttackOrWind){
+        fprintf(stderr,
+          "VITAGL_CH5_ATTACK_WIND=room=%s limit_mib=68 vram_reserve_mib=6 small_idle_frames=16\n",
+          room->name);
+    }
+    if(vitaCh5CliffGpuReserve){
+        fprintf(stderr,"VITAGL_CH5_CLIFF=reserve active=1 room=%s vram_free=%u\n",
+                room->name,(unsigned)vglMemFree(VGL_MEM_VRAM));
+    }
+#endif
 #ifdef PLATFORM_VITA
     // Phase 10: per-room texture telemetry, for recalibrating cache limits and
     // pools with real data. R444/BC3/PVRTC counts are inferred from the effective
@@ -3111,6 +3806,22 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
         room->name != nullptr &&
         (strcmp(room->name, "room_dw_cyber_intro_2") == 0 ||
          strcmp(room->name, "room_dw_cyber_intro_connector") == 0);
+    vitaCh5CliffUploadGuard=g_vitaActiveChapter==5 && room->name!=nullptr &&
+        (strcmp(room->name,"room_dw_cliff_netskieclimb")==0 ||
+         strcmp(room->name,"room_dw_cliff_netskieclimb_behind")==0);
+    vitaCh5CliffUploadBurst=0;
+    if(vitaCh5CliffUploadGuard)
+        fprintf(stderr,"VITAGL_CH5_CLIFF=texture_batch_guard_enabled room=%s\n",room->name);
+    vitaCh2MansionGpuGuard=g_vitaActiveChapter==2 && room->name!=nullptr &&
+        (strcmp(room->name,"room_dw_mansion_east_3f")==0 ||
+         strcmp(room->name,"room_dw_mansion_east_3f_projection")==0 ||
+         strcmp(room->name,"room_dw_mansion_east_teacup_4")==0 ||
+         strcmp(room->name,"room_dw_mansion_acid_tunnel_loop_rouxls")==0);
+    vitaCh2MansionUploadBurst=0;
+    if(vitaCh2MansionGpuGuard)
+        fprintf(stderr,
+          "VITAGL_CH2_GPU_GUARD=room_enabled room=%s limit_mib=84 vram_reserve_mib=18 phy_reserve_mib=2\n",
+          room->name);
     vitaCh2KeyboardMemoryMode = g_vitaActiveChapter == 2 &&
         room->name != nullptr && strstr(room->name, "room_dw_cyber_keyboard") != nullptr;
     vitaCh2BattleMemoryMode = g_vitaActiveChapter == 2 && room->name != nullptr &&
@@ -3149,10 +3860,29 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
          strncmp(room->name, "room_dw_ralsei_castle_", sizeof("room_dw_ralsei_castle_") - 1) == 0);
     vitaChapter5CastleApproachMode = g_vitaActiveChapter == 5 && room->name != nullptr &&
         strcmp(room->name, "room_dw_castle_area_1") == 0;
+    const bool vitaCh4SchoolCastleTransition=(g_vitaActiveChapter==4 || g_vitaActiveChapter==5) &&
+        room->name &&
+        (strcmp(room->name,"room_schooldoor")==0 ||
+         strcmp(room->name,"room_dw_castle_area_1")==0 ||
+         strcmp(room->name,"room_dw_castle_town")==0 ||
+         strncmp(room->name,"room_dw_castle_",15)==0);
+    if(vitaCh4SchoolCastleTransition)
+        fprintf(stderr,"VITAGL_CH4_SCHOOL_CASTLE=prewarm_dynamic_actors room=%s\n",
+                room->name);
     bool vitaChapter5FloweryBattle = room->name != nullptr &&
         g_vitaActiveChapter == 5 &&
         strcmp(room->name, "room_dw_fcastle_flowery") == 0;
+    if (vitaFloweryBattleMemoryMode && !vitaChapter5FloweryBattle)
+        vitaCpuTextureCacheReleaseFlowery(gl);
     vitaFloweryBattleMemoryMode = vitaChapter5FloweryBattle;
+    {
+        bool pvrRamRoom = vitaChapter5FloweryBattle || vitaCh5CliffAttackOrWind;
+        if (vitaPvrRamMode && !pvrRamRoom) vitaPvrRamRelease(gl);
+        vitaPvrRamMode = pvrRamRoom;
+    }
+    vitaFcastleLargeSurfaceMode = g_vitaActiveChapter == 5 && room->name != nullptr &&
+        !vitaChapter5FloweryBattle &&
+        strncmp(room->name, "room_dw_fcastle_", sizeof("room_dw_fcastle_") - 1) == 0;
     vitaChapter3TvMemoryMode = vitaChapter3TvBoard;
     vitaChapter3BoardMinigameMode = vitaChapter3BoardMinigame;
     vitaChapter3PerformanceSurfaceMode = vitaChapter3PerformanceSurface;
@@ -3175,6 +3905,25 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
          (g_vitaActiveChapter == 3 && vitaCouchOverworld) ||
          vitaChapter3TvBoard ||
          (g_vitaActiveChapter == 5 && (vitaChapter5Town || vitaChapter5FloweryBattle)));
+    if(g_vitaActiveChapter==2 && room->name &&
+       strcmp(room->name,"room_dw_mansion_acid_tunnel_loop_rouxls")==0){
+        /* GPU dump: main RAM + PHY staging nearly exhausted after 80+
+         * atlas pages. Release old decoded pages before shader/room upload. */
+        unsigned freedPages=0;
+        for(int slot=0;slot<VITA_CPU_TEXTURE_CACHE_SLOTS;slot++){
+            if(gl->cpuTextureCachePixels[slot]){
+                free(gl->cpuTextureCachePixels[slot]);
+                gl->cpuTextureCachePixels[slot]=nullptr;
+                gl->cpuTextureCachePage[slot]=UINT32_MAX;
+                gl->cpuTextureCacheStamp[slot]=0;
+                freedPages++;
+            }
+        }
+        fprintf(stderr,
+          "VITAGL_CH2_GPU_GUARD=acid_loop_staging_reclaimed pages=%u ram_free=%u phy_free=%u\n",
+          freedPages,(unsigned)vglMemFree(VGL_MEM_RAM),
+          (unsigned)vglMemFree(VGL_MEM_SLOW));
+    }
     gl->vitaConstrainedRoomTextures = room->name != nullptr &&
         (strcmp(room->name, "room_dw_castle_area_2_transformed") == 0 ||
          strcmp(room->name, "room_dw_cyber_rollercoaster") == 0 ||
@@ -3196,7 +3945,7 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
         if (vitaCh2CyberIntroMemoryMode)
             gl->vitaConstrainedRoomTextures = true;
     }
-    if (gl->vitaSevereRoomTextures) {
+    if (gl->vitaSevereRoomTextures || vitaCh5FcastleYellowblueHeavy) {
         // Do not carry the previous room's full-resolution CPU staging page
         // into a room already proven to exhaust the auxiliary RAM pool.
         for (int i = 0; i < VITA_CPU_TEXTURE_CACHE_SLOTS; ++i) {
@@ -3268,6 +4017,76 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
     // Room Start. The static room manifest is therefore nearly empty and the
     // first playable beats were uploading atlases on demand. Warm only the
     // semantic rhythm set during the transition; do not pin it.
+    vitaCh5SethMinibossEntry=g_vitaActiveChapter==5 && room->name &&
+       strcmp(room->name,"room_dw_cliff_seth_miniboss")==0;
+    if(vitaCh5SethMinibossEntry){
+        /* Actual v0.80-28 freeze: leaving room_dw_cliff_shop (161)
+         * enters the miniboss (160), completes Room Start/trim with 76 MiB
+         * VRAM free, then never produces its FIRST drawable frame. Resolve
+         * its dynamic actor atlases ahead of the first Draw to avoid a
+         * synchronous multi-atlas upload inside a surface/shadow composition.
+         * Do not pin all atlases permanently, and keep other rooms unchanged. */
+        static const char* sethCore[]={
+           "spr_seth_idle","spr_enemy_aqua_idle",
+           "spr_kawkaw_small","spr_parallax_cliffs_sunlayer_base"
+        };
+        for(unsigned i=0;i<sizeof(sethCore)/sizeof(sethCore[0]);i++)
+            vitaMarkSpritePagesByName(gl,sethCore[i],true);
+        fprintf(stderr,"VITAGL_CH5_SETH=entry_manifest room=160 dynamic_actor_core=4\n");
+    }
+    if(vitaCh5CliffAttackOrWind){
+        /* Choose distinct visible attack/foliage/party sprites; never pin the
+         * entire parallax/foliage bank. Note Toby's mixed spelling across
+         * objects: obj_kawkaw_shooter/enemy use spr_kawkaw_tongue,
+         * spr_kawkaw_sparkle, spr_kawkaw_hurt, spr_kawkaw_hurt2, and
+         * spr_kawakaw_happy in addition to spr_kakaw_*. */
+        static const char* visualCore[]={
+          "spr_kakaw_idle","spr_kakaw_tongue","spr_kawkaw_tongue",
+          "spr_kawkaw_sparkle","spr_kawkaw_hurt","spr_kawkaw_hurt2",
+          "spr_kawakaw_happy","spr_featherbullet","spr_kawkaw_feather",
+          "spr_kakaw_dig","spr_kakaw_eye","spr_kawkaw_small",
+          "spr_kakaw_bobhead","spr_kakaw_hurt2","spr_cliff_crater",
+          "spr_dw_cliffs_tallgrass_lightbake",
+          "spr_dw_cliffs_tallgrass_lightbake2",
+          "spr_krisd_dark","spr_susie_walk_down_dw","spr_ralsei_walk_down_dw"
+        };
+        for(unsigned i=0;i<sizeof(visualCore)/sizeof(visualCore[0]);i++){
+            vitaMarkSpritePagesByName(gl,visualCore[i],true);
+            vitaPinSpritePagesByName(gl,visualCore[i]);
+        }
+        static const char* windCore[]={
+          "spr_plat_twirlflower_vine","spr_plat_twirlflower_petals"
+        };
+        for(unsigned i=0;i<sizeof(windCore)/sizeof(windCore[0]);i++){
+            vitaMarkSpritePagesByName(gl,windCore[i],true);
+            vitaPinSpritePagesByName(gl,windCore[i]);
+        }
+    }
+    if (g_vitaActiveChapter == 5 && room->name != nullptr &&
+        strncmp(room->name, "room_dw_garden_", 15) == 0 &&
+        strcmp(room->name, "room_dw_garden_video") != 0) {
+        static const char* gardenCore[] = {
+            "spr_blocktree_parts", "spr_blocktree_parts_pink",
+            "spr_floradinn_overworld", "spr_floradinn_idle",
+            "spr_pushable_block", "spr_spin_petal_particlefps",
+            "spr_canopy_shadow", "spr_fx_mushroomcloud",
+            "spr_krisd_dark", "spr_krisu_dark", "spr_krisl_dark", "spr_krisr_dark",
+            "spr_susie_walk_down_dw", "spr_susie_walk_up_dw", "spr_susie_walk_left_dw", "spr_susie_walk_right_dw",
+            "spr_ralsei_walk_down", "spr_ralsei_walk_up", "spr_ralsei_walk_left", "spr_ralsei_walk_right"
+        };
+        for (unsigned i = 0; i < sizeof(gardenCore) / sizeof(gardenCore[0]); ++i)
+            vitaMarkSpritePagesByName(gl, gardenCore[i], true);
+    }
+    if(vitaCh5CliffUploadGuard){
+        static const char* cliffCore[]={
+          "spr_cliff_crater","spr_parallax_cliffs_sunlayer_base",
+          "spr_parallax_cliffs_sunlayer_rim",
+          "spr_bush_leaf","spr_bush_leaf2","spr_bush_leaf3",
+          "spr_bush_leaf_pink","spr_bush_leaf2_pink","spr_bush_leaf3_pink"
+        };
+        for(unsigned i=0;i<sizeof(cliffCore)/sizeof(cliffCore[0]);i++)
+            vitaMarkSpritePagesByName(gl,cliffCore[i],true);
+    }
     if (vitaChapter3Rhythm) {
         static const char* rhythmCore[] = {
             "spr_rhythmgame_bg", "spr_rhythmgame_bg_mask",
@@ -3414,6 +4233,13 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
     // the chase thorns, yellow-heart phase and Susie's Idea animation without
     // pinning unrelated atlases for the complete battle.
     if (vitaChapter5FloweryBattle && gl->textureRoomPreload != nullptr) {
+        /* Tower is constructed from atlas-backed 360x360 and cylindrical
+         * shader layers. Preserve the two source vines and stage parallax
+         * pillar pages; evicting these mid-phase leaves only tower fragments. */
+        vitaMarkSpritePagesByName(gl, "spr_towery_vines", true);
+        vitaMarkSpritePagesByName(gl, "spr_towery_vines_depth", true);
+        vitaMarkSpritePagesByName(gl, "spr_dw_parallaxpillar_1_solo", true);
+        vitaMarkSpritePagesByName(gl, "spr_dw_parallaxpillar_3_solo", true);
         vitaMarkSpritePagesByName(gl, "spr_bramble", true);
         vitaMarkSpritePagesByName(gl, "spr_enemy_floradin_spikes", true);
         vitaMarkSpritePagesByName(gl, "spr_dw_garden_susiechase_spikery", true);
@@ -3428,6 +4254,44 @@ void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room) {
         vitaMarkSpritePagesByName(gl, "spr_dw_three_petals", true);
     }
 
+    if (g_vitaActiveChapter == 5 && room->name != nullptr &&
+        strncmp(room->name,"room_town_",10)==0 &&
+        gl->textureRoomPreload != nullptr) {
+        /* Festival scripts toggle layered objects at runtime after Room
+         * Start. Original static room manifests miss these sprite atlases.
+         * Keep a tiny semantic core, not all 134 festival sprites, to avoid
+         * evicting the player/GUI textures under VitaGL's VRAM ceiling. */
+        static const char* festivalCore[]={
+            "spr_festival_arch","spr_festival_archback",
+            "spr_festival_flags_crossed","spr_festival_flags_semicircle",
+            "spr_festival_confetti_1","spr_festival_confetti_2",
+            "spr_festival_ferris_base","spr_festival_ferris_car"
+        };
+        for(unsigned j=0;j<sizeof(festivalCore)/sizeof(festivalCore[0]);j++)
+            vitaMarkSpritePagesByName(gl,festivalCore[j],true);
+    }
+    if (vitaCh5FcastleYellowblueHeavy && gl->textureRoomPreload != nullptr) {
+        /* Moving the camera introduces 3 actors and shaded flower/projectile
+         * pages that are not in the static room object atlas manifest.
+         * Classify them as required, but do not pin all scene assets. */
+        static const char* core[]={
+            "spr_krisd","spr_susied","spr_ralseid",
+            "spr_enemy_blue_ballet_r","spr_yellow_cool_stance"
+        };
+        for(unsigned i=0;i<sizeof(core)/sizeof(core[0]);i++)
+            vitaMarkSpritePagesByName(gl,core[i],true);
+    }
+    if(vitaCh4SchoolCastleTransition && gl->textureRoomPreload!=nullptr){
+        /* Chapter 4 schooldoor->Castle Town logs show 1.03s first render
+         * and repeated 150-290ms obj_actor Draw: these actors switch to
+         * Dark World sprites in script, outside room's default OBJT set. */
+        static const char* const darkWorldActors[]={
+            "spr_krisd","spr_susied","spr_ralseid",
+            "spr_kris_dw","spr_susie_dw","spr_ralsei_dw"
+        };
+        for(unsigned k=0;k<sizeof(darkWorldActors)/sizeof(darkWorldActors[0]);k++)
+            vitaMarkSpritePagesByName(gl,darkWorldActors[k],true);
+    }
     if (vitaChapter5CastleApproachMode && gl->textureRoomPreload != nullptr) {
         // The transformation assigns these actors dynamically. The static
         // manifest therefore missed them and the first visible frame paid a
@@ -3475,10 +4339,16 @@ uint32_t GLLegacyRenderer_preloadRoomTextureSet(GLLegacyRenderer* gl) {
     // pages can be uploaded during the loading transition. Deferring both to
     // the first battle frame caused the black/missing background and a large
     // render hitch even when enough memory remained.
-    const uint32_t preloadLimit = (gl->vitaConstrainedRoomTextures &&
+    const uint32_t preloadLimit =
+        vitaCh5FcastleYellowblueHeavy ? 4U :
+        vitaCh5FestivalEntry ? 4U :
+        vitaCh5SethMinibossEntry ? 6U :
+        vitaCh5CliffAttackOrWind ? 4U :
+        ((gl->vitaConstrainedRoomTextures &&
                                    !vitaFloweryBattleMemoryMode) ? 0U :
+        (vitaCh5CliffUploadGuard ? 12U :
         ((g_vitaActiveChapter == 5 ||
-          (g_vitaActiveChapter == 3 && gl->vitaSevereRoomTextures)) ? 2U : UINT32_MAX);
+          (g_vitaActiveChapter == 3 && gl->vitaSevereRoomTextures)) ? 2U : UINT32_MAX)));
 #else
     const uint32_t preloadLimit = UINT32_MAX;
 #endif
@@ -3495,6 +4365,13 @@ uint32_t GLLegacyRenderer_preloadRoomTextureSet(GLLegacyRenderer* gl) {
     // font/subtitle pages; static room pages would consume the contiguous
     // decoder reserve without contributing to the presented frame.
     if (vitaNativeVideoMemoryMode) return loaded;
+    if(vitaFloweryBattleMemoryMode){
+        /* Always prepare both tower source textures while the room is
+         * hidden. Later frames can create the tower's RGBA4444 surfaces
+         * without blocking their first source atlas upload. */
+        loaded+=vitaEnsureSpritePagesByName(gl,"spr_towery_vines");
+        loaded+=vitaEnsureSpritePagesByName(gl,"spr_towery_vines_depth");
+    }
     if (vitaCh2GigaSequenceMode) {
         // Move the small, repeatedly observed Queen/Giga Queen core behind the
         // room loading screen. Loading every cutscene_26/27 page would consume
@@ -3665,8 +4542,30 @@ static int vitaClassifyCameraQuad(Renderer* renderer,
         if (!safeCityCull) return 2;
     }
     if (renderer == nullptr || renderer->runner == nullptr) return 2;
-    if (renderer->cameraCurrent == GUI_CAMERA || renderer->cameraCurrent == SURFACE_CAMERA)
+    if(renderer->cameraCurrent==SURFACE_CAMERA){
+        /* Chapter 4's rotating titan tower composes thousands of tiles into
+         * a 640x480 offscreen surface. Off-surface tiles cannot contribute
+         * to the render target, but previously every one triggered a texture
+         * lookup, GL state changes and an immediate draw. Apply generous
+         * 80px padding; never reject sprites under custom vertex shaders. */
+        if(g_vitaActiveChapter==4 && renderer->currentShader<0 &&
+           renderer->runner && renderer->runner->currentRoom &&
+           renderer->runner->currentRoom->name &&
+           strstr(renderer->runner->currentRoom->name,"titanclimb") &&
+           renderer->runner->surfaceCamera.allocated){
+            GMLCamera*surface=&renderer->runner->surfaceCamera;
+            float left=fminf(fminf(x0,x1),fminf(x2,x3));
+            float right=fmaxf(fmaxf(x0,x1),fmaxf(x2,x3));
+            float top=fminf(fminf(y0,y1),fminf(y2,y3));
+            float bottom=fmaxf(fmaxf(y0,y1),fmaxf(y2,y3));
+            if(right < -80.0f || bottom < -80.0f ||
+               left > (float)surface->viewWidth+80.0f ||
+               top > (float)surface->viewHeight+80.0f)
+                return 0;
+        }
         return 2;
+    }
+    if(renderer->cameraCurrent==GUI_CAMERA)return 2;
 
     GMLCamera* camera = Runner_getCameraById(renderer->runner, renderer->cameraCurrent);
     if (camera == nullptr || !camera->allocated || camera->viewWidth <= 0 ||
@@ -3741,21 +4640,31 @@ static void glDrawSprite(Renderer* renderer, int32_t tpagIndex, float x, float y
     float localX1 = localX0 + (float) tpag->targetWidth;
     float localY1 = localY0 + (float) tpag->targetHeight;
 
-    // Build 2D transform: T(x,y) * R(-angleDeg) * S(xscale, yscale)
-    // GML rotation is counter-clockwise, OpenGL rotation is counter-clockwise, but
-    // since we have Y-down, we negate the angle to get the correct visual rotation
-    float angleRad = -angleDeg * ((float) M_PI / 180.0f);
-    Matrix4f transform;
-    Matrix4f_setTransform2D(&transform, x, y, xscale, yscale, angleRad);
-
-    // Transform 4 corners
     float x0, y0, x1, y1, x2, y2, x3, y3;
-    Matrix4f_transformPoint(&transform, localX0, localY0, &x0, &y0); // top-left
-    Matrix4f_transformPoint(&transform, localX1, localY0, &x1, &y1); // top-right
-    Matrix4f_transformPoint(&transform, localX1, localY1, &x2, &y2); // bottom-right
-    Matrix4f_transformPoint(&transform, localX0, localY1, &x3, &y3); // bottom-left
+    if(angleDeg==0.0f){
+        /* Exact algebraic fast path for unrotated GameMaker sprites.
+         * Titan tower tile strips and most scene sprites have angle=0:
+         * skip Matrix4f construction, sin/cos and four matrix multiplies. */
+        x0=x+localX0*xscale;y0=y+localY0*yscale;
+        x1=x+localX1*xscale;y1=y0;
+        x2=x1;y2=y+localY1*yscale;
+        x3=x0;y3=y2;
+    }else{
+        float angleRad=-angleDeg*((float)M_PI/180.0f);
+        Matrix4f transform;
+        Matrix4f_setTransform2D(&transform,x,y,xscale,yscale,angleRad);
+        Matrix4f_transformPoint(&transform,localX0,localY0,&x0,&y0);
+        Matrix4f_transformPoint(&transform,localX1,localY0,&x1,&y1);
+        Matrix4f_transformPoint(&transform,localX1,localY1,&x2,&y2);
+        Matrix4f_transformPoint(&transform,localX0,localY1,&x3,&y3);
+    }
 
     int cameraClass = vitaClassifyCameraQuad(renderer, x0, y0, x1, y1, x2, y2, x3, y3);
+#ifdef PLATFORM_VITA
+    // Loading or evicting a page must not overtake quads queued from another one.
+    if (vitaQuadBatchCount > 0 && vitaQuadBatchTexture != gl->glTextures[pageId])
+        vitaQuadBatchFlush();
+#endif
     if (!vitaPrepareCameraTexture(gl, (uint32_t)pageId, cameraClass)) return;
     // A near-camera request is read-ahead only. It becomes drawable as soon as
     // the quad crosses into the real 4:3 camera on a later frame.
@@ -3764,6 +4673,12 @@ static void glDrawSprite(Renderer* renderer, int32_t tpagIndex, float x, float y
     GLuint texId = gl->glTextures[pageId];
     int32_t texW = gl->textureWidths[pageId];
     int32_t texH = gl->textureHeights[pageId];
+#ifdef PLATFORM_VITA
+    const bool queueQuad = renderer->quadBatchWindow &&
+        renderer->cameraCurrent == SURFACE_CAMERA &&
+        renderer->currentShader < 0 && !vitaCustomShaderActive;
+    if (!queueQuad)
+#endif
     glBindTexture(GL_TEXTURE_2D, texId);
     PS3_PALETTED_BEGIN(tpagIndex);
 
@@ -3784,6 +4699,15 @@ static void glDrawSprite(Renderer* renderer, int32_t tpagIndex, float x, float y
         {u1, v1, r, g, b, alpha, x2, y2},
         {u0, v1, r, g, b, alpha, x3, y3},
     };
+    if (queueQuad) {
+        if (vitaQuadBatchCount >= VITA_QUAD_BATCH_MAX ||
+            (vitaQuadBatchCount > 0 && vitaQuadBatchTexture != texId))
+            vitaQuadBatchFlush();
+        vitaQuadBatchTexture = texId;
+        memcpy(&vitaQuadBatch[vitaQuadBatchCount * 4], vertices, sizeof(vertices));
+        vitaQuadBatchCount++;
+        return;
+    }
     vitaDrawQuad(vertices);
 #else
     glBegin(GL_QUADS);
@@ -3848,6 +4772,33 @@ static void glDrawSpriteTiled(Renderer* renderer, int32_t tpagIndex, float origi
     } else {
         startY = y - originY * ayScale;
         endY = startY + tileH;
+    }
+
+    // v0.80-47: draw_sprite_tiled always passes the room size, even while a
+    // surface is the target. Chapter 4's obj_texturescroller_dark asks for a
+    // 40x40 tile twice on a 640x480 surface inside a 5000px+ room: about 48k
+    // quads per frame for ~200 visible ones (70 ms on the Vita). This renderer
+    // has no world matrix, so outside custom vertex shaders the surface camera
+    // (origin 0,0, full surface) fully defines what can reach the target.
+    if (renderer->cameraCurrent == SURFACE_CAMERA && renderer->currentShader < 0 &&
+        renderer->runner != nullptr && renderer->runner->surfaceCamera.allocated &&
+        renderer->runner->surfaceCamera.viewWidth > 0 &&
+        renderer->runner->surfaceCamera.viewHeight > 0
+#ifndef PLATFORM_VITA
+        && getenv("BS_TEST_DISABLE_SURFACE_TILE_CLIP") == nullptr // A/B regression runs
+#endif
+        ) {
+        const GMLCamera* surfaceCamera = &renderer->runner->surfaceCamera;
+        float clipL = surfaceCamera->viewX - tileW;
+        float clipT = surfaceCamera->viewY - tileH;
+        float clipR = surfaceCamera->viewX + (float)surfaceCamera->viewWidth + tileW;
+        float clipB = surfaceCamera->viewY + (float)surfaceCamera->viewHeight + tileH;
+        if (tileX && startX < clipL)
+            startX += floorf((clipL - startX) / tileW) * tileW;
+        if (tileY && startY < clipT)
+            startY += floorf((clipT - startY) / tileH) * tileH;
+        if (tileX && endX > clipR) endX = clipR;
+        if (tileY && endY > clipB) endY = clipB;
     }
 
 #ifdef PLATFORM_VITA
@@ -4013,6 +4964,24 @@ static void glDrawSpritePart(Renderer* renderer, int32_t tpagIndex, int32_t srcO
     float u1 = (float) (tpag->sourceX + srcOffX + srcW) / (float) texW;
     float v1 = (float) (tpag->sourceY + srcOffY + srcH) / (float) texH;
 
+#ifdef PLATFORM_VITA
+    // v0.80-49-ch3: the Chapter 3 menu wave is 380 one-pixel strips per frame.
+    if (renderer->quadBatchPartWindow && renderer->currentShader < 0 && !vitaCustomShaderActive) {
+        const Vita2DVertex vertices[4] = {
+            {u0, v0, r, g, b, alpha, cx0, cy0},
+            {u1, v0, r, g, b, alpha, cx1, cy1},
+            {u1, v1, r, g, b, alpha, cx2, cy2},
+            {u0, v1, r, g, b, alpha, cx3, cy3},
+        };
+        if (vitaQuadBatchCount >= VITA_QUAD_BATCH_MAX ||
+            (vitaQuadBatchCount > 0 && vitaQuadBatchTexture != texId))
+            vitaQuadBatchFlush();
+        vitaQuadBatchTexture = texId;
+        memcpy(&vitaQuadBatch[vitaQuadBatchCount * 4], vertices, sizeof(vertices));
+        vitaQuadBatchCount++;
+        return;
+    }
+#endif
     PS3_PALETTED_BEGIN(tpagIndex);
     glBegin(GL_QUADS);
         glColor4f(r, g, b, alpha);
@@ -4388,7 +5357,21 @@ static void glDrawText(Renderer* renderer, const char* text, float x, float y, f
     // Build transform matrix
     float angleRad = -angleDeg * ((float) M_PI / 180.0f);
     Matrix4f transform;
-    Matrix4f_setTransform2D(&transform, x, y, xscale * font->scaleX, yscale * font->scaleY, angleRad);
+    /* Native GXM fixed the clipped bottom scanline of battle speech by
+     * aligning pixel-font quads at integral screen origins. VitaGL must
+     * preserve the same exact sampling for nearest-neighbour font atlas:
+     * half-texel UV inset is already applied in glResolveGlyph, but a
+     * fractional matrix origin could still drop the bottom pixel row. */
+    float fontSx=xscale*font->scaleX;
+    float fontSy=yscale*font->scaleY;
+    if((font->isSpriteFont || font->antiAliasing==0) &&
+       fabsf(angleDeg)<0.001f &&
+       fabsf(fontSx-roundf(fontSx))<0.001f &&
+       fabsf(fontSy-roundf(fontSy))<0.001f){
+        x=roundf(x);
+        y=roundf(y);
+    }
+    Matrix4f_setTransform2D(&transform, x, y, fontSx, fontSy, angleRad);
 
     // Iterate through lines. HTML5 subtracts ascenderOffset from the per-line y offset
     // (see yyFont.GR_Text_Draw), shifting glyphs up so the baseline aligns with the drawn y.
@@ -4522,7 +5505,21 @@ static void glDrawTextColor(Renderer* renderer, const char* text, float x, float
     // Build transform matrix
     float angleRad = -angleDeg * ((float) M_PI / 180.0f);
     Matrix4f transform;
-    Matrix4f_setTransform2D(&transform, x, y, xscale * font->scaleX, yscale * font->scaleY, angleRad);
+    /* Native GXM fixed the clipped bottom scanline of battle speech by
+     * aligning pixel-font quads at integral screen origins. VitaGL must
+     * preserve the same exact sampling for nearest-neighbour font atlas:
+     * half-texel UV inset is already applied in glResolveGlyph, but a
+     * fractional matrix origin could still drop the bottom pixel row. */
+    float fontSx=xscale*font->scaleX;
+    float fontSy=yscale*font->scaleY;
+    if((font->isSpriteFont || font->antiAliasing==0) &&
+       fabsf(angleDeg)<0.001f &&
+       fabsf(fontSx-roundf(fontSx))<0.001f &&
+       fabsf(fontSy-roundf(fontSy))<0.001f){
+        x=roundf(x);
+        y=roundf(y);
+    }
+    Matrix4f_setTransform2D(&transform, x, y, fontSx, fontSy, angleRad);
 
     // Iterate through lines. HTML5 subtracts ascenderOffset from per-line y offset.
     float cursorY = valignOffset - (float) font->ascenderOffset;
@@ -4695,6 +5692,15 @@ static int32_t glCreateSpriteFromSurface(Renderer* renderer, int32_t surfaceID, 
     if (0 >= w || 0 >= h) return -1;
     if (0 > surfaceID || (uint32_t) surfaceID >= gl->surfaceCount) return -1;
     if (gl->surfaces[surfaceID] == 0) return -1;
+#ifdef PLATFORM_VITA
+    // VitaGL has no working glReadPixels path for RGBA4444 framebuffers.
+    if (vitaFcastleLargeSurfaceMode &&
+        (int64_t)gl->surfaceWidth[surfaceID] * (int64_t)gl->surfaceHeight[surfaceID] >=
+        VITA_FCASTLE_COMPACT_SURFACE_PIXELS) {
+        fprintf(stderr, "VITAGL_FCASTLE_SURFACE=snapshot_refused surface=%d\n", (int)surfaceID);
+        return -1;
+    }
+#endif
 
     // The Chapter 3 gameshow freezes the current application surface into a
     // sprite immediately before starting the battle.  A flush only submits the
@@ -4825,7 +5831,9 @@ static int32_t glGpuGetBlendMode(Renderer* renderer) {
 
 static void glGpuSetBlendMode(Renderer* renderer, int32_t mode) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
-    
+#ifdef PLATFORM_VITA
+    if (gl->currentBlendMode != mode) vitaQuadBatchFlush();
+#endif
     gl->currentBlendMode = mode;
     gl->currentSFactor = GLCommon_blendFactorFromGL(GLCommon_blendModeToSFactor(mode));
     gl->currentDFactor = GLCommon_blendFactorFromGL(GLCommon_blendModeToDFactor(mode));
@@ -4838,7 +5846,11 @@ static void glGpuSetBlendMode(Renderer* renderer, int32_t mode) {
 
 static void glGpuSetBlendModeExt(Renderer* renderer, int32_t sfactor, int32_t dfactor, int32_t sfactor_alpha, int32_t dfactor_alpha) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
-    
+#ifdef PLATFORM_VITA
+    if (gl->currentBlendMode != bm_complex || gl->currentSFactor != sfactor ||
+        gl->currentDFactor != dfactor || gl->currentSFactorAlpha != sfactor_alpha ||
+        gl->currentDFactorAlpha != dfactor_alpha) vitaQuadBatchFlush();
+#endif
     gl->currentBlendMode = bm_complex;
     gl->currentSFactor = sfactor;
     gl->currentDFactor = dfactor;
@@ -4873,6 +5885,25 @@ static void glGpuSetAlphaTestEnable(MAYBE_UNUSED Renderer* renderer, bool enable
     // shader already implements the discard through alpha_op/ALPHA_CUT_UNIF.
 #endif
     enable ? glEnable(GL_ALPHA_TEST) : glDisable(GL_ALPHA_TEST);
+}
+
+/* v0.80-49: this renderer ignored d3d_set_fog. GameMaker's fog(0,1) replaces the
+ * RGB with the fog colour and keeps the alpha. A linear ramp ending at depth 0
+ * gives the same result for these flat quads, and custom shaders stay unaffected. */
+static void glGpuSetFog(MAYBE_UNUSED Renderer* renderer, bool enable, uint32_t color) {
+    if (enable) {
+        const GLfloat fogColor[4] = {
+            (float) BGR_R(color) / 255.0f, (float) BGR_G(color) / 255.0f,
+            (float) BGR_B(color) / 255.0f, 1.0f
+        };
+        glFogfv(GL_FOG_COLOR, fogColor);
+        glFogi(GL_FOG_MODE, GL_LINEAR);
+        glFogf(GL_FOG_START, -1.0f);
+        glFogf(GL_FOG_END, 0.0f);
+        glEnable(GL_FOG);
+    } else {
+        glDisable(GL_FOG);
+    }
 }
 
 static void glGpuSetAlphaTestRef(MAYBE_UNUSED Renderer* renderer, uint8_t ref) {
@@ -4920,8 +5951,17 @@ static int32_t glLegacyCreateSurface(Renderer* renderer, int32_t width, int32_t 
     // than source art, so RGBA4444 preserves alpha while halving their VRAM.
     bool floweryStructuralSurface = vitaFloweryBattleMemoryMode &&
         VitaGpuRules_floweryStructuralSurface(width, height);
+    // obj_fusuma_render_helper creates a room-sized surface. In
+    // room_dw_fcastle_obscured_bullets the v0.80-47-ch5 log shows 60 MiB of
+    // surfaces and only 29 KiB of VitaGL VRAM free. Floor snapshots stay below
+    // this size, and glCreateSpriteFromSurface refuses compact sources.
+    bool compactLargeFcastleSurface = vitaFcastleLargeSurfaceMode &&
+        (int64_t)width * (int64_t)height >= VITA_FCASTLE_COMPACT_SURFACE_PIXELS;
     bool compactEffectSurface = (vitaFloweryBattleMemoryMode && !floweryStructuralSurface) ||
-                                vitaChapter3PerformanceSurfaceMode;
+                                vitaChapter3PerformanceSurfaceMode ||
+                                compactLargeFcastleSurface ||
+                                (vitaCh5CliffGpuReserve &&
+                                 (int32_t)surfaceIndex != renderer->runner->applicationSurfaceId);
     GLenum surfaceInternal = compactEffectSurface ? GL_RGBA4 : GL_RGBA;
     GLenum surfaceType = compactEffectSurface ?
                          GL_UNSIGNED_SHORT_4_4_4_4 : GL_UNSIGNED_BYTE;
@@ -5011,7 +6051,8 @@ static void glLegacySurfaceResize(Renderer* renderer, int32_t surfaceId, int32_t
     bool floweryStructuralSurface = vitaFloweryBattleMemoryMode &&
         VitaGpuRules_floweryStructuralSurface(width, height);
     bool compactEffectSurface = ((vitaFloweryBattleMemoryMode && !floweryStructuralSurface) ||
-                                 vitaChapter3PerformanceSurfaceMode) &&
+                                 vitaChapter3PerformanceSurfaceMode ||
+                                 vitaCh5CliffGpuReserve) &&
                                 surfaceId != renderer->runner->applicationSurfaceId;
     GLenum surfaceInternal = compactEffectSurface ? GL_RGBA4 : GL_RGBA;
     GLenum surfaceType = compactEffectSurface ?
@@ -5059,6 +6100,9 @@ static void glLegacySurfaceFree(Renderer* renderer, int32_t surfaceId) {
 
 static bool glLegacySetRenderTarget(Renderer* renderer, int32_t surfaceId, bool implicitApplicationSurface) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush();
+#endif
 
     int32_t viewCurrent = 0;
     if (renderer->runner->viewsEnabled) {
@@ -5117,6 +6161,20 @@ static bool glLegacySetRenderTarget(Renderer* renderer, int32_t surfaceId, bool 
     return true;
 }
 
+#ifdef PLATFORM_VITA
+// v0.80-49-ch3: lets a camera-sized surface receive draws in room coordinates.
+// glLegacySetRenderTarget resets the origin to 0,0 on the next target change.
+void GLLegacyRenderer_setSurfaceOrigin(Renderer* renderer, float x, float y) {
+    vitaQuadBatchFlush();
+    if (renderer->cameraCurrent != SURFACE_CAMERA) return;
+    GMLCamera* camera = &renderer->runner->surfaceCamera;
+    camera->viewX = x;
+    camera->viewY = y;
+    Runner_updateCameraViewSimple(camera);
+    glApplyProjection(renderer, &camera->viewMatrix, &camera->projectionMatrix);
+}
+#endif
+
 // Resolves a surfaceID to a GL texture and its actual texture size
 // (POT dimensions if needsPOT, logical dimensions otherwise).
 static bool resolveSurfaceTexture(GLLegacyRenderer* gl, int32_t surfaceId, GLuint* outTexId, int32_t* outTexW, int32_t* outTexH) {
@@ -5133,8 +6191,71 @@ static bool resolveSurfaceTexture(GLLegacyRenderer* gl, int32_t surfaceId, GLuin
     return true;
 }
 
-static void glLegacyDrawSurfaceTiled(MAYBE_UNUSED Renderer* renderer, MAYBE_UNUSED int32_t surfaceID, MAYBE_UNUSED float x, MAYBE_UNUSED float y, MAYBE_UNUSED float xscale, MAYBE_UNUSED float yscale, MAYBE_UNUSED float roomW, MAYBE_UNUSED float roomH, MAYBE_UNUSED uint32_t color, MAYBE_UNUSED float alpha) {
-    // No-op
+/* Share the existing, correctly mapped surface-quad path instead of
+ * allocating another GL texture or attempting to GPU-blit each tile. */
+static void glLegacyDrawSurface(Renderer* renderer, int32_t surfaceId,
+    int32_t srcLeft,int32_t srcTop,int32_t srcWidth,int32_t srcHeight,
+    float x,float y,float xscale,float yscale,float angleDeg,
+    uint32_t color,float alpha);
+
+static void glLegacyDrawSurfaceTiled(Renderer* renderer,int32_t surfaceID,
+    float x,float y,float xscale,float yscale,float roomW,float roomH,
+    uint32_t color,float alpha) {
+    GLLegacyRenderer* gl=(GLLegacyRenderer*)renderer;
+    if(!renderer||!renderer->runner||surfaceID<0||
+       (uint32_t)surfaceID>=gl->surfaceCount||
+       !gl->surfaces[surfaceID]||alpha<=0.0f||
+       !(xscale>0.0f)||!(yscale>0.0f))return;
+    const float tileW=gl->surfaceWidth[surfaceID]*xscale;
+    const float tileH=gl->surfaceHeight[surfaceID]*yscale;
+    if(!(tileW>=1.0f)||!(tileH>=1.0f))return;
+    float left=0.0f,top=0.0f,right=roomW,bottom=roomH;
+    /* Tile only the camera-visible part of the room; large Chapter 5 maps
+     * should not draw hundreds of offscreen 320x240 confetti surfaces.
+     * Render target and viewport are owned by the existing GameMaker Draw. */
+    if(renderer->runner->viewsEnabled){
+        GMLCamera*cam=Runner_getCameraById(renderer->runner,
+                                           gl->base.cameraCurrent);
+        if(cam && cam->viewWidth>0 && cam->viewHeight>0){
+            left=cam->viewX-1.0f;top=cam->viewY-1.0f;
+            right=cam->viewX+(float)cam->viewWidth+1.0f;
+            bottom=cam->viewY+(float)cam->viewHeight+1.0f;
+        }
+    }
+    if(left<0.0f)left=0.0f;
+    if(top<0.0f)top=0.0f;
+    if(right>roomW)right=roomW;
+    if(bottom>roomH)bottom=roomH;
+    if(right<=left||bottom<=top)return;
+    const int firstX=(int)floorf((left-x)/tileW);
+    const int lastX=(int)floorf((right-x-0.001f)/tileW);
+    const int firstY=(int)floorf((top-y)/tileH);
+    const int lastY=(int)floorf((bottom-y-0.001f)/tileH);
+    if(firstX>lastX||firstY>lastY)return;
+    /* A safe bound protects malformed GML room/camera parameters. */
+    if((int64_t)(lastX-firstX+1)*(int64_t)(lastY-firstY+1)>128){
+        static bool loggedLimit=false;
+        if(!loggedLimit){loggedLimit=true;
+            fprintf(stderr,"VITAGL_TILED_SURFACE=visible_tile_limit count=%lld\n",
+             (long long)(int64_t)(lastX-firstX+1)*(lastY-firstY+1));}
+        return;
+    }
+    for(int iy=firstY;iy<=lastY;iy++)
+     for(int ix=firstX;ix<=lastX;ix++)
+        glLegacyDrawSurface(renderer,surfaceID,0,0,-1,-1,
+            x+ix*tileW,y+iy*tileH,xscale,yscale,0.0f,color,alpha);
+#ifdef PLATFORM_VITA
+    extern int g_vitaActiveChapter;
+    if(g_vitaActiveChapter==5){
+        static bool festivalLogged=false;
+        if(!festivalLogged){
+            festivalLogged=true;
+            fprintf(stderr,"VITAGL_CH5_CONFETTI=surface_tiled_drawn tiles=%d size=%dx%d\n",
+               (lastX-firstX+1)*(lastY-firstY+1),
+               gl->surfaceWidth[surfaceID],gl->surfaceHeight[surfaceID]);
+        }
+    }
+#endif
 }
 
 static void glLegacyDrawSurface(Renderer* renderer, int32_t surfaceId, int32_t srcLeft, int32_t srcTop, int32_t srcWidth, int32_t srcHeight, float x, float y, float xscale, float yscale, float angleDeg, uint32_t color, float alpha) {
@@ -5142,6 +6263,9 @@ static void glLegacyDrawSurface(Renderer* renderer, int32_t surfaceId, int32_t s
     GLuint texId;
     int32_t texW, texH;
     if (!resolveSurfaceTexture(gl, surfaceId, &texId, &texW, &texH)) return;
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush();
+#endif
 
     // Use the logical surface size for the default "draw everything" case,
     // not the POT texture dimensions (texW/texH may be rounded up).
@@ -5166,6 +6290,107 @@ static void glLegacyDrawSurface(Renderer* renderer, int32_t surfaceId, int32_t s
     float r = (float) BGR_R(color) / 255.0f;
     float g = (float) BGR_G(color) / 255.0f;
     float b = (float) BGR_B(color) / 255.0f;
+
+    if (angleDeg == 0.0f &&
+        renderer->runner != nullptr && renderer->runner->currentRoom != nullptr &&
+        renderer->runner->currentRoom->name != nullptr &&
+        strcmp(renderer->runner->currentRoom->name, "room_dw_garden_floradinnencounter") == 0 &&
+        renderer->runner->vmContext != nullptr) {
+        VMContext* ctx = renderer->runner->vmContext;
+        Instance* sakura = nullptr;
+        if (ctx->currentInstance != nullptr && ctx->currentInstance->objectIndex >= 0 &&
+            (uint32_t)ctx->currentInstance->objectIndex < renderer->runner->dataWin->objt.count) {
+            const char* cname = renderer->runner->dataWin->objt.objects[ctx->currentInstance->objectIndex].name;
+            if (cname != nullptr && strcmp(cname, "obj_sakurafubuki_new") == 0)
+                sakura = ctx->currentInstance;
+        }
+        if (sakura != nullptr) {
+            int32_t surfVarId = shget(ctx->varNameMap, "surf_view1");
+            int32_t stageVarId = shget(ctx->varNameMap, "transition_stage");
+            int32_t pctVarId = shget(ctx->varNameMap, "transition_percent");
+            if (surfVarId >= 0 && RValue_toInt32(Instance_getSelfVar(sakura, surfVarId)) == surfaceId) {
+                int32_t stage = stageVarId >= 0 ? RValue_toInt32(Instance_getSelfVar(sakura, stageVarId)) : 0;
+                float pct = pctVarId >= 0 ? (float)RValue_toReal(Instance_getSelfVar(sakura, pctVarId)) : 0.0f;
+                if (stage >= 2 || pct >= 2.0f ||
+                    gl->surfaceWidth[surfaceId] != 640 || gl->surfaceHeight[surfaceId] != 480) {
+                    Instance_setSelfVar(sakura, surfVarId, RValue_makeInt32(-4));
+                    return;
+                }
+                if (stage == 1 || (pct > 0.0f && pct < 2.0f)) {
+                    // shd_petalcut clips surf_view1 along the oblique line from
+                    // lineTop=(690 - pct*640, 0) to lineBottom=(1130 - pct*640, 480).
+                    // Emitting axis-aligned 4px horizontal strips preserves both
+                    // camera culling/batching during view 1 and exact UV mapping.
+                    float topX = 690.0f - pct * 640.0f;
+                    float botX = 1130.0f - pct * 640.0f;
+                    if (topX <= 0.0f && botX <= 0.0f) return;
+                    if (topX < (float)srcWidth || botX < (float)srcWidth) {
+                        glBindTexture(GL_TEXTURE_2D, texId);
+                        glBegin(GL_QUADS);
+                        for (int32_t sy0 = 0; sy0 < srcHeight; sy0 += 4) {
+                            int32_t sy1 = sy0 + 4 > srcHeight ? srcHeight : sy0 + 4;
+                            float fy = ((float)sy0 + (float)sy1) * 0.5f / (float)srcHeight;
+                            float clipW = topX + (botX - topX) * fy;
+                            if (clipW <= 0.0f) continue;
+                            if (clipW > (float)srcWidth) clipW = (float)srcWidth;
+                            float su0 = (float)srcLeft / (float)texW;
+                            float su1 = ((float)srcLeft + clipW) / (float)texW;
+                            float sv0 = (float)(srcTop + sy0) / (float)texH;
+                            float sv1 = (float)(srcTop + sy1) / (float)texH;
+                            float lx0 = x;
+                            float lx1 = x + clipW * xscale;
+                            float ly0 = y + (float)sy0 * yscale;
+                            float ly1 = y + (float)sy1 * yscale;
+                            glColor4f(r, g, b, alpha); glTexCoord2f(su0, sv0); glVertex2f(lx0, ly0);
+                            glColor4f(r, g, b, alpha); glTexCoord2f(su1, sv0); glVertex2f(lx1, ly0);
+                            glColor4f(r, g, b, alpha); glTexCoord2f(su1, sv1); glVertex2f(lx1, ly1);
+                            glColor4f(r, g, b, alpha); glTexCoord2f(su0, sv1); glVertex2f(lx0, ly1);
+                        }
+                        glEnd();
+#if !defined(PLATFORM_VITA)
+                        int32_t petalSpriteIdx = -1;
+                        if (gl->base.dataWin != nullptr) {
+                            for (uint32_t si = 0; si < gl->base.dataWin->sprt.count; ++si) {
+                                Sprite* cand = &gl->base.dataWin->sprt.sprites[si];
+                                if (cand->present && cand->name != nullptr &&
+                                    strcmp(cand->name, "spr_spin_petal_particlefps") == 0) {
+                                    petalSpriteIdx = (int32_t)si;
+                                    break;
+                                }
+                            }
+                        }
+                        if (petalSpriteIdx >= 0) {
+                            Sprite* pspr = &gl->base.dataWin->sprt.sprites[petalSpriteIdx];
+                            int32_t pframes = pspr->textureCount > 0 ? (int32_t)pspr->textureCount : 1;
+                            uint32_t fc = (uint32_t)renderer->runner->frameCount;
+                            for (int i = 0; i < 144; ++i) {
+                                unsigned int seed = (unsigned int)((i + 64) * 2654435761u);
+                                float gy = fmodf((float)((seed >> 5) % 520u) +
+                                                 (float)fc * (3.4f + (float)(i % 5) * 0.45f), 520.0f) - 20.0f;
+                                float edgeX = topX + (botX - topX) * (gy / 480.0f);
+                                float spread = (i % 3 != 0)
+                                    ? (((float)((seed >> 13) % 56u) - 28.0f))
+                                    : (((float)((seed >> 13) % 112u) - 56.0f));
+                                float bandOffset = spread +
+                                                   sinf(((float)fc + (float)i * 7.0f) * 0.13f) * 10.0f;
+                                float gx = edgeX + bandOffset;
+                                if (gx < 8.0f || gx > 632.0f || gy < 6.0f || gy > 474.0f) continue;
+                                float pscale = 2.0f * (0.90f + 0.05f * (float)(i % 5));
+                                float pxscale = (i & 1) ? -pscale : pscale;
+                                float pangle = fmodf((float)fc * (4.0f + (float)(i % 4)) + (float)i * 23.0f, 360.0f);
+                                int psub = ((int)(fc / 4u) + i) % pframes;
+                                Renderer_drawSpriteExt(renderer, petalSpriteIdx, psub,
+                                                       x + gx * xscale, y + gy * yscale,
+                                                       pxscale, pscale, pangle, 0xFFFFFF, 0.96f);
+                            }
+                        }
+#endif
+                        return;
+                    }
+                }
+            }
+        }
+    }
 
     float angleRad = -angleDeg * ((float) M_PI / 180.0f);
     Matrix4f transform;
@@ -5209,6 +6434,70 @@ static void glLegacyDrawSurfaceColor(Renderer* renderer, int32_t surfaceId, int3
 
 static void glLegacySurfaceCopy(Renderer* renderer, int32_t destSurfaceID, int32_t destX, int32_t destY, int32_t srcSurfaceID, int32_t srcX, int32_t srcY, int32_t srcW, int32_t srcH, bool part) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
+#ifdef PLATFORM_VITA
+    /* CH5 Cliff petal-crater entrance crash, v0.80-24 dump:
+     * room_dw_cliff_netskieclimb created a 640x480 destination FBO just
+     * before a GPU fault. Original obj_cliff_crater->frontmarker.Draw
+     * calls surface_copy(surf,0,0,application_surface) during live Draw.
+     * The generic GLCommon_surfaceBlit rebinds BOTH READ and DRAW FBOs
+     * while VitaGL's asynchronous GXM list is still building the same
+     * application_surface, then leaves the READ target modified.
+     * For this exact copy, use the supported GL texture-copy path, with
+     * an explicit command fence and full GL binding restoration.
+     * This preserves the captured scenery beneath the entrance hole.
+     */
+    extern int g_vitaActiveChapter;
+    if(g_vitaActiveChapter==5 && renderer->runner &&
+       renderer->runner->currentRoom && renderer->runner->currentRoom->name &&
+       strcmp(renderer->runner->currentRoom->name,"room_dw_cliff_netskieclimb")==0 &&
+       !part && srcSurfaceID==renderer->runner->applicationSurfaceId &&
+       destSurfaceID>=0 && srcSurfaceID>=0 &&
+       (uint32_t)destSurfaceID<gl->surfaceCount &&
+       (uint32_t)srcSurfaceID<gl->surfaceCount &&
+       destSurfaceID!=srcSurfaceID &&
+       gl->surfaces[destSurfaceID] && gl->surfaces[srcSurfaceID] &&
+       gl->surfaceTexture[destSurfaceID] &&
+       gl->surfaceWidth[srcSurfaceID]>0 && gl->surfaceHeight[srcSurfaceID]>0 &&
+       gl->surfaceWidth[destSurfaceID]>=gl->surfaceWidth[srcSurfaceID] &&
+       gl->surfaceHeight[destSurfaceID]>=gl->surfaceHeight[srcSurfaceID]){
+        static uint32_t lastCraterSnapshotFrame=UINT32_MAX;
+        static int32_t lastCraterSnapshotSurface=-1;
+        uint32_t frame=renderer->runner->frameCount;
+        /* The original script may recapture each Draw. At 60 FPS this
+         * alternated FBOs hundreds of times during the cutscene. The
+         * snapshot is decorative; 15 FPS recapture is visually adequate,
+         * while script timing, particles and room_goto remain untouched. */
+        if(lastCraterSnapshotSurface==destSurfaceID &&
+           lastCraterSnapshotFrame!=UINT32_MAX &&
+           frame>=lastCraterSnapshotFrame &&
+           frame-lastCraterSnapshotFrame<4U)return;
+        lastCraterSnapshotSurface=destSurfaceID;
+        lastCraterSnapshotFrame=frame;
+        GLint prevFramebuffer=0,prevTexture=0,prevActiveTexture=GL_TEXTURE0;
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING,&prevFramebuffer);
+        glGetIntegerv(GL_ACTIVE_TEXTURE,&prevActiveTexture);
+        glActiveTexture(GL_TEXTURE0);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D,&prevTexture);
+        glFinish(); /* finish queued source-frame rendering BEFORE copy */
+        glBindFramebuffer(GL_FRAMEBUFFER,gl->surfaces[srcSurfaceID]);
+        glBindTexture(GL_TEXTURE_2D,gl->surfaceTexture[destSurfaceID]);
+        glCopyTexSubImage2D(GL_TEXTURE_2D,0,destX,destY,
+                            0,0,gl->surfaceWidth[srcSurfaceID],
+                            gl->surfaceHeight[srcSurfaceID]);
+        GLenum copyErr=glGetError();
+        glBindTexture(GL_TEXTURE_2D,(GLuint)prevTexture);
+        glActiveTexture((GLenum)prevActiveTexture);
+        glBindFramebuffer(GL_FRAMEBUFFER,(GLuint)prevFramebuffer);
+        static unsigned samples=0;
+        if(samples++<12u)
+            fprintf(stderr,
+              "VITAGL_CH5_CRATER=safe_snapshot frame=%u dst=%d src=%d size=%dx%d err=0x%x\n",
+              frame,destSurfaceID,srcSurfaceID,
+              gl->surfaceWidth[srcSurfaceID],
+              gl->surfaceHeight[srcSurfaceID],copyErr);
+        return;
+    }
+#endif
     GLCommon_surfaceBlit(gl->surfaces, gl->surfaceWidth, gl->surfaceHeight, gl->surfaceCount, destSurfaceID, destX, destY, srcSurfaceID, srcX, srcY, srcW, srcH, part);
 }
 
@@ -5298,6 +6587,126 @@ static bool glTextureGetUVs(Renderer* renderer, uint32_t texHandle, float* outUV
     return true;
 }
 
+#ifdef PLATFORM_VITA
+// shd_pal_swapper replaces a palette colour by searching the palette's first
+// column for the pixel's colour. The original search reads the palette texture
+// in a per-pixel loop. Atlases are RGBA4444 on Vita, so a pixel can only have
+// 4096 colours: build that search once on the CPU into a 64x64 table per
+// palette, and the shader needs a fixed number of texture reads per pixel.
+#define VITA_PALETTE_LUT_SIZE 64
+#define VITA_PALETTE_LUT_SLOTS 48
+typedef struct {
+    int32_t tpagIndex;
+    GLuint texture;
+    uint32_t lastUsed;
+} VitaPaletteLut;
+static VitaPaletteLut vitaPaletteLuts[VITA_PALETTE_LUT_SLOTS];
+static uint32_t vitaPaletteLutClock = 0;
+static GLuint vitaPaletteEmptyLut = 0;
+
+static GLuint vitaPaletteUploadLut(GLuint texture, const uint8_t* rgba) {
+    if (texture == 0) glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, VITA_PALETTE_LUT_SIZE, VITA_PALETTE_LUT_SIZE, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return texture;
+}
+
+// The palette page must be bound on the active unit. Returns false when its
+// pixels cannot be read as RGBA4444; the pixels then keep their own colours.
+static bool vitaPaletteFillLut(const TexturePageItem* tpag, uint8_t* rgba) {
+    SceGxmTexture* gxmTexture = vglGetGxmTexture(GL_TEXTURE_2D);
+    const uint8_t* data = (const uint8_t*)vglGetTexDataPointer(GL_TEXTURE_2D);
+    if (gxmTexture == nullptr || data == nullptr) return false;
+    if (sceGxmTextureGetType(gxmTexture) != SCE_GXM_TEXTURE_LINEAR ||
+        sceGxmTextureGetFormat(gxmTexture) != SCE_GXM_TEXTURE_FORMAT_U4U4U4U4_RGBA)
+        return false;
+    uint32_t stride = sceGxmTextureGetStride(gxmTexture);
+    uint32_t height = sceGxmTextureGetHeight(gxmTexture);
+    uint32_t rows = tpag->sourceHeight < 256U ? tpag->sourceHeight : 256U;
+    if (stride == 0 || (uint32_t)tpag->sourceY + rows > height) return false;
+    // A freshly loaded page can still be in a queued GPU transfer.
+    glFinish();
+    for (uint32_t row = 0; row < rows; ++row) {
+        const uint8_t* texel = data + ((uint32_t)tpag->sourceY + row) * stride +
+                               (uint32_t)tpag->sourceX * 2U;
+        uint16_t key = (uint16_t)(texel[0] | ((uint16_t)texel[1] << 8));
+        if ((key & 0xFU) != 0xFU) continue; // Only opaque keys, as the shader requires.
+        uint32_t r = (key >> 12) & 0xFU, g = (key >> 8) & 0xFU, b = (key >> 4) & 0xFU;
+        uint32_t x = r + 16U * (g & 3U);
+        uint32_t y = (g >> 2) + 4U * b;
+        uint8_t* entry = &rgba[(y * VITA_PALETTE_LUT_SIZE + x) * 4U];
+        if (entry[3] != 0) continue; // The original search stops at the first match.
+        entry[0] = (uint8_t)row;
+        entry[3] = 255;
+    }
+    return true;
+}
+
+static GLuint vitaPaletteLutFor(GLLegacyRenderer* gl, const TexturePageItem* tpag, int32_t lutUnit) {
+    int32_t tpagIndex = (int32_t)(tpag - gl->base.dataWin->tpag.items);
+    VitaPaletteLut* slot = &vitaPaletteLuts[0];
+    for (int i = 0; i < VITA_PALETTE_LUT_SLOTS; ++i) {
+        VitaPaletteLut* candidate = &vitaPaletteLuts[i];
+        if (candidate->texture != 0 && candidate->tpagIndex == tpagIndex) {
+            candidate->lastUsed = ++vitaPaletteLutClock;
+            return candidate->texture;
+        }
+        if (candidate->lastUsed < slot->lastUsed) slot = candidate;
+    }
+    uint8_t* rgba = (uint8_t*)calloc(VITA_PALETTE_LUT_SIZE * VITA_PALETTE_LUT_SIZE, 4U);
+    if (rgba == nullptr) return 0;
+    bool filled = vitaPaletteFillLut(tpag, rgba);
+    fprintf(stderr, "VITAGL_PALETTE_LUT=%s tpag=%d rows=%u\n", filled ? "built" : "unreadable",
+            (int)tpagIndex, (unsigned int)tpag->sourceHeight);
+    // Replacing a table a queued draw may still sample needs the same fence.
+    if (slot->texture != 0) glFinish();
+    // Uploading binds the table, so leave the palette's own unit untouched.
+    glActiveTexture(GL_TEXTURE0 + lutUnit);
+    slot->texture = vitaPaletteUploadLut(slot->texture, rgba);
+    slot->tpagIndex = tpagIndex;
+    slot->lastUsed = ++vitaPaletteLutClock;
+    free(rgba);
+    return slot->texture;
+}
+
+// Called with the palette's unit active and the palette page bound on it.
+static void vitaPaletteBindLookup(GLLegacyRenderer* gl, int32_t slot,
+                                  const TexturePageItem* tpag, uint32_t texHandle) {
+    (void)texHandle;
+    Renderer* renderer = &gl->base;
+    int32_t shader = renderer->currentShader;
+    if (shader < 0 || (uint32_t)shader >= gl->base.dataWin->shdr.count ||
+        gl->shaderPrograms == nullptr || gl->shaderPrograms[shader] == 0) return;
+    const char* name = gl->base.dataWin->shdr.shaders[shader].name;
+    if (name == nullptr || strcmp(name, "shd_pal_swapper") != 0) return;
+    GLint location = glGetUniformLocation(gl->shaderPrograms[shader], "u_palLut");
+    if (location < 0) return;
+
+    // Sampler stages come from uniform locations, so avoid the palette's unit.
+    int32_t lutUnit = slot == 7 ? 6 : 7;
+    GLuint lut = tpag != nullptr ? vitaPaletteLutFor(gl, tpag, lutUnit) : 0;
+    glActiveTexture(GL_TEXTURE0 + lutUnit);
+    if (lut == 0) {
+        // Surface palettes and failures: an empty table keeps the pixel's colour.
+        if (vitaPaletteEmptyLut == 0) {
+            uint8_t* rgba = (uint8_t*)calloc(VITA_PALETTE_LUT_SIZE * VITA_PALETTE_LUT_SIZE, 4U);
+            if (rgba == nullptr) return;
+            vitaPaletteEmptyLut = vitaPaletteUploadLut(0, rgba);
+            free(rgba);
+        }
+        lut = vitaPaletteEmptyLut;
+    }
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, lut);
+    glUniform1i(location, lutUnit);
+}
+#endif
+
 // Bind a texture into the stage returned by glShaderGetSamplerIndex.
 static void glTextureSetStage(Renderer* renderer, int32_t slot, uint32_t texHandle) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
@@ -5323,6 +6732,9 @@ static void glTextureSetStage(Renderer* renderer, int32_t slot, uint32_t texHand
         glBindTexture(GL_TEXTURE_2D, 0);
         glDisable(GL_TEXTURE_2D);
     }
+#ifdef PLATFORM_VITA
+    vitaPaletteBindLookup(gl, slot, tpag, texHandle);
+#endif
     glActiveTexture(GL_TEXTURE0);        // restore unit 0 for the fixed pipeline
 }
 
@@ -5624,12 +7036,14 @@ static void glCompileAllShaders(GLLegacyRenderer* gl) {
             "uniform mat4 u_vitaMVP; varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
             "void main(){ gl_Position=u_vitaMVP*vec4(in_Position,1.0); v_vColour=in_Colour; v_vTexcoord=in_TextureCoord; }\n";
         static const char* paletteFragmentVita =
-            "precision mediump float; uniform sampler2D gm_BaseTexture; uniform sampler2D u_palTexture; uniform vec4 u_Uvs; uniform float u_paletteId; uniform vec2 u_pixelSize;\n"
+            "precision mediump float; uniform sampler2D gm_BaseTexture; uniform sampler2D u_palTexture; uniform sampler2D u_palLut; uniform vec4 u_Uvs; uniform float u_paletteId; uniform vec2 u_pixelSize;\n"
             "varying vec2 v_vTexcoord; varying vec4 v_vColour;\n"
             "void main(){ vec4 src=texture2D(gm_BaseTexture,v_vTexcoord); if(src.a<=0.0){ gl_FragColor=vec4(0.0); return; } vec4 outc=src;"
-            "for(int i=0;i<256;i++){ vec2 p=u_Uvs.xy+vec2(0.0,float(i)*u_pixelSize.y); if(p.y>=u_Uvs.w)break; vec4 key=texture2D(u_palTexture,p);"
-            "if(distance(key,src)<=0.004){ float col=floor(u_paletteId+1.0); vec2 q=vec2(u_Uvs.x+u_pixelSize.x*col,p.y);"
-            "outc=mix(texture2D(u_palTexture,q-vec2(u_pixelSize.x,0.0)),texture2D(u_palTexture,q),fract(u_paletteId)); break; }}"
+            // At most four texture reads per pixel; see vitaPaletteFillLut.
+            "if(src.a>0.96){ vec3 n=floor(src.rgb*15.0+0.5);"
+            "vec4 e=texture2D(u_palLut,vec2((n.r+16.0*mod(n.g,4.0)+0.5)/64.0,(floor(n.g/4.0)+4.0*n.b+0.5)/64.0));"
+            "if(e.a>0.5){ float col=floor(u_paletteId+1.0); vec2 q=vec2(u_Uvs.x+u_pixelSize.x*col,u_Uvs.y+floor(e.r*255.0+0.5)*u_pixelSize.y);"
+            "outc=mix(texture2D(u_palTexture,q-vec2(u_pixelSize.x,0.0)),texture2D(u_palTexture,q),fract(u_paletteId)); }}"
             "gl_FragColor=v_vColour*outc; }\n";
         // Common 2D GameMaker vertex contract.  v_vPosition is required by the
         // Chapter 4 prophecy shaders and harmless when a fragment does not use
@@ -5793,6 +7207,26 @@ uint32_t GLLegacyRenderer_prepareShaders(GLLegacyRenderer* gl, VitaShaderPrepare
 
 static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex) {
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
+    const bool validShader = shaderIndex >= 0 &&
+        (uint32_t)shaderIndex < gl->base.dataWin->shdr.count;
+    if (validShader && gl->base.dataWin->shdr.shaders[shaderIndex].name != NULL &&
+        strcmp(gl->base.dataWin->shdr.shaders[shaderIndex].name, "shd_petalcut") == 0) {
+        // shd_petalcut is executed as a diagonal surface clip when surf_view1 is
+        // composited in glLegacyDrawSurface. Keeping currentShader = -1 during
+        // view 1 preserves frustum culling and quad batching across the room.
+#ifdef PLATFORM_VITA
+        extern int g_vitaShadersEnabled;
+        if (g_vitaShadersEnabled &&
+            GLLegacyRenderer_experimentalShadersEnabled(gl) &&
+            gl->shaderAttempted != NULL && !gl->shaderAttempted[shaderIndex]) {
+            gl->shaderAttempted[shaderIndex] = true;
+            vitaLogExperimentalShader(gl, "adapted", (uint32_t)shaderIndex, "surface_diagonal_clip");
+        }
+#endif
+        renderer->currentShader = -1;
+        glUseProgram(0);
+        return;
+    }
 #ifdef PLATFORM_VITA
     extern int g_vitaShadersEnabled;
     if (!g_vitaShadersEnabled) {
@@ -5804,8 +7238,6 @@ static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex)
     // visible loading pass gets a chance to prepare programs.  Compile the
     // audited set on that first request so those handles never become a
     // permanent -1 for the remainder of the chapter.
-    const bool validShader = shaderIndex >= 0 &&
-        (uint32_t)shaderIndex < gl->base.dataWin->shdr.count;
     const bool compactSupported = validShader &&
         legacyCompactShaderSupported(gl->base.dataWin->shdr.shaders[shaderIndex].name);
     if (validShader && GLLegacyRenderer_experimentalShadersEnabled(gl) &&
@@ -5874,10 +7306,16 @@ static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex)
     const char* activeRoomName = gl->base.runner != nullptr &&
         gl->base.runner->currentRoom != nullptr ? gl->base.runner->currentRoom->name : nullptr;
     extern int g_vitaActiveChapter;
+    // v0.80-47-ch5b: the room fallback that stopped the GPU crashes (hardware
+    // test, v0.80-47-ch5) is replaced by the constant-cost lookup shader. Set this
+    // to 1 to restore it if the crash returns with the new shader.
+#define VITA_PALETTE_ROOM_FALLBACK 0
+#if VITA_PALETTE_ROOM_FALLBACK
     if (g_vitaActiveChapter == 5 && activeShaderName != nullptr && activeRoomName != nullptr &&
         strcmp(activeShaderName, "shd_pal_swapper") == 0 &&
         (strncmp(activeRoomName, "room_dw_castle_", sizeof("room_dw_castle_") - 1) == 0 ||
-         strncmp(activeRoomName, "room_dw_ralsei_castle_", sizeof("room_dw_ralsei_castle_") - 1) == 0)) {
+         strncmp(activeRoomName, "room_dw_ralsei_castle_", sizeof("room_dw_ralsei_castle_") - 1) == 0 ||
+         strncmp(activeRoomName, "room_dw_fcastle_", sizeof("room_dw_fcastle_") - 1) == 0)) {
         vitaCustomShaderActive = false;
         glUseProgram(0);
         if (!castlePaletteFallbackLogged) {
@@ -5887,6 +7325,11 @@ static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex)
         }
         return;
     }
+#else
+    (void)activeShaderName;
+    (void)activeRoomName;
+    (void)castlePaletteFallbackLogged;
+#endif
 #endif
 
     GLuint program = gl->shaderPrograms[shaderIndex];
@@ -6112,6 +7555,7 @@ Renderer* GLLegacyRenderer_create(void) {
     glVtable.gpuSetBlendMode = glGpuSetBlendMode;
     glVtable.gpuSetBlendModeExt = glGpuSetBlendModeExt;
     glVtable.gpuSetBlendEnable = glGpuSetBlendEnable;
+    glVtable.gpuSetFog = glGpuSetFog;
     glVtable.gpuSetAlphaTestEnable = glGpuSetAlphaTestEnable;
     glVtable.gpuSetAlphaTestRef = glGpuSetAlphaTestRef;
     glVtable.gpuSetColorWriteEnable = glGpuSetColorWriteEnable;

@@ -12,13 +12,16 @@ void LauncherUi_draw(VitaBackend selected, uint32_t countdownSeconds,
     psvDebugScreenPrintf("\e[2J\e[1;1H");
     psvDebugScreenPrintf("\n\n        DELTARUNE VITA - RENDERIZADOR\n");
     psvDebugScreenPrintf("        ==============================\n\n");
-    psvDebugScreenPrintf("   %s VitaGL - Estavel\n\n",
+    psvDebugScreenPrintf("   %s VitaGL - Compatibilidade (atualizacoes pausadas)\n\n",
                          selected == VITA_BACKEND_VITAGL ? ">" : " ");
-    psvDebugScreenPrintf("   %s Native-GXM - Experimental\n\n",
+    psvDebugScreenPrintf("   %s Native-GXM - Padrao v0.80\n\n",
                          selected == VITA_BACKEND_GXM ? ">" : " ");
     if (previousGxmFailure)
-        psvDebugScreenPrintf("   O Native-GXM nao concluiu a abertura anterior.\n"
-                             "   VitaGL e recomendado para recuperar o jogo.\n\n");
+        psvDebugScreenPrintf("   O GXM nao concluiu a abertura anterior.\n"
+                             "   X para tentar GXM de novo; O para VitaGL.\n\n");
+    if (selected == VITA_BACKEND_VITAGL)
+        psvDebugScreenPrintf("   AVISO: Melhorias v0.80 priorizam Native GXM.\n"
+                             "   VitaGL mantido como alternativa; evolucao pausada.\n\n");
     if (status != 0 && status[0] != '\0')
         psvDebugScreenPrintf("   %s\n\n", status);
     if (countdownHeld)

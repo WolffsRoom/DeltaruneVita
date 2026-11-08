@@ -20,7 +20,12 @@ static RValue builtin_draw_primitive_begin(MAYBE_UNUSED VMContext* ctx, RValue* 
     if (runner->renderer == nullptr) return RValue_makeUndefined();
 
     int32_t primitiveType = RValue_toInt32(args[0]);
-    Renderer_primitiveBegin(runner->renderer, primitiveType);
+    /* GameMaker's pr_pointlist..pr_trianglefan constants are 1..6.
+     * Renderer.h's PRIMITIVE_POINTS..FAN are 0..5. Vertex_submit_ext
+     * already subtracts one; the immediate draw path (used by Knight's
+     * cone attack) must apply the same mapping. */
+    if(primitiveType<1 || primitiveType>6)return RValue_makeUndefined();
+    Renderer_primitiveBegin(runner->renderer, primitiveType-1);
     return RValue_makeUndefined();
 }
 
@@ -35,7 +40,8 @@ static RValue builtin_draw_primitive_begin_texture(MAYBE_UNUSED VMContext* ctx, 
 
     int32_t primitiveType = RValue_toInt32(args[0]);
     int32_t textureId = RValue_toInt32(args[1]);
-    Renderer_primitiveBeginTexture(runner->renderer, primitiveType, textureId);
+    if(primitiveType<1 || primitiveType>6)return RValue_makeUndefined();
+    Renderer_primitiveBeginTexture(runner->renderer, primitiveType-1, textureId);
     return RValue_makeUndefined();
 }
 

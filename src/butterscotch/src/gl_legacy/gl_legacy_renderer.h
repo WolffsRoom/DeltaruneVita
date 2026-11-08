@@ -10,7 +10,8 @@
 #elif defined(PLATFORM_VITA)
 #include <vitaGL.h>
 // Vita GPU Texture cache configurations
-#define VITA_CPU_TEXTURE_CACHE_SLOTS 1
+// Only the first slot is used outside the Chapter 5 Flowery battle.
+#define VITA_CPU_TEXTURE_CACHE_SLOTS 8
 #define VITA_RETIRED_TEXTURE_SLOTS 16
 #else
 #include <glad/glad.h>

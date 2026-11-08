@@ -7,13 +7,24 @@ trophies = (root / "src/vita-probe/source/vita_trophies.c").read_text(encoding="
 legacy = (root / "src/butterscotch/src/gl_legacy/gl_legacy_renderer.c").read_text(encoding="utf-8")
 
 early = main.split("bool nativeTrophies = VitaTrophies_init();", 1)[0]
-assert "CHAPTER_LOADING=visible phase=pre_trophies_datawin" in early
+assert ("CHAPTER_LOADING=visible phase=pre_trophies_datawin" in early or
+        "CHAPTER_LOADING=unified_begin phase=pre_trophies_datawin" in early)
 assert "loading_screen_init();" in early
 assert "LOADING_LABEL_LOADING_TEXTURES" in early
 
 progress = main.split("static void progress", 1)[1].split("static void draw_loading_screen", 1)[0]
-assert "loading_overlay_current = index + 1" in progress
-assert "loading_overlay_total = total" in progress
+assert ("loading_overlay_current = index + 1" in progress or
+        "loading_overlay_current=index+1" in progress)
+assert ("loading_overlay_total = total" in progress or
+        "loading_overlay_total=total" in progress)
+# v0.80-29 retains a monotonic ratio for the car, but shows the actual
+# stage-specific N / 31 chunks, N / shader count or N / texture count.
+assert "completed*12u/count" in progress
+assert "loading_overlay_total=100" in progress
+assert "loading_overlay_current=percent" in progress
+assert "loading_overlay_total=count" not in progress
+assert "LOADING_LABEL_UPDATING_GAME_FILES" in progress
+assert "loading_overlay_ratio=(float)percent/100.0f" in progress
 assert "draw_loading_screen(true" in progress
 
 assert "VitaProbe_pumpLoadingScreen();" in trophies

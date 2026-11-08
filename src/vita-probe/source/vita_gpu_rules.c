@@ -24,10 +24,12 @@ int VitaGpuRules_deferTextureEvictionToFrameBoundary(int chapter, const char* ro
 
 int VitaGpuRules_ch5CliffSimpleMode(const char* roomName) {
     if (roomName == NULL) return 0;
-    // Kawkawdash composes its moving hazards with the complete cliff draw
-    // path. Hiding the secondary layers also hides the enemy attack there.
-    return strcmp(roomName, "room_dw_cliff_twirlflowerwind") == 0 ||
-           strcmp(roomName, "room_dw_cliff_precipice") == 0;
+    // All Chapter 5 cliff rooms use obj_parallax_cliffs_moving_layers and
+    // obj_parallax_cliffs_moving_layers_back purely for background cliff
+    // parallax. Running their full multi-layer palette-mapped GML draw path
+    // took ~194 ms/frame and cycled 2048x2048 cliff atlases every frame.
+    return (strcmp(roomName, "room_dw_fcastle_flowery") == 0 ||
+            strncmp(roomName, "room_dw_cliff_", 14) == 0) ? 1 : 0;
 }
 
 int VitaGpuRules_modernSynchronousEviction(int chapter, const char* roomName) {

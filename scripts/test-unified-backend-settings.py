@@ -18,18 +18,24 @@ for source in (header, vitagl, gxm):
 for source in (vitagl, gxm):
     assert "VITA_BACKEND_PREFERENCE_PATH" in source
     assert "VitaBackendSelection_save" in source
-    assert '"Graphics API"' in source
-    assert '"VitaGL"' in source
-    assert '"Native-GXM"' in source
+    assert "graphicsBackend" in source
+assert "VITA_RENDERER_EXPERIMENTAL" in vitagl
+assert '"VitaGL"' in gxm and '"Native-GXM"' in gxm
+assert 'VITA_BACKEND_VITAGL' in vitagl
+assert '"Graphics API"' in vitagl  # explicit GXM choice restored in Game Settings
+assert '"Graphics API"' in gxm
+assert 'LauncherUi_draw' not in launcher   # only boot selector removed
 
 assert "VITA_LAUNCHER_COUNTDOWN_US" not in launcher
-assert "countdownHeld" in launcher  # L+R remains a recovery selector.
+assert "VITA_BACKEND_VITAGL" in launcher
+assert "LauncherUi_draw" not in launcher
+assert "VITA_BACKEND_GXM_BOOT_MARKER" not in launcher
 
 assert "layout=0;" in rgba
 assert "g_vitaActiveChapter==0" not in rgba
 
 assert "native_first_load_video_play" in gxm_main
-assert 'VitaVideo_open("app0:first_load.mp4")' in gxm_main
+assert 'VitaVideo_open("app0:assets/vid/first_load.mp4")' in gxm_main
 assert "VitaVideo_image()" in gxm_main
 assert "gxmSwapBuffer()" in gxm_main
 

@@ -14,8 +14,10 @@ static bool valueEquals(const char* value, const char* expected) {
 }
 
 VitaBackend VitaBackendSelection_parse(const char* value) {
-    return valueEquals(value, "gxm") ? VITA_BACKEND_GXM :
-                                      VITA_BACKEND_VITAGL;
+    /* Missing/invalid preference -> VitaGL. Explicit GXM selection from
+     * Game Settings survives reboot and skips the launch selector entirely. */
+    return valueEquals(value,"gxm") ? VITA_BACKEND_GXM :
+                                     VITA_BACKEND_VITAGL;
 }
 
 const char* VitaBackendSelection_name(VitaBackend backend) {

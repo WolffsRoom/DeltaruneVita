@@ -4,7 +4,7 @@ root = Path(__file__).resolve().parents[1]
 renderer = (root / "src/butterscotch/src/gl/gl_renderer.c").read_text(encoding="utf-8")
 runner = (root / "src/butterscotch/src/runner.c").read_text(encoding="utf-8")
 
-assert 'strncmp(sprite->name, "spr_blocktree_", 14) != 0' in renderer, (
+assert 'strncmp(sprite->name, "spr_blocktree_", 14) == 0' in renderer, (
     "Modern BC3 policy must keep animated blocktree component pages lossless"
 )
 assert 'strcmp(objectName, "obj_castlereflect_manager") == 0' in runner, (

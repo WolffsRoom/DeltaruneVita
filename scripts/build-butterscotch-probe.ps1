@@ -47,7 +47,7 @@ if (-not (Test-Path -LiteralPath $chapter0Data)) { throw "Chapter 0 ausente: $ch
 if (-not (Test-Path -LiteralPath $umtCli)) { throw "UndertaleModCli ausente: $umtCli" }
 if (-not (Test-Path -LiteralPath $chapter0VersionScript)) { throw "Script de versao ausente: $chapter0VersionScript" }
 Remove-Item -LiteralPath $chapter0Versioned -Force -ErrorAction SilentlyContinue
-& $umtCli load $chapter0Data -s $chapter0VersionScript -o $chapter0Versioned
+"" | & $umtCli load $chapter0Data -s $chapter0VersionScript -o $chapter0Versioned
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $chapter0Versioned)) {
     throw 'Falha ao sincronizar a versao do Chapter 0.'
 }
@@ -66,7 +66,20 @@ $builtVpk = Join-Path $project 'build-vita\Deltarune.vpk'
 # Write-Host "Limpando NP_COMMUNICATION_ID do VPK..."
 # python (Join-Path $rootPath 'scripts\remove_np_comm.py') $builtVpk
 
-Copy-Item -Force $builtVpk $output
+# A arvore CMake ainda contem LiveArea/assets legados. Preserve a composicao
+# validada da linha v0.80 (v0.80-59, ou no minimo v0.80-53) e instale somente
+# os runners que acabaram de ser compilados e o identificador da nova versao.
+$packageBases = @(
+    (Join-Path $rootPath 'artifacts\current\Old Brothers\Deltarune-v0.80-59.vpk'),
+    (Join-Path $rootPath 'artifacts\current\Old Brothers\Deltarune-v0.80-53.vpk')
+)
+$packageBase = $packageBases | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $packageBase) {
+    throw 'VPK-base ausente: esperado Deltarune-v0.80-59.vpk ou Deltarune-v0.80-53.vpk em artifacts/current/Old Brothers.'
+}
+$rebaseScript = Join-Path $rootPath 'scripts\rebase-vpk-on-v080.py'
+& python $rebaseScript --base $packageBase --compiled $builtVpk --output $output --version "v$baseVersion"
+if ($LASTEXITCODE -ne 0) { throw "Falha ao remontar o VPK sobre $packageBase." }
 
 # Backup automatizado numerado dos arquivos do projeto
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'

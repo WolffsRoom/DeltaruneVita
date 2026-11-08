@@ -30,6 +30,7 @@ typedef struct {
     bool widescreenEnabled;
     int consoleBorderMode; // 0 = off, 1 = dynamic artwork, 2 = simple white frame
     bool betterBordersEnabled;
+    bool animatedBordersEnabled;
     bool adjustMode;
     bool restartOnClose;
     bool returnToChapterSelect;
@@ -39,12 +40,16 @@ typedef struct {
     int sfxVolume;
     int masterVolume;
     bool audioDisabled;
+    bool microphoneEnabled; /* Vita internal microphone, optional */
+    int microphoneSensitivity; /* 1-10, default 5 (100%) */
+    int mikeMouseSensitivity; /* 1-10 (20-200%), default 5 */
     bool devMode;
     bool showSettings;
+    bool prologuePending; // config.ini: prologue='s' (first launch) / prologue='n' (completed)
     bool vsyncEnabled;
     int fpsTargetMode; // 0 = 30 FPS, 1 = 40 FPS, 2 = 60 FPS, 3 = Unlock
-    // 0 none, 1 scanlines, 2 sharp bilinear, 3 CRT curvature,
-    // 0 none, 1 scanlines, 2 sharp bilinear, 3 dithering, 4 VHS. All apply live.
+    // 0 none, 1 CRT soft, 2 sharp bilinear, 3 dithering, 4 VHS,
+    // 5 CRT medium, 6 CRT advanced. All apply live.
     int screenFilterMode;
     int textureFormatProfile; // 0 = Otimizado (RGBA4444 + BC3 2048x2048), 1 = Nativo (RGBA4444), 2 = Low (BC3)
     bool pvrEnabled;
@@ -53,10 +58,15 @@ typedef struct {
     int graphicsBackend; // VitaBackend: 0 = VitaGL, 1 = Native-GXM
     bool modernGlEnabled;
     bool shadersEnabled;
+    bool asyncRoomPrefetchEnabled;       // config.ini: gxm_async_room_prefetch=1, default enabled
+    bool pendingAsyncRoomPrefetchEnabled;
     bool debugDevEnabled;
     bool debugDevChanged;
     bool debugCollisionMasks;
     bool devRoomNavEnabled;
+    bool devRoomNavCollapsed; /* R toggles a small current-room HUD. */
+    bool collisionPreviewActive; /* front touch held on scene object */
+    float collisionPreviewX, collisionPreviewY;
     bool shortcutSkipDialogs;
     int brightness;
     bool pendingPvrEnabled;
@@ -131,15 +141,27 @@ void VitaSettings_updateTrophies(VitaSettings* settings);
 uint32_t VitaSettings_syncGameTrophies(VitaSettings* settings, const bool unlocked[30]);
 void VitaSettings_drawTrophyNotification(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_setNativeTrophiesActive(VitaSettings* settings, bool active);
+/* Standalone Chapter 0 prologue: save locale immediately without a game restart. */
+bool VitaSettings_selectIntroLanguage(VitaSettings* settings,const char* modName);
+/* Native GXM: persist one-time prologue completion to shared config.ini. */
+void VitaSettings_markPrologueComplete(VitaSettings* settings);
 void VitaSettings_drawBrightness(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_drawTouchControls(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_drawCalibration(VitaSettings* settings, Renderer* renderer);
+void VitaSettings_drawCollisionTouchPreview(VitaSettings* settings, Renderer* renderer);
 void VitaSettings_drawDevOverlay(VitaSettings* settings, Renderer* renderer,
                                  const char* room, float fps, uint64_t stepUs,
                                  uint64_t audioUs, uint64_t renderUs,
                                  uint64_t gpuBytes, uint32_t evictions,
                                  uint32_t deferred, uint32_t ramHits,
                                  const char* devTargetRoom, int32_t devTargetIndex);
+/* Native-GXM DEV Quick Tests: five resolved destinations; never hardcode
+ * room indices because chapter mods use different data.win tables. */
+void VitaSettings_drawDevNavigatorHint(VitaSettings* settings,Renderer* renderer,
+                                        const char* currentRoomName);
+void VitaSettings_drawDevQuickScenes(VitaSettings* settings,Renderer* renderer,
+    int chapter,int selected,const char*const labels[5],
+    const int targets[5],const char*const rooms[5],const char* status);
 void VitaSettings_setTouchVisuals(VitaSettings* settings, float stickX, float stickY,
                                   bool confirm, bool cancel, bool menu);
 void VitaSettings_setLauncherMode(bool launcherMode);

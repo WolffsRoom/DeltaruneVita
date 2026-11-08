@@ -6,9 +6,12 @@
 
 // Apply optional creation overrides after Variable Definitions, before Create.
 void VMBuiltins_applyCreationVariables(VMContext* ctx, Instance* target, Instance* variables);
+bool VMBuiltins_tryGrassStripDraw(VMContext* ctx, Instance* target, int32_t codeId);
+bool VMBuiltins_tryBluePlatformDraw(VMContext* ctx, Instance* target, int32_t codeId);
 bool VMBuiltins_tryGardenLightDraw(VMContext* ctx, Instance* target, int32_t codeId);
 bool VMBuiltins_tryCullTVPanel(VMContext* ctx, Instance* target, int32_t codeId);
 bool VMBuiltins_tryManeDraw(VMContext* ctx, Instance* target, int32_t codeId);
+bool VMBuiltins_tryFloortexDraw(VMContext* ctx, Instance* target, int32_t codeId);
 
 // ===[ Built-in Variable ID Enum ]===
 typedef enum {
@@ -287,5 +290,8 @@ const char* VMBuiltins_getShapePuzzleDiagnostic(void);
 // Writes and clears shader API activity accumulated since the previous call.
 // Returns false when no shader-related GML call occurred.
 bool VMBuiltins_takeShaderDiagnostic(char* output, size_t outputSize);
+
+void VMBuiltins_setShader(VMContext* ctx, int32_t shaderIndex);
+void VMBuiltins_resetShader(VMContext* ctx);
 
 #endif /* _BS_VM_BUILTINS_H_ */

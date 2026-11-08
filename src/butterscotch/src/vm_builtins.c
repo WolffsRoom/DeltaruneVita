@@ -38,6 +38,7 @@
 extern int g_vitaActiveChapter;
 #endif
 #ifdef PLATFORM_VITA
+#include <psp2/io/stat.h>
 #include "audio/openal/al_audio_system.h"
 #include "vita_gpu_rules.h"
 extern int g_vitaActiveChapter;
@@ -4252,15 +4253,56 @@ static RValue builtin_video_close(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RVal
     return RValue_makeUndefined();
 }
 
+#ifdef NATIVE_GXM_PROBE_VERSION
+/* Chapter 5 deliberately freezes the MP4 for 90 GML frames near the end.
+ * The original script forgets to pause its independently streamed OGG.
+ * Keep both media clocks together; otherwise the OGG finishes early. */
+static void native_ch5_pause_game_soundtrack(VMContext*ctx,bool pause){
+    if(!ctx||!ctx->runner||!ctx->runner->audioSystem||
+       !VitaVideo_isChapter5Intro()||!ctx->dataWin)return;
+    int var=shget(ctx->varNameMap,"_mus_file");
+    if(var<0)return;
+    AudioSystem*audio=ctx->runner->audioSystem;
+    for(size_t i=0;i<arrlen(ctx->runner->instances);i++){
+        Instance*inst=ctx->runner->instances[i];
+        if(!inst||inst->destroyed||inst->objectIndex<0||
+           (uint32_t)inst->objectIndex>=ctx->dataWin->objt.count)continue;
+        const char*name=ctx->dataWin->objt.objects[inst->objectIndex].name;
+        if(!name||strcmp(name,"obj_room_garden_video")!=0)continue;
+        RValue arr=Instance_getSelfVar(inst,var);
+        if(arr.type!=RVALUE_ARRAY||!arr.array)continue;
+        RValue music=GMLArray_get(arr.array,1);
+        int32_t handle=RValue_toInt32(music);
+        if(handle<=0)continue;
+        if(pause)audio->vtable->pauseSound(audio,handle);
+        else audio->vtable->resumeSound(audio,handle);
+        static unsigned trace=0;
+        if(trace++<6){
+            extern void VitaProbe_logLine(const char*);
+            VitaProbe_logLine(pause?
+                "NATIVE_GXM=ch5_video_audio pause_together=1":
+                "NATIVE_GXM=ch5_video_audio resume_together=1");
+        }
+        return;
+    }
+}
+#endif
+
 // video_pause()
 static RValue builtin_video_pause(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
     VitaVideo_pause();
+#ifdef NATIVE_GXM_PROBE_VERSION
+    native_ch5_pause_game_soundtrack(ctx,true);
+#endif
     return RValue_makeUndefined();
 }
 
 // video_resume()
 static RValue builtin_video_resume(MAYBE_UNUSED VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
     VitaVideo_resume();
+#ifdef NATIVE_GXM_PROBE_VERSION
+    native_ch5_pause_game_soundtrack(ctx,false);
+#endif
     return RValue_makeUndefined();
 }
 
@@ -6669,6 +6711,13 @@ static RValue builtin_sound_play(VMContext* ctx, RValue* args, MAYBE_UNUSED int3
         return RValue_makeReal(-1.0);
 
     int32_t soundIndex = RValue_toInt32(args[0]);
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* Native GXM uses its own NXRUNE border painter; legacy VitaBorders
+     * callbacks are VitaGL-only. Observe the actual snap SFX in the VM. */
+    extern void VitaNativeBorder_noteSound(const char* name);
+    if(soundIndex>=0 && (uint32_t)soundIndex<ctx->dataWin->sond.count)
+        VitaNativeBorder_noteSound(ctx->dataWin->sond.sounds[soundIndex].name);
+#endif
 #ifdef PLATFORM_VITA
     if (g_vitaActiveChapter == 3 && soundIndex >= 0 &&
         (uint32_t)soundIndex < ctx->dataWin->sond.count) {
@@ -6735,6 +6784,13 @@ static RValue builtin_audio_play_sound(VMContext* ctx, RValue* args, MAYBE_UNUSE
         return RValue_makeReal(-1.0);
 
     int32_t soundIndex = RValue_toInt32(args[0]);
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* Native GXM uses its own NXRUNE border painter; legacy VitaBorders
+     * callbacks are VitaGL-only. Observe the actual snap SFX in the VM. */
+    extern void VitaNativeBorder_noteSound(const char* name);
+    if(soundIndex>=0 && (uint32_t)soundIndex<ctx->dataWin->sond.count)
+        VitaNativeBorder_noteSound(ctx->dataWin->sond.sounds[soundIndex].name);
+#endif
 #ifdef PLATFORM_VITA
     if (g_vitaActiveChapter == 3 && soundIndex >= 0 &&
         (uint32_t)soundIndex < ctx->dataWin->sond.count) {
@@ -7471,7 +7527,57 @@ static RValue builtin_file_exists(VMContext* ctx, RValue* args, int32_t argCount
     const char* path = (args[0].type == RVALUE_STRING ? args[0].string : "");
     Runner* runner = ctx->runner;
     FileSystem* fs = runner->fileSystem;
-    return RValue_makeBool(fs->vtable->fileExists(fs, path));
+    bool exists=fs->vtable->fileExists(fs, path);
+#ifdef PLATFORM_VITA
+    /* The Portuguese-BR Chapter 5 patch adds:
+     *
+     *   if (file_exists("mus/deltarune_logo_ch5_itoki.ogg"))
+     *      audio_create_stream(...);
+     *
+     * whereas original DELTARUNE calls audio_create_stream directly.
+     * Shared music lives in deltarunevita/music rather than the translated
+     * chapter's own mus directory. audio_create_stream already falls back
+     * to that canonical location, but the mod's premature file_exists
+     * test would return FALSE, so neither that sound nor town music ever
+     * gets a stream. Match the existing audio stream fallback contract,
+     * only for genuine music paths and only if the real file exists.
+     * Do NOT return true blindly (missing music remains missing). */
+    if(!exists && path && *path && g_vitaActiveChapter>0){
+        const char* leaf=strrchr(path,'/');
+        const char* backslash=strrchr(path,'\\');
+        if(backslash && (!leaf||backslash>leaf))leaf=backslash;
+        leaf=leaf?leaf+1:path;
+        bool isMusicPath=
+            strncmp(path,"mus/",4)==0 ||
+            strncmp(path,"music/",6)==0 ||
+            strstr(path,"/mus/")!=NULL ||
+            strstr(path,"\\mus\\")!=NULL ||
+            strstr(path,"/music/")!=NULL;
+        size_t n=strlen(leaf);
+        if(isMusicPath && n>4 && n<145 &&
+           strcmp(leaf+n-4,".ogg")==0 &&
+           strchr(leaf,'/')==NULL && strchr(leaf,'\\')==NULL){
+            char shared[240];
+            snprintf(shared,sizeof(shared),
+                "ux0:data/deltarune/deltarunevita/music/%s",leaf);
+            SceIoStat statbuf;
+            if(sceIoGetstat(shared,&statbuf)>=0 &&
+               !SCE_S_ISDIR(statbuf.st_mode)){
+                exists=true;
+                static unsigned restored=0;
+                if(restored++<20){
+                    extern void VitaProbe_logLine(const char*);
+                    char logbuf[240];
+                    snprintf(logbuf,sizeof(logbuf),
+                      "VITA_GML_MUSIC_EXISTS=shared_library_fallback ch=%d name=%.100s",
+                      g_vitaActiveChapter,leaf);
+                    VitaProbe_logLine(logbuf);
+                }
+            }
+        }
+    }
+#endif
+    return RValue_makeBool(exists);
 }
 
 static RValue builtin_directory_exists(VMContext* ctx, RValue* args, int32_t argCount) {
@@ -10283,6 +10389,11 @@ static RValue builtin_draw_sprite(VMContext* ctx, RValue* args, MAYBE_UNUSED int
     return RValue_makeUndefined();
 }
 
+#if defined(PLATFORM_VITA) && !defined(NATIVE_GXM_PROBE_VERSION)
+// True between chromakey_mask_begin and chromakey_mask_end; see vitaChromakey below.
+static bool vitaChromakeyMaskPass = false;
+#endif
+
 static RValue builtin_draw_sprite_ext(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
     if (runner->renderer == nullptr) return RValue_makeUndefined();
@@ -10305,6 +10416,39 @@ static RValue builtin_draw_sprite_ext(VMContext* ctx, RValue* args, MAYBE_UNUSED
     float rot = (float) RValue_toReal(args[6]);
     uint32_t color = (uint32_t) RValue_toInt32(args[7]);
     float alpha = (float) RValue_toReal(args[8]);
+#if defined(PLATFORM_VITA) && !defined(NATIVE_GXM_PROBE_VERSION)
+    // shd_chromakey ignored the vertex alpha: the facescreen circle is drawn
+    // with alpha 0 and still grows the mask.
+    if (vitaChromakeyMaskPass) alpha = 1.0f;
+#endif
+    /* Fireworks in obj_firework_explosion issue thousands of GML
+     * draw_sprite_ext calls. Their particle fade/scale arrays reach exactly
+     * zero well before object destruction. Do not submit a zero-coverage
+     * sprite to VitaGL: that saves texture lookup, shader and quad setup.
+     * The same early-out is valid for every chapter and preserves the
+     * original particle timing, blend mode and nonzero alpha effects. */
+    if(alpha<=0.0f || xscale==0.0f || yscale==0.0f)
+        return RValue_makeUndefined();
+#ifdef NATIVE_GXM_PROBE_VERSION
+    /* The Titan climb tower uses spr_pxteal_40 as a water/energy curtain.
+     * Its intended depth/blend shader (shd_fakedepth) has no native GXP
+     * translation yet; the unprocessed 0.8-alpha teal looks like a bright
+     * opaque rectangle. Use a scene/asset-specific translucent fallback,
+     * without changing obstacle hitboxes or draw order. */
+    if(g_vitaActiveChapter==4 && runner->currentRoom &&
+       runner->currentRoom->name &&
+       strcmp(runner->currentRoom->name,
+           "room_dw_churchc_titanclimb2_tiled")==0 &&
+       spriteIndex>=0 && (uint32_t)spriteIndex<runner->dataWin->sprt.count &&
+       runner->dataWin->sprt.sprites[spriteIndex].name &&
+       strcmp(runner->dataWin->sprt.sprites[spriteIndex].name,
+           "spr_pxteal_40")==0){
+        if(alpha>0.38f)alpha=0.38f;
+        static unsigned reported=0;
+        if(reported++<4)
+            fprintf(stderr,"NATIVE_GXM=ch4_climb_teal_effect fallback_alpha=0.38\n");
+    }
+#endif
 
     if (0 > subimg && ctx->currentInstance != nullptr) {
         subimg = (int32_t) ctx->currentInstance->imageIndex;
@@ -11209,6 +11353,32 @@ static RValue builtin_draw_ellipse(VMContext* ctx, RValue* args, MAYBE_UNUSED in
     return RValue_makeUndefined();
 }
 
+/* Chapter 4 uses the compatibility helper d_ellipse for the Titan darkness.
+ * In this data.win that helper lives in a large global drawing-library script;
+ * entering it twice per frame executes thousands of VM operations just to add
+ * Vita's one-pixel primitive offset and call draw_ellipse. Keep the exact
+ * wrapper semantics in C. This is also valid for its other callers. */
+static RValue builtin_d_ellipse_compat(VMContext* ctx, RValue* args, int32_t argCount) {
+    if (argCount < 5) return RValue_makeUndefined();
+    Runner* runner = ctx->runner;
+    if (runner->renderer != nullptr) {
+        float off = 0.0f;
+#if defined(PLATFORM_VITA) || defined(PLATFORM_SWITCH)
+        off = 1.0f;
+#endif
+        float x1 = (float) RValue_toReal(args[0]) + off;
+        float y1 = (float) RValue_toReal(args[1]) + off;
+        float x2 = (float) RValue_toReal(args[2]) + off;
+        float y2 = (float) RValue_toReal(args[3]) + off;
+        bool outline = RValue_toBool(args[4]);
+        uint32_t color = runner->renderer->drawColor;
+        Renderer_drawEllipseColor(runner->renderer, (x1 + x2) * 0.5f,
+                                  (y1 + y2) * 0.5f, (x2 - x1) * 0.5f,
+                                  (y2 - y1) * 0.5f, color, color, outline);
+    }
+    return RValue_makeUndefined();
+}
+
 // draw_ellipse_color(x1, y1, x2, y2, col1, col2, outline)
 static RValue builtin_draw_ellipse_color(VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     Runner* runner = ctx->runner;
@@ -11485,6 +11655,61 @@ static RValue builtin_surface_set_target(VMContext* ctx, RValue* args, MAYBE_UNU
         int32_t objectIndex = ctx->currentInstance->objectIndex;
         if (objectIndex >= 0 && (uint32_t)objectIndex < ctx->dataWin->objt.count) {
             const char* objectName = ctx->dataWin->objt.objects[objectIndex].name;
+#if defined(PLATFORM_VITA) && !defined(NATIVE_GXM_PROBE_VERSION)
+            /* The v0.80-59 hardware log still spends about 13 ms rebuilding
+             * the rotating tower and cloud surfaces in titanclimb2. Their
+             * transforms and gameplay continue every Step; only the cached
+             * decorative surface is refreshed at 30 Hz, matching the native
+             * backend's established climb policy. */
+            if (objectName && runner->currentRoom && runner->currentRoom->name &&
+                (strcmp(runner->currentRoom->name, "room_dw_churchc_titanclimb2") == 0 ||
+                 strcmp(runner->currentRoom->name, "room_dw_churchc_titanclimb2_tiled") == 0) &&
+                (runner->frameCount & 1u) != 0u &&
+                (strcmp(objectName, "obj_rotating_tower_controller_new") == 0 ||
+                 strcmp(objectName, "obj_cloud_render_new") == 0)) {
+                int sw = (int) Renderer_getSurfaceWidth(runner->renderer, surfaceId);
+                int sh = (int) Renderer_getSurfaceHeight(runner->renderer, surfaceId);
+                if (sw > 0 && sh > 0 && sw <= 1024 && sh <= 1024) {
+                    ctx->vitaSuppressSurfaceDraw = true;
+                    return RValue_makeReal(1.0);
+                }
+            }
+#endif
+#ifdef NATIVE_GXM_PROBE_VERSION
+            /* Ch4 Titan climb: repeatedly rebuilding tower/cloud surfaces
+             * is the dominant 135ms Draw cost. Keep the previous GPU surface
+             * image on intermediate frames (tower 30 Hz / clouds 20 Hz at
+             * 60 FPS). Physics, objects and boss scripting still run each
+             * step. All actual GXM drawing functions honor the suppression
+             * flag; the Draw event's final draw_surface occurs AFTER
+             * surface_reset_target, so the cached image remains visible. */
+            if(objectName && runner->currentRoom &&
+               runner->currentRoom->name &&
+               (strcmp(runner->currentRoom->name,
+                       "room_dw_churchc_titanclimb2_tiled")==0 ||
+                strcmp(runner->currentRoom->name,
+                       "room_dw_churchc_titanclimb2_post")==0) &&
+               ((strcmp(objectName,"obj_rotating_tower_controller_new")==0 &&
+                 strcmp(runner->currentRoom->name,
+                       "room_dw_churchc_titanclimb2_tiled")==0 &&
+                 (runner->frameCount&1u)!=0u) ||
+                (strcmp(objectName,"obj_cloud_render_new")==0 &&
+                 (runner->frameCount%
+                   (strcmp(runner->currentRoom->name,
+                       "room_dw_churchc_titanclimb2_tiled")==0?3u:2u))!=0u))){
+                int sw=(int)Renderer_getSurfaceWidth(runner->renderer,surfaceId);
+                int sh=(int)Renderer_getSurfaceHeight(runner->renderer,surfaceId);
+                if(sw>0 && sh>0 && sw<=1024 && sh<=1024){
+                    ctx->vitaSuppressSurfaceDraw=true;
+                    static unsigned logCount=0;
+                    if(logCount++<8)
+                        fprintf(stderr,
+                          "NATIVE_GXM=ch4_climb_surface_reuse name=%s frame=%u size=%dx%d\n",
+                          objectName,runner->frameCount,sw,sh);
+                    return RValue_makeReal(1.0);
+                }
+            }
+#endif
             if (objectName != nullptr && strcmp(objectName, "obj_circlezoom") == 0 &&
                 (runner->frameCount & 1U) != 0U) {
                 ctx->vitaSuppressSurfaceDraw = true;
@@ -11520,7 +11745,11 @@ static RValue builtin_surface_set_target(VMContext* ctx, RValue* args, MAYBE_UNU
     return RValue_makeReal(0.0);
 }
 
+void Runner_towerNativeNoteSurfaceReset(Runner* runner, Instance* current);
 static RValue builtin_surface_reset_target(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+#ifndef NATIVE_GXM_PROBE_VERSION
+    Runner_towerNativeNoteSurfaceReset(ctx->runner, ctx->currentInstance);
+#endif
     if (ctx->vitaSuppressSurfaceDraw) {
         ctx->vitaSuppressSurfaceDraw = false;
         return RValue_makeReal(1.0);
@@ -15185,7 +15414,38 @@ static RValue builtin_draw_tilemap(VMContext* ctx, RValue* args, MAYBE_UNUSED in
 
     RuntimeLayerElement* el = Runner_findLayerElementById(runner, RValue_toInt32(args[0]), nullptr);
     if (el != nullptr && el->type == RuntimeLayerElementType_Tilemap) {
+#ifdef NATIVE_GXM_PROBE_VERSION
+        /* generate_shadow_surface(room_width,room_height) draws every tile
+         * in Town_Shadows_morning. The general optimized Runner tile walker
+         * was using camera.viewX/viewW even for this full-room render target,
+         * so masks were forever missing the left/right edge after scrolling.
+         * Scope the full tile walk to explicitly drawn CH5 tilemaps. */
+        extern int g_vitaActiveChapter;
+        extern int g_nativeGxmFullShadowTilemap;
+        int previous=g_nativeGxmFullShadowTilemap;
+        /* GML method closures may change ctx->currentInstance while the
+         * owner remains obj_sunshadows. All Chapter 5 explicit draw_tilemap
+         * calls need the full layer, unlike automatic room-layer draws. */
+        if(g_vitaActiveChapter==5){
+            g_nativeGxmFullShadowTilemap=1;
+            static int traceRoom=-999;
+            if(traceRoom!=runner->currentRoomIndex){
+                traceRoom=runner->currentRoomIndex;
+                extern void VitaProbe_logLine(const char* text);
+                char line[156];
+                snprintf(line,sizeof(line),
+                  "NATIVE_GXM=ch5_static_shadow_tilemap full_room=1 room=%d cells=%ux%u",
+                  runner->currentRoomIndex,
+                  (unsigned)el->tilemapData->tilesX,
+                  (unsigned)el->tilemapData->tilesY);
+                VitaProbe_logLine(line);
+            }
+        }
+#endif
         Runner_drawTileLayer(runner, el->tilemapData, x, y, el->tilemapFrame);
+#ifdef NATIVE_GXM_PROBE_VERSION
+        g_nativeGxmFullShadowTilemap=previous;
+#endif
     }
 
     return RValue_makeUndefined();
@@ -15462,6 +15722,335 @@ static RValue builtin_tilemap_get_tileset(VMContext* ctx, RValue* args, MAYBE_UN
 }
 
 // tile_get_index(tiledata): extracts the tileset cell index from a raw tile cell value, masking off the mirror/flip/rotate bits.
+/* v0.80-60: obj_plat_vertical_floor_grass_strip (Chapter 5 platform rooms). While
+ * a strip is shown, its Draw clears its surface and redraws the grass tiles from
+ * the tilemap every frame: 7 ms per frame in room_dw_fcastle_orange_gauntlet on
+ * the Vita. The picture only depends on the tilemap cells it reads, so the GML
+ * runs when those (or the surface) change, and otherwise only its last line, the
+ * draw_surface_ext, runs here. */
+#define GRASS_CACHE_SLOTS 256
+typedef struct { uint32_t instanceId; uint32_t key; int32_t surface; bool valid; } GrassStripCache;
+static GrassStripCache grassStripCache[GRASS_CACHE_SLOTS];
+
+static int32_t grassVar(VMContext* ctx, const char* name) {
+    ptrdiff_t slot = shgeti(ctx->varNameMap, (char*) name);
+    return slot < 0 ? -1 : ctx->varNameMap[slot].value;
+}
+
+static bool grassInstanceAlive(Runner* runner, int32_t id) {
+    if (id < 0) return false;
+    Instance* inst = hmget(runner->instancesById, id);
+    return inst != nullptr && inst->active;
+}
+
+bool VMBuiltins_tryGrassStripDraw(VMContext* ctx, Instance* target, int32_t codeId) {
+    if (codeId < 0 || (uint32_t) codeId >= ctx->dataWin->code.count || ctx->runner->renderer == nullptr) return false;
+    CodeEntry* code = &ctx->dataWin->code.entries[codeId];
+    if (code->name == nullptr || strcmp(code->name, "gml_Object_obj_plat_vertical_floor_grass_strip_Draw_0") != 0)
+        return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_GRASS_CACHE") != nullptr) return false; // A/B regression runs
+#endif
+    static VMContext* cachedCtx = nullptr;
+    static int32_t vOwner, vYscale, vSurf, vTanim, vCulled, vAll, vMethod, vWidth, vLayers, vLayids,
+                   vSurfX, vSurfY, vSurfH, vDarken, vFrontCol, vRowLen;
+    if (cachedCtx != ctx) {
+        cachedCtx = ctx;
+        memset(grassStripCache, 0, sizeof(grassStripCache));
+        vOwner = grassVar(ctx, "owner"); vYscale = grassVar(ctx, "yscale"); vSurf = grassVar(ctx, "surf");
+        vTanim = grassVar(ctx, "tanim"); vCulled = grassVar(ctx, "is_culled"); vAll = grassVar(ctx, "draw_all_surfaces");
+        vMethod = grassVar(ctx, "surface_method"); vWidth = grassVar(ctx, "surface_width");
+        vLayers = grassVar(ctx, "num_layers"); vLayids = grassVar(ctx, "layids"); vSurfX = grassVar(ctx, "surface_x");
+        vSurfY = grassVar(ctx, "surface_y"); vSurfH = grassVar(ctx, "surface_height"); vDarken = grassVar(ctx, "darken_mode");
+        vFrontCol = grassVar(ctx, "front_col"); vRowLen = grassVar(ctx, "tile_row_length");
+    }
+    if (vOwner < 0 || vYscale < 0 || vSurf < 0 || vTanim < 0 || vCulled < 0 || vAll < 0 || vMethod < 0 ||
+        vWidth < 0 || vLayers < 0 || vLayids < 0 || vSurfX < 0 || vSurfY < 0 || vSurfH < 0 || vDarken < 0 ||
+        vFrontCol < 0 || vRowLen < 0) return false;
+    Runner* runner = ctx->runner;
+    GrassStripCache* cache = &grassStripCache[target->instanceId % GRASS_CACHE_SLOTS];
+
+    // Only the surface branch is handled; everything else runs as GML.
+    const int32_t ownerId = RValue_toInt32(Instance_getSelfVar(target, vOwner));
+    Instance* owner = ownerId >= 0 ? hmget(runner->instancesById, ownerId) : nullptr;
+    if (owner == nullptr || !owner->active) return false;
+    if (RValue_toBool(Instance_getSelfVar(owner, vCulled)) || !RValue_toBool(Instance_getSelfVar(owner, vAll)) ||
+        !RValue_toBool(Instance_getSelfVar(owner, vMethod))) return false;
+    const int32_t tanimId = RValue_toInt32(Instance_getSelfVar(target, vTanim));
+    if (!grassInstanceAlive(runner, tanimId)) return false;
+    const double yscale = RValue_toReal(Instance_getSelfVar(target, vYscale));
+    if (!(1.0 - yscale > 0.0)) return false;
+    Instance* tanim = hmget(runner->instancesById, tanimId);
+    RValue layids = Instance_getSelfVar(owner, vLayids);
+    if (layids.type != RVALUE_ARRAY || layids.array == nullptr) return false;
+
+    // Key: everything the rebuild reads.
+    const int32_t surfaceWidth = RValue_toInt32(Instance_getSelfVar(owner, vWidth));
+    const int32_t layers = RValue_toInt32(Instance_getSelfVar(owner, vLayers));
+    const double surfX = RValue_toReal(Instance_getSelfVar(owner, vSurfX));
+    const double surfY = RValue_toReal(Instance_getSelfVar(owner, vSurfY));
+    const double surfH = RValue_toReal(Instance_getSelfVar(owner, vSurfH));
+    const int32_t rowLen = RValue_toInt32(Instance_getSelfVar(tanim, vRowLen));
+    if (surfaceWidth < 0 || surfaceWidth > 4096 || layers < 0 || layers > 64) return false;
+    uint32_t key = 2166136261U;
+#define GRASS_MIX(v) do { uint64_t _v = (uint64_t) (int64_t) (v); for (int _b = 0; _b < 8; ++_b) key = (key ^ (uint8_t) (_v >> (_b * 8))) * 16777619U; } while (0)
+    GRASS_MIX(surfaceWidth); GRASS_MIX(layers); GRASS_MIX(llround(surfX * 16.0)); GRASS_MIX(llround(surfY * 16.0));
+    GRASS_MIX(llround(surfH * 16.0)); GRASS_MIX(rowLen);
+    const double rowY = surfY + surfH * 40.0 - 40.0;
+    for (int32_t i = 1; i < surfaceWidth + 1; i++) {
+        const double cellX = surfX + i * 40.0 - 40.0;
+        for (int32_t layer = 0; layer < layers; layer++) {
+            RValue map = GMLArray_get(layids.array, layer);
+            RValue a3[3] = { map, RValue_makeReal(cellX), RValue_makeReal(rowY) };
+            RValue tx = builtin_tilemap_get_cell_x_at_pixel(ctx, a3, 3);
+            RValue ty = builtin_tilemap_get_cell_y_at_pixel(ctx, a3, 3);
+            RValue g3[3] = { map, tx, ty };
+            RValue data = builtin_tilemap_get(ctx, g3, 3);
+            RValue tileset = builtin_tilemap_get_tileset(ctx, &map, 1);
+            GRASS_MIX(RValue_toInt32(map)); GRASS_MIX(RValue_toInt32(data)); GRASS_MIX(RValue_toInt32(tileset));
+        }
+    }
+#undef GRASS_MIX
+
+    const int32_t surface = RValue_toInt32(Instance_getSelfVar(target, vSurf));
+    RValue surfaceArg = RValue_makeReal(surface);
+    const bool exists = RValue_toBool(builtin_surface_exists(ctx, &surfaceArg, 1));
+    if (!exists || !cache->valid || cache->instanceId != target->instanceId || cache->key != key ||
+        cache->surface != surface) {
+        // The GML rebuilds now with these inputs; next frame its surface id is known.
+        cache->instanceId = target->instanceId;
+        cache->key = key;
+        cache->surface = exists ? surface : INT32_MIN;
+        cache->valid = true;
+        return false;
+    }
+
+    // The rest of that branch.
+    runner->renderer->drawColor = 0xFFFFFF;
+    double t = yscale / 0.5, yy;
+    if (t < 1.0) {
+        yy = 20.0 * 0.5 * (t * t) - 78.0;
+    } else {
+        t -= 1.0;
+        yy = -20.0 * 0.5 * (t * (t - 2.0) - 1.0) - 78.0;
+    }
+    int32_t targetColor = 16777215;
+    if (RValue_toInt32(Instance_getSelfVar(owner, vDarken)) == 1)
+        targetColor = Color_lerp(targetColor, RValue_toInt32(Instance_getSelfVar(owner, vFrontCol)), (float) yscale);
+    InstanceBBox box = Collision_computeBBox(runner, owner);
+    const double left = box.valid ? box.left : owner->x;
+    const double bottom = box.valid ? (runner->collisionCompatibilityMode ? box.bottom - 1 : box.bottom) : owner->y;
+    RValue args[8] = {
+        surfaceArg, RValue_makeReal(left - 40.0), RValue_makeReal(bottom + yy + 1.0), RValue_makeReal(1),
+        RValue_makeReal(1), RValue_makeReal(0), RValue_makeReal(targetColor), RValue_makeReal(1.0 - yscale)
+    };
+    builtin_draw_surface_ext(ctx, args, 8);
+    return true;
+}
+
+/* v0.81: obj_blue_platform spends roughly 1 ms per frame interpreting a small
+ * Draw event in yellowblue. Keep collision, state transitions, particles and
+ * audio in its original Step; only translate the pixel-equivalent Draw here. */
+bool VMBuiltins_tryBluePlatformDraw(VMContext* ctx, Instance* target, int32_t codeId) {
+    if (ctx == nullptr || target == nullptr || ctx->runner == nullptr ||
+        ctx->runner->renderer == nullptr || codeId < 0 ||
+        (uint32_t)codeId >= ctx->dataWin->code.count)
+        return false;
+    CodeEntry* code = &ctx->dataWin->code.entries[codeId];
+    if (code->name == nullptr ||
+        strcmp(code->name, "gml_Object_obj_blue_platform_Draw_0") != 0)
+        return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_CH5_C_FASTPATHS") != nullptr) return false;
+#endif
+
+    static VMContext* cachedCtx = nullptr;
+    static int32_t vActive, vSquish, vExplosion, vTransition, reticleSprite;
+    if (cachedCtx != ctx) {
+        cachedCtx = ctx;
+        vActive = grassVar(ctx, "has_active_plat");
+        vSquish = grassVar(ctx, "squishtimer");
+        vExplosion = grassVar(ctx, "explodetimer");
+        vTransition = grassVar(ctx, "__transition_yscale");
+        reticleSprite = -1;
+        for (uint32_t i = 0; i < ctx->dataWin->sprt.count; ++i)
+            if (ctx->dataWin->sprt.sprites[i].name != nullptr &&
+                strcmp(ctx->dataWin->sprt.sprites[i].name, "spr_enemy_yellow_reticle") == 0) {
+                reticleSprite = (int32_t)i;
+                break;
+            }
+    }
+    if (vActive < 0 || vSquish < 0 || vExplosion < 0 || vTransition < 0)
+        return false;
+
+    double transition = 0.0;
+    Runner* runner = ctx->runner;
+    for (size_t i = 0; i < arrlen(runner->instances); ++i) {
+        Instance* inst = runner->instances[i];
+        if (inst == nullptr || !inst->active || inst->destroyed || inst->objectIndex < 0 ||
+            (uint32_t)inst->objectIndex >= runner->dataWin->objt.count)
+            continue;
+        const char* name = runner->dataWin->objt.objects[inst->objectIndex].name;
+        if (name == nullptr || strcmp(name, "obj_platswap") != 0) continue;
+        RValue scale = Instance_getSelfVar(inst, vTransition);
+        if (scale.type == RVALUE_ARRAY && scale.array != nullptr &&
+            GMLArray_length1D(scale.array) > 0)
+            transition = RValue_toReal(GMLArray_get(scale.array, 0));
+        break;
+    }
+    target->imageIndex = transition > 0.5 ? 1.0f : 0.0f;
+
+    if (RValue_toBool(Instance_getSelfVar(target, vActive))) {
+        const float oldX = target->x, oldY = target->y;
+        const float oldXs = target->imageXscale, oldYs = target->imageYscale;
+        const double squish = RValue_toReal(Instance_getSelfVar(target, vSquish));
+        target->y = floorf(target->y + sinf((float)(squish * 3.14159265358979323846)) * 2.0f);
+        target->imageXscale += sinf((float)(squish * 0.5 * 3.14159265358979323846)) * 0.1f;
+        target->imageYscale -= sinf((float)(squish * 0.5 * 3.14159265358979323846)) * 0.1f;
+        builtin_draw_self(ctx, nullptr, 0);
+        target->x = oldX; target->y = oldY;
+        target->imageXscale = oldXs; target->imageYscale = oldYs;
+    }
+
+    const double explosion = RValue_toReal(Instance_getSelfVar(target, vExplosion));
+    if (explosion > 0.0 && reticleSprite >= 0) {
+        const double t = (30.0 - explosion) / 30.0;
+        const double alpha = fmin(t * 2.0, 1.0);
+        const double eased = alpha * (2.0 - alpha); // ease_out_quad(0..1)
+        RValue args[9] = {
+            RValue_makeReal(reticleSprite), RValue_makeReal(0),
+            RValue_makeReal(target->x), RValue_makeReal(target->y),
+            RValue_makeReal(2.0 * eased), RValue_makeReal(2.0 * eased),
+            RValue_makeReal(270.0 * (1.0 - eased)), RValue_makeReal(0xFFFFFF),
+            RValue_makeReal(alpha)
+        };
+        builtin_draw_sprite_ext(ctx, args, 9);
+    }
+    return true;
+}
+
+/* v0.81-10: obj_plat_floortex_FLOOR (and child obj_plat_floortex_FLOOR_AlignBottom1TILE).
+ * In complex platform rooms like room_dw_cliff_twirlflowerwind, dozens of platforms each
+ * run 9.1 KB of GML bytecode. When culled or when surfaces are already baked,
+ * native C handles drawing in microseconds without GML VM dispatch, avoiding VRAM eviction. */
+bool VMBuiltins_tryFloortexDraw(VMContext* ctx, Instance* target, int32_t codeId) {
+    if (ctx == nullptr || target == nullptr || ctx->runner == nullptr ||
+        ctx->runner->renderer == nullptr || codeId < 0 ||
+        (uint32_t)codeId >= ctx->dataWin->code.count)
+        return false;
+    CodeEntry* code = &ctx->dataWin->code.entries[codeId];
+    if (code->name == nullptr ||
+        strcmp(code->name, "gml_Object_obj_plat_floortex_FLOOR_Draw_0") != 0)
+        return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_CH5_C_FASTPATHS") != nullptr) return false;
+#endif
+
+    static VMContext* cachedCtx = nullptr;
+    static int32_t vGen, vCulled, vMethod, vNeedRefresh, vSurf, vFrontSurf, vBackSurf,
+                   vDrawAll, vSloped, vFrontCol, vDarkenBlend, vFrontX, vBackX,
+                   vBackHeight;
+    if (cachedCtx != ctx) {
+        cachedCtx = ctx;
+        vGen = grassVar(ctx, "gen");
+        vCulled = grassVar(ctx, "is_culled");
+        vMethod = grassVar(ctx, "surface_method");
+        vNeedRefresh = grassVar(ctx, "surfaces_need_refresh");
+        vSurf = grassVar(ctx, "surf");
+        vFrontSurf = grassVar(ctx, "front_surf");
+        vBackSurf = grassVar(ctx, "back_surf");
+        vDrawAll = grassVar(ctx, "draw_all_surfaces");
+        vSloped = grassVar(ctx, "sloped");
+        vFrontCol = grassVar(ctx, "front_col");
+        vDarkenBlend = grassVar(ctx, "darken_blend");
+        vFrontX = grassVar(ctx, "front_x");
+        vBackX = grassVar(ctx, "back_x");
+        vBackHeight = grassVar(ctx, "back_height");
+    }
+    if (vGen < 0 || vCulled < 0) return false;
+
+    // GML lines 0-40: if (!gen || is_culled) exit;
+    if (!RValue_toBool(Instance_getSelfVar(target, vGen)) ||
+        RValue_toBool(Instance_getSelfVar(target, vCulled))) {
+        return true; // Culled or ungenerated: completely skip GML execution.
+    }
+
+    if (vMethod < 0 || !RValue_toBool(Instance_getSelfVar(target, vMethod))) {
+        // Sprite-based path or surface_method disabled: let GML handle
+        return false;
+    }
+
+    // If surfaces need refresh, let GML build them once
+    if (vNeedRefresh >= 0 && RValue_toBool(Instance_getSelfVar(target, vNeedRefresh))) {
+        return false;
+    }
+
+    // Sloped platforms have complex quad projections: let GML handle
+    if (vSloped >= 0 && RValue_toBool(Instance_getSelfVar(target, vSloped))) {
+        return false;
+    }
+
+    int32_t frontSurf = vFrontSurf >= 0 ? RValue_toInt32(Instance_getSelfVar(target, vFrontSurf)) : -1;
+    int32_t surf = vSurf >= 0 ? RValue_toInt32(Instance_getSelfVar(target, vSurf)) : -1;
+    int32_t backSurf = vBackSurf >= 0 ? RValue_toInt32(Instance_getSelfVar(target, vBackSurf)) : -1;
+
+    // Verify existing surfaces exist; if destroyed, GML must rebuild
+    RValue frontArg = RValue_makeReal(frontSurf);
+    if (frontSurf < 0 || !RValue_toBool(builtin_surface_exists(ctx, &frontArg, 1)))
+        return false;
+
+    Runner* runner = ctx->runner;
+    int32_t col = 16777215;
+    if (vFrontCol >= 0 && vDarkenBlend >= 0) {
+        int32_t frontColVal = RValue_toInt32(Instance_getSelfVar(target, vFrontCol));
+        double darkenVal = RValue_toReal(Instance_getSelfVar(target, vDarkenBlend));
+        col = Color_lerp(16777215, frontColVal, (float)darkenVal);
+    }
+
+    InstanceBBox box = Collision_computeBBox(runner, target);
+    double bottom = box.valid ? (runner->collisionCompatibilityMode ? box.bottom - 1 : box.bottom) : target->y;
+    double top = box.valid ? box.top : target->y;
+
+    // 1. Draw back_surf if draw_all_surfaces is true
+    if (vDrawAll >= 0 && RValue_toBool(Instance_getSelfVar(target, vDrawAll)) && backSurf >= 0) {
+        RValue backArg = RValue_makeReal(backSurf);
+        if (RValue_toBool(builtin_surface_exists(ctx, &backArg, 1))) {
+            double backX = vBackX >= 0 ? RValue_toReal(Instance_getSelfVar(target, vBackX)) : target->x;
+            double backH = vBackHeight >= 0 ? RValue_toReal(Instance_getSelfVar(target, vBackHeight)) : 0.0;
+            RValue args[8] = {
+                backArg, RValue_makeReal(backX), RValue_makeReal(top - backH),
+                RValue_makeReal(1), RValue_makeReal(1), RValue_makeReal(0),
+                RValue_makeReal(col), RValue_makeReal(1)
+            };
+            builtin_draw_surface_ext(ctx, args, 8);
+        }
+    }
+
+    // 2. Draw front_surf
+    double frontX = vFrontX >= 0 ? RValue_toReal(Instance_getSelfVar(target, vFrontX)) : target->x;
+    RValue frontArgs[8] = {
+        frontArg, RValue_makeReal(frontX), RValue_makeReal(bottom + 1.0),
+        RValue_makeReal(1), RValue_makeReal(1), RValue_makeReal(0),
+        RValue_makeReal(col), RValue_makeReal(1)
+    };
+    builtin_draw_surface_ext(ctx, frontArgs, 8);
+
+    // 3. Draw main top surf if present
+    if (surf >= 0) {
+        RValue topArg = RValue_makeReal(surf);
+        if (RValue_toBool(builtin_surface_exists(ctx, &topArg, 1))) {
+            RValue topArgs[8] = {
+                topArg, RValue_makeReal(target->x), RValue_makeReal(target->y),
+                RValue_makeReal(1), RValue_makeReal(1), RValue_makeReal(0),
+                RValue_makeReal(col), RValue_makeReal(1)
+            };
+            builtin_draw_surface_ext(ctx, topArgs, 8);
+        }
+    }
+
+    return true;
+}
+
 static RValue builtin_tile_get_index(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     if (1 > argCount) return RValue_makeReal(-1.0);
     return RValue_makeReal((GMLReal) (RValue_toInt32(args[0]) & TILEINDEX_SHIFTEDMASK));
@@ -17550,6 +18139,16 @@ static RValue builtin_shader_reset(VMContext* ctx, MAYBE_UNUSED RValue* args, MA
     return RValue_makeUndefined();
 }
 
+// Native draw paths use the same checks as shader_set and shader_reset.
+void VMBuiltins_setShader(VMContext* ctx, int32_t shaderIndex) {
+    RValue arg = RValue_makeReal((GMLReal) shaderIndex);
+    builtin_shader_set(ctx, &arg, 1);
+}
+
+void VMBuiltins_resetShader(VMContext* ctx) {
+    builtin_shader_reset(ctx, nullptr, 0);
+}
+
 static RValue builtin_shader_current(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
     if (!vitaGameShadersEnabled()) return RValue_makeReal(-1);
     if (ctx->runner->renderer != nullptr) {
@@ -17856,6 +18455,118 @@ static RValue builtin_sprite_get_info(VMContext* ctx, RValue* args, int32_t argC
 #include "vm_vertex_builtins.inc"
 
 // ===[ REGISTRATION ]===
+
+#if defined(PLATFORM_VITA) && !defined(NATIVE_GXM_PROBE_VERSION)
+/* v0.80-49-ch3: native scr_chromakey. The v0.80-48 log of the Tenna cutscene ends
+ * at the first shader_set(shd_chromakey), in obj_btb04_facescreeneffect. At that
+ * point the GML has just created two room-sized surfaces (2960x480 in
+ * room_dw_snow_zone), and the room shows no other custom shader. Which of the two
+ * stops the frame is not known, so this path avoids both:
+ *  - Surfaces are camera-sized on Legacy-GL, with the surface camera moved to the
+ *    game camera, so room coordinates still land on the same pixels.
+ *  - No shader. All three callers tint the sprite and pass similarity 5, and with
+ *    that value shd_chromakey outputs alpha 1 for every non-transparent pixel,
+ *    which a plain textured draw reproduces. Its vertex alpha was also ignored,
+ *    hence the forced alpha in draw_sprite_ext during the mask pass. Pixels with
+ *    partial alpha stay partial here instead of becoming solid. */
+extern bool g_vitaModernGlActive;
+extern void GLLegacyRenderer_setSurfaceOrigin(Renderer* renderer, float x, float y);
+static int32_t vitaChromakeyMaskSurface = -1;
+static int32_t vitaChromakeySurface = -1;
+static float vitaChromakeyX = 0.0f, vitaChromakeyY = 0.0f;
+
+static void vitaChromakeyLog(const char* stage) {
+    // Once per stage, so a repeated freeze shows how far the first use got.
+    static uint32_t logged = 0;
+    static const char* const stages[] = { "mask_begin", "mask_end", "on", "mask_composited", "complete" };
+    for (uint32_t i = 0; i < sizeof(stages) / sizeof(stages[0]); i++) {
+        if (strcmp(stage, stages[i]) != 0 || (logged & (1U << i)) != 0) continue;
+        logged |= 1U << i;
+        extern void VitaProbe_logLine(const char* line);
+        char line[96];
+        snprintf(line, sizeof(line), "CH3_CHROMAKEY=%s origin=%d,%d", stage,
+                 (int)vitaChromakeyX, (int)vitaChromakeyY);
+        VitaProbe_logLine(line);
+    }
+}
+
+static int32_t vitaChromakeyEnsure(Renderer* renderer, int32_t surfaceId, int32_t w, int32_t h) {
+    if (!Renderer_surfaceExists(renderer, surfaceId)) return Renderer_createSurface(renderer, w, h);
+    // Grow only: a camera zoom must not reallocate the texture every frame.
+    int32_t curW = (int32_t)Renderer_getSurfaceWidth(renderer, surfaceId);
+    int32_t curH = (int32_t)Renderer_getSurfaceHeight(renderer, surfaceId);
+    if (curW < w || curH < h)
+        renderer->vtable->surfaceResize(renderer, surfaceId, curW > w ? curW : w, curH > h ? curH : h);
+    return surfaceId;
+}
+
+static void vitaChromakeyBeginTarget(VMContext* ctx, int32_t surfaceId) {
+    Renderer* renderer = ctx->runner->renderer;
+    RValue target = RValue_makeReal(surfaceId);
+    builtin_surface_set_target(ctx, &target, 1);
+    if (!g_vitaModernGlActive)
+        GLLegacyRenderer_setSurfaceOrigin(renderer, vitaChromakeyX, vitaChromakeyY);
+    renderer->vtable->clearScreen(renderer, 0, 0.0f);
+    renderer->vtable->gpuSetBlendModeExt(renderer, bm_src_alpha, bm_inv_src_alpha, bm_one, bm_inv_src_alpha);
+}
+
+static RValue builtin_vita_chromakey_mask_begin(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Runner* runner = ctx->runner;
+    if (runner->renderer == nullptr || runner->currentRoom == nullptr) return RValue_makeUndefined();
+    int32_t w = (int32_t)runner->currentRoom->width;
+    int32_t h = (int32_t)runner->currentRoom->height;
+    vitaChromakeyX = 0.0f;
+    vitaChromakeyY = 0.0f;
+    if (!g_vitaModernGlActive && runner->viewsEnabled) {
+        GMLCamera* camera = Runner_getCameraById(runner, runner->views[runner->viewCurrent].cameraId);
+        if (camera != nullptr && camera->allocated && camera->viewWidth > 0 && camera->viewHeight > 0) {
+            vitaChromakeyX = floorf((float)camera->viewX);
+            vitaChromakeyY = floorf((float)camera->viewY);
+            w = (int32_t)camera->viewWidth + 1; // +1: the floor above can expose one more column.
+            h = (int32_t)camera->viewHeight + 1;
+        }
+    }
+    vitaChromakeyLog("mask_begin");
+    vitaChromakeyMaskSurface = vitaChromakeyEnsure(runner->renderer, vitaChromakeyMaskSurface, w, h);
+    vitaChromakeySurface = vitaChromakeyEnsure(runner->renderer, vitaChromakeySurface, w, h);
+    vitaChromakeyBeginTarget(ctx, vitaChromakeyMaskSurface);
+    vitaChromakeyMaskPass = true;
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_vita_chromakey_mask_end(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    vitaChromakeyMaskPass = false;
+    if (ctx->runner->renderer == nullptr) return RValue_makeUndefined();
+    builtin_surface_reset_target(ctx, nullptr, 0);
+    vitaChromakeyLog("mask_end");
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_vita_chromakey_on(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    if (ctx->runner->renderer == nullptr) return RValue_makeUndefined();
+    vitaChromakeyBeginTarget(ctx, vitaChromakeySurface);
+    vitaChromakeyLog("on");
+    return RValue_makeUndefined();
+}
+
+static RValue builtin_vita_chromakey_off(VMContext* ctx, MAYBE_UNUSED RValue* args, MAYBE_UNUSED int32_t argCount) {
+    Renderer* renderer = ctx->runner->renderer;
+    if (renderer == nullptr) return RValue_makeUndefined();
+    renderer->vtable->gpuSetBlendEnable(renderer, false);
+    renderer->vtable->gpuSetColorWriteEnable(renderer, false, false, false, true);
+    renderer->vtable->drawSurface(renderer, vitaChromakeyMaskSurface, 0, 0, -1, -1,
+                                  vitaChromakeyX, vitaChromakeyY, 1.0f, 1.0f, 0.0f, 0xFFFFFFFF, renderer->drawAlpha);
+    renderer->vtable->gpuSetBlendEnable(renderer, true);
+    renderer->vtable->gpuSetColorWriteEnable(renderer, true, true, true, true);
+    vitaChromakeyLog("mask_composited");
+    builtin_surface_reset_target(ctx, nullptr, 0);
+    renderer->vtable->gpuSetBlendMode(renderer, bm_normal);
+    renderer->vtable->drawSurface(renderer, vitaChromakeySurface, 0, 0, -1, -1,
+                                  vitaChromakeyX, vitaChromakeyY, 1.0f, 1.0f, 0.0f, 0xFFFFFFFF, renderer->drawAlpha);
+    vitaChromakeyLog("complete");
+    return RValue_makeUndefined();
+}
+#endif
 
 void VMBuiltins_registerAll(VMContext* ctx) {
     requireMessage(!ctx->registeredBuiltinFunctions, "Attempting to register all VMBuiltins, but it was already registered!");
@@ -18545,6 +19256,20 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "scr_draw_sprite_tiled_area", builtin_scr_draw_sprite_tiled_area);
     VM_registerBuiltin(ctx, "gml_Script_scr_draw_sprite_tiled_area", builtin_scr_draw_sprite_tiled_area);
     VM_registerBuiltin(ctx, "gml_GlobalScript_scr_draw_sprite_tiled_area", builtin_scr_draw_sprite_tiled_area);
+#if defined(PLATFORM_VITA) && !defined(NATIVE_GXM_PROBE_VERSION)
+    // Surface ids from the previous VM do not survive a chapter change.
+    vitaChromakeyMaskSurface = -1;
+    vitaChromakeySurface = -1;
+    vitaChromakeyMaskPass = false;
+    VM_registerBuiltin(ctx, "chromakey_mask_begin", builtin_vita_chromakey_mask_begin);
+    VM_registerBuiltin(ctx, "gml_Script_chromakey_mask_begin", builtin_vita_chromakey_mask_begin);
+    VM_registerBuiltin(ctx, "chromakey_mask_end", builtin_vita_chromakey_mask_end);
+    VM_registerBuiltin(ctx, "gml_Script_chromakey_mask_end", builtin_vita_chromakey_mask_end);
+    VM_registerBuiltin(ctx, "chromakey_on", builtin_vita_chromakey_on);
+    VM_registerBuiltin(ctx, "gml_Script_chromakey_on", builtin_vita_chromakey_on);
+    VM_registerBuiltin(ctx, "chromakey_off", builtin_vita_chromakey_off);
+    VM_registerBuiltin(ctx, "gml_Script_chromakey_off", builtin_vita_chromakey_off);
+#endif
     VM_registerBuiltin(ctx, "draw_sprite_part_ext", builtin_draw_sprite_part_ext);
     VM_registerBuiltin(ctx, "draw_sprite_general", builtin_draw_sprite_general);
     VM_registerBuiltin(ctx, "draw_sprite_pos", builtin_draw_sprite_pos);
@@ -18610,6 +19335,7 @@ void VMBuiltins_registerAll(VMContext* ctx) {
     VM_registerBuiltin(ctx, "draw_circle_colour", builtin_draw_circle_color);
     VM_registerBuiltin(ctx, "draw_circle_color", builtin_draw_circle_color);
     VM_registerBuiltin(ctx, "draw_ellipse", builtin_draw_ellipse);
+    VM_registerBuiltin(ctx, "gml_Script_d_ellipse", builtin_d_ellipse_compat);
     VM_registerBuiltin(ctx, "draw_ellipse_colour", builtin_draw_ellipse_color);
     VM_registerBuiltin(ctx, "draw_ellipse_color", builtin_draw_ellipse_color);
     VM_registerBuiltin(ctx, "draw_set_circle_precision", builtin_draw_set_circle_precision);

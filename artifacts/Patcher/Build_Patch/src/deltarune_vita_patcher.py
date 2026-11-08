@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """DELTARUNE PS Vita data patcher by WolffsRoom."""
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import bsdiff4
 import console_ui as ui
 import pvr_pipeline
 
-VERSION = "0.73"
+VERSION = "0.81"
 LANG_MANIFEST_URL = "https://wolffsroom.github.io/DeltaruneVita/language-packs/language_packs.json"
 LANGUAGES = [
     ("English", "EN"), ("Portuguese (Brasil)", "PT"), ("Espanol", "ES"),
@@ -622,26 +622,40 @@ def apply_language_pack(entry: dict, steam: Path, result: Path, text: dict) -> N
     lang_id = entry["id"]
     draw_header(TX(getattr(ui, "active_lang", "EN"), "language_pack").format(name=entry.get("display_name", lang_id)))
     with tempfile.TemporaryDirectory() as td:
-        pack_path = Path(td) / (entry.get("file") or f"{lang_id}.langpack")
-        parts = entry.get("parts") if isinstance(entry.get("parts"), list) else []
-        if parts:
-            with open(pack_path, "wb") as merged:
-                for part_index, part in enumerate(parts, 1):
-                    part_url = str(part.get("url", ""))
-                    if not part_url:
-                        raise ValueError(f"Language Pack part URL missing: {lang_id} part {part_index}")
-                    if not urllib.parse.urlparse(part_url).scheme:
-                        part_url = urllib.parse.urljoin(LANG_MANIFEST_URL, "../" + part_url.lstrip("/"))
-                    part_path = Path(td) / f"part_{part_index:02d}.bin"
-                    download_mod(part_url, part_path)
-                    if part.get("size") and part_path.stat().st_size != int(part["size"]):
-                        raise ValueError(f"Language Pack part size mismatch: {lang_id} part {part_index}")
-                    if part.get("sha256") and sha256(part_path).lower() != str(part["sha256"]).lower():
-                        raise ValueError(f"Language Pack part SHA-256 mismatch: {lang_id} part {part_index}")
-                    with open(part_path, "rb") as source_part:
-                        shutil.copyfileobj(source_part, merged)
+        file_name = entry.get("file") or f"{lang_id}.langpack"
+        pack_path = Path(td) / file_name
+
+        # Check for local language pack file first
+        local_candidates = [
+            Path(file_name),
+            resource(file_name),
+            Path("LanguagePacks") / file_name,
+            Path(__file__).resolve().parent.parent.parent.parent / "artifacts" / "LanguagePacks" / file_name,
+            Path(__file__).resolve().parent.parent / "webpatcher" / "language-packs" / file_name,
+        ]
+        local_pack = next((c for c in local_candidates if c.is_file()), None)
+        if local_pack:
+            shutil.copyfile(local_pack, pack_path)
         else:
-            download_mod(entry["url"], pack_path)
+            parts = entry.get("parts") if isinstance(entry.get("parts"), list) else []
+            if parts:
+                with open(pack_path, "wb") as merged:
+                    for part_index, part in enumerate(parts, 1):
+                        part_url = str(part.get("url", ""))
+                        if not part_url:
+                            raise ValueError(f"Language Pack part URL missing: {lang_id} part {part_index}")
+                        if not urllib.parse.urlparse(part_url).scheme:
+                            part_url = urllib.parse.urljoin(LANG_MANIFEST_URL, "../" + part_url.lstrip("/"))
+                        part_path = Path(td) / f"part_{part_index:02d}.bin"
+                        download_mod(part_url, part_path)
+                        if part.get("size") and part_path.stat().st_size != int(part["size"]):
+                            raise ValueError(f"Language Pack part size mismatch: {lang_id} part {part_index}")
+                        if part.get("sha256") and sha256(part_path).lower() != str(part["sha256"]).lower():
+                            raise ValueError(f"Language Pack part SHA-256 mismatch: {lang_id} part {part_index}")
+                        with open(part_path, "rb") as source_part:
+                            shutil.copyfileobj(source_part, merged)
+            else:
+                download_mod(entry["url"], pack_path)
         expected_pack_hash = str(entry.get("sha256", "")).lower()
         if expected_pack_hash and sha256(pack_path).lower() != expected_pack_hash:
             raise ValueError(f"Language Pack SHA-256 mismatch: {lang_id}")

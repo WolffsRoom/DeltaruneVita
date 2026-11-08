@@ -8,6 +8,7 @@ build = (root/'scripts/build-native-gxm-probe.ps1').read_text(encoding='utf-8')
 header = (root/'src/butterscotch/src/renderer.h').read_text(encoding='utf-8')
 contract = (root/'experiments/native-gxm/bs_renderer_contract.c').read_text(encoding='utf-8')
 impl = (root/'experiments/native-gxm/bs_renderer_impl.inc').read_text(encoding='utf-8')
+video = (root/'experiments/native-gxm/native_video_gxm.c').read_text(encoding='utf-8')
 bootstrap = (root/'experiments/native-gxm/bs_bootstrap_probe.c').read_text(encoding='utf-8')
 names = re.findall(r'^\s*.*?\(\*(\w+)\)\([^\n]*\);', header.split('} VertexBuffer;',1)[1].split('} RendererVtable;',1)[0], re.M)
 entries = re.findall(r'^\s*\.(\w+) = bs_(\w+),$',contract,re.M)
@@ -56,11 +57,13 @@ assert 'log_audio_metrics' in source and 'NATIVE_GXM=audio_metrics' in source
 assert 'g_vitaActiveChapter = 0' in source
 assert 'g_vitaProbeLoggingEnabled = 1' in source
 assert 'NATIVE_GXM=audio_stream' in source
-assert 'bs_bootstrap_load(&bs,activeChapter,activeMod)' in source
+assert 'gxm_parse_with_loading_screen(vg,&bs,activeChapter,activeMod,' in source and 'bs_bootstrap_load(job->bs, job->chapter, job->mod)' in source
 assert 'rejected=self_intersecting_quad' in impl
 assert 'p->chapter=chapter' in (root/'experiments/native-gxm/bs_bootstrap_probe.c').read_text(encoding='utf-8')
 assert 'BS_CHAPTER_ROOT "chapter%d/"' in (root/'experiments/native-gxm/bs_bootstrap_probe.c').read_text(encoding='utf-8')
 assert 'GX_CHAPTER_MARKER' in source and 'next_chapter.txt' in source
+assert 'ux0:data/deltarune_saves/gxm_next_chapter.txt' in source
+assert 'deltarune_native_gxm_saves' not in source
 assert 'sceAppMgrLoadExec("app0:eboot.bin",NULL,NULL)' in source
 assert 'SceAppMgr_stub' in cmake
 assert 'Runner_setGameArgs(bs.runner,launcherArgs,3)' in source
@@ -107,7 +110,7 @@ assert 'vita_border_rules.c' in cmake
 assert 'static void saveSettings(' in settings and 'border_mode=' in settings
 assert 'consoleBorderMode' in settings and 'betterBordersEnabled' in settings
 assert 'g_nativeBorderMode=settings.consoleBorderMode' in source
-assert 'angle==0.0f && xs==1.0f && ys==1.0f' in impl
+assert 'angle==0.0f && xs>0.0f && ys>0.0f' in impl  # v0.80-16 scaled sprite fast path
 assert 'VitaSettings_draw(&settings,bs.renderer)' in source
 print('GXM48: PASS direct Chapter0, PNG borders, settings, gradient crash path, sprite fastpath')
 
@@ -131,7 +134,7 @@ assert 'sceTouchPeek(' in touch
 assert 'VitaSettings_handleInput(&settings,&pad,bs.audio)' in source
 assert 'g_nativeSettingsVG=vg;' in source
 assert 'g_vitaDisplayZoom' in impl and 'g_vitaDisplayOffsetX' in impl
-assert '"Native GXM"' in settings and '"RGBA4444 (fixed)"' in settings
+assert '"Native-GXM"' in settings and '"RGBA4444 (fixed)"' in settings
 assert 'VitaSettings_drawBrightness(&settings' in source
 assert 'VitaSettings_drawTrophyNotification(&settings' in source
 print('GXM48 original Game Settings integration: PASS code, assets, controls, graphics safeguards')
@@ -268,14 +271,19 @@ print('GXM48 Chapter3 regression: sprite-font atlas glyph rendering and conserva
 assert 'bs_unsupported("drawTriangle_vertex_gradient")' not in impl
 assert 'NATIVE_GXM=drawTriangle_vertex_gradient mode=native_linear_approx' in impl
 assert 'bs_unsupported("switch_target_inside_view")' not in impl
-assert 'surface_switch inside_active_pass restore_camera=1' in impl
-assert 'nvgSave(b->vg);nvgScissor(b->vg,px,py,pw,ph);' in impl
+assert 'NATIVE_GXM=target_projection' in impl
+assert 'target==appTarget' in impl
+assert 'world_camera' in impl and 'surface_local' in impl
+assert 'if(worldTarget && b->viewW>0 && b->viewH>0' in impl
+assert 'nvgTranslate(b->vg,-b->viewX,-b->viewY)' in impl
+assert 'targetTransformValid' not in impl
+assert 'nvgCurrentTransform(b->vg,outgoingTransform)' not in impl
 assert 'bs_unsupported("drawRectangleColor_four_corners")' not in impl
 assert 'bs_unsupported("drawLineColor_gradient")' not in impl
 borders=(root/'experiments/native-gxm/native_borders.inc').read_text(encoding='utf-8')
 assert 'b->borderOldImage' in borders
 assert 'borderTransition+=1.0f/24.0f' in borders
-assert '!g_nativeBetterBorders&&controllerName' in borders
+assert 'g_vitaActiveChapter>=2 && controllerName' in borders  # Ch1 follows fixed VitaGL region mapping
 assert 'gxmClearColor(0.0f, 0.0f, 0.0f, 1.0f)' in source
 assert 'NATIVE_GXM_VIDEO' in cmake
 assert 'native_video_gxm.c' in cmake
@@ -322,7 +330,15 @@ assert 'NATIVE_GXM=shader_effect id=%d' in impl
 assert 'int nvgxmEnableRuntimeShaders(' in native
 assert 'SceGxmProgram*compiled=shark_compile_shader_extended' in native
 assert 'sceGxmShaderPatcherRegisterProgram(gxm->shader_patcher' in native
-assert 'GXMNVGshader runtime_shader[14];' in native
+assert 'GXMNVGshader runtime_shader[25];' in native
+assert 'case 17:return palette;' in native
+assert 'shd_pal_html_surface' in impl and 'shd_pal_html_sprite' in impl
+assert 'shd_shadowblend_evening' in impl
+assert 'forceVideoFill=(g_vitaActiveChapter==5 && VitaVideo_isChapter5Intro()' in impl
+assert 'end_of_stream_hold' in video
+assert 'strstr(source,"ch5_intro")?41667ull:33367ull' in video
+assert 'int zoom=forceVideoFill?100:g_vitaDisplayZoom;' in impl
+assert '(forceVideoFill?0:g_vitaDisplayOffsetX)' in impl
 assert 'gxm->runtime_shader[k].prog.frag' in native
 assert 'ret->shaderTag=(unsigned)gxm->drawShaderTag;' in native
 assert 'gxm->activeShaderTag=(int)call->shaderTag;' in native
@@ -382,8 +398,8 @@ assert 'r->circlePrecision=24' in contract
 assert 'BSNative_drawEllipseColor(renderer,cx,cy,rx,ry,col1,col2,outline)' in header
 assert 'nvgCircle(b->vg,0,0,1)' in impl
 assert 'nvgRadialGradient(b->vg,0,0,0,1' in impl
-assert 'if(sw<=0)sw=(int)vw-sx;' in impl
-assert 'if(sh<=0)sh=(int)vh-sy;' in impl
+assert 'sx=sy=0;sw=(int)vw;sh=(int)vh;' in impl
+assert '0,0,dw,dh,tint,a' in impl
 assert 'video_frame_to_nvg=1' in impl
 assert 'sceAvPlayerGetAudioData(player,&frame)' in video
 assert 'sceAudioOutOutput(audioPort,frame.pData)' in video
@@ -411,7 +427,7 @@ assert 'static void bs_release_retired(' in impl
 assert 'void BSContractRenderer_collectRetired(' in impl
 assert 'sceGxmFinish(win->context);' in impl
 assert 'BSContractRenderer_collectRetired(bs.renderer);' in source
-assert 'o.scenesPerFrame=id==0?4:2;' in impl
+assert 'o.scenesPerFrame=id==0?8:4;' in impl and '.scenesPerFrame = 8,' in source
 assert 'retire_pending=%u retire_total=%u' in impl
 assert 'NATIVE_GXM=surface_retirement released=' in impl
 assert 'NATIVE_GXM=castle_phase stage=armed_after_step pending=54' in source
@@ -423,9 +439,9 @@ print('GXM48 Ch5 Castle Town: GPU-fenced surface retirement, multi-scene targets
 
 # GXM48 Experimental-GL native GXP shader adapter: per-program uniform handles,
 # per-draw packet snapshot, compile isolation, optical effects and settings.
-assert 'GXMNVGshader runtime_shader[14];' in native
+assert 'GXMNVGshader runtime_shader[25];' in native
 assert 'runtimeShaderMask' in native
-assert 'for(int k=0;k<14;k++)' in native
+assert 'for(int k=0;k<25;k++)' in native
 assert 'if(!successes)' in native
 assert 'nvgxmSetRuntimeShaderParams(' in native
 assert 'memcpy(ret->shaderParams,gxm->drawShaderParams' in native
@@ -444,8 +460,8 @@ assert 'shd_saturation' in impl
 assert 'shd_alpha' in impl
 assert 'shd_brightness_to_alpha' in impl
 assert 'shd_forcefullalpha' in impl
-assert 'settings.shadersEnabled?1:0' in source
-assert "option[0]=='0'?0:" in source
+assert 'settings.shadersEnabled && activeChapter!=0' in source
+assert "int requested=(settings.shadersEnabled && activeChapter!=0)?1:0;" in source
 assert 'mask=0x%02X' in source
 for name in ['grayscale_fade','saturation','alpha','brightness_to_alpha','forcefullalpha']:
     cg=(root/'experiments/native-gxm/shaders'/f'{name}.cg').read_text()
@@ -464,7 +480,10 @@ print('GXM48 lab: preview uses native fragment programs with no Runner/OpenAL: P
 nvgcore=(root/'scratch/refs/nanovg-gxm/src/nanovg.c').read_text(encoding='utf-8')
 nvgheader=(root/'scratch/refs/nanovg-gxm/src/nanovg.h').read_text(encoding='utf-8')
 assert 'void nvgDrawImageQuad(' in nvgcore and 'void nvgDrawImageQuad(' in nvgheader
-assert 'static const unsigned idx[6]={0,2,1,0,3,2};' in nvgcore
+assert ('static const unsigned idx[6]={0,2,1,0,3,2};' in nvgcore or
+        ('static const unsigned forward[6]={0,2,1,0,3,2};' in nvgcore and
+         'static const unsigned reverse[6]={0,1,2,0,2,3};' in nvgcore and
+         'const unsigned*idx=cross<0.0f?reverse:forward;' in nvgcore))
 assert 'state->compositeOperation,&state->scissor,verts,6,ctx->fringeWidth' in nvgcore
 assert 'nvgTransformPoint(&verts[i].x,&verts[i].y,state->xform' in nvgcore
 assert 'nvgDrawImageQuad(b->vg,img,xy,uv,bs_clamp01(alpha));' in impl
@@ -485,10 +504,10 @@ assert 'runner->gxmStepProfileUs[slot]+=dur*8u;' in runner
 print('GXM48 quad visualization lab + object-level Step CPU hotspots: PASS')
 
 # GXM48 Ch5 native fixes; shaders, realtime LUT screen copies, solid background and Chapter0.
-assert 'runtime_shader[14];' in native
+assert 'runtime_shader[25];' in native
 assert 'case 8:return shadowblend;' in native
 assert 'case 9:return forcecolour;' in native
-assert 'gxm->activeShaderTag<=14' in native
+assert 'gxm->activeShaderTag<=25' in native
 assert '(gxm->activeShaderTag<=5||gxm->activeShaderTag>=8)' in native
 assert 'shd_shadowblend' in impl
 assert 'shd_forcecolour' in impl
@@ -550,7 +569,7 @@ assert 'DLTAGXM48' in cmake
 print('GXM48 5 translated GXP effects preserve premultiplied RGB and single alpha: PASS')
 
 # Native extra sampler contracts: two Chapter5 GLSL-ES shaders.
-assert 'runtime_shader[14];' in native
+assert 'runtime_shader[25];' in native
 assert 'case 10:return shoujo;' in native
 assert 'case 11:return lut;' in native
 assert 'nvgxmSetRuntimeSamplerImage(NVGcontext*ctx,int stage,int imageId)' in native
@@ -575,7 +594,7 @@ assert 'DLTAGXM48' in cmake
 print('GXM48 shoujo 4-sampler GXP and LUT 2-sampler GXP, per-draw stage+uniforms and resumed LUT passes: PASS')
 
 # GXM48 Castle Town reflection shaders preserve GML uniforms per draw call.
-assert 'runtime_shader[14];' in native
+assert 'runtime_shader[25];' in native
 assert 'case 12:return castlereflect;' in native
 assert 'case 13:return castlereflect_layerblend;' in native
 assert 'float shaderVectors[16];' in native
@@ -690,7 +709,7 @@ assert '{3,1,2,0}' in fmt and 'perm[9][4]' in fmt
 assert 'layout=0;' in fmt and 'g_vitaActiveChapter==0' not in fmt and "if(c>='0'&&c<='8')" in fmt
 assert 'gxm-color-layout-ch%d.txt' in fmt and 'gxm-color-layout.txt' in fmt
 assert 'NATIVE_GXM=rgba4444_channel_layout variant=%d first_page=%d' in impl
-assert 'DELTARUNE VITA v0.78' in impl
+assert 'DELTARUNE VITA %.*s' in impl
 assert 'DLTAGXM48' in cmake
 print('GXM48 hardware alpha/red swap, emulator layout, version label: PASS')
 
@@ -772,7 +791,7 @@ text = impl.split('static void bs_text(Renderer *r,',1)[1].split('static void bs
 assert 'separation<0.0f?TextUtils_lineStride(f):separation/fontScaleY' in text
 assert 'rowHeight+separation' not in text and 'TextUtils_skipNewline(' in text
 video = (root / 'experiments/native-gxm/native_video_gxm.c').read_text(encoding='utf-8')
-assert 'init.numOutputVideoFrameBuffers=strstr(source,"first_load")?5:2;' in video
+assert 'init.numOutputVideoFrameBuffers=5;' in video
 assert 'NATIVE_GXM=surface_create_failed' in impl
 print('v0.78 GXM text line stride, intro video buffers, surface failure log PASS')
 
@@ -786,3 +805,50 @@ assert '#define BS_MAX_SURFACE_EDGE 4096' in impl
 assert 'static void draw_screen_filter(' in main_src and 'sync_game_trophies(&settings,bs.runner,gameFrames);' in main_src
 print('v0.78 GXM primitives, soft fallbacks, app-surface composite, filters and trophies PASS')
 
+
+# v0.79.6 Chapter 5 petalcut + Chapter 3 all-stars alpha shader contracts.
+assert 'case 18:return petalcut;' in native
+assert 'case 19:return luminosityAlpha;' in native
+assert 'shd_petalcut' in impl and 'shd_luminosity_to_transparency' in impl
+assert 'lineBottom' in impl and 'lineTop' in impl
+assert 'nvgResetScissor(b->vg);' in impl
+assert 'ch3_tenna_boot_prewarm' in impl
+assert 'init.numOutputVideoFrameBuffers=5;' in video
+print('GXM79.6 video/petals/shadow-alpha/Tenna prewarm contracts: PASS')
+
+assert 'case 20:return screenBlend;' in native
+assert 'shd_screen_blend' in impl
+print('GXM79.6 Flowey/Susie exact SHDR screen blend contract: PASS')
+
+assert 'static int logged[26]={0};' in impl
+assert 'GameMaker draw_clear_alpha(black,0)' in impl
+print('GXM79.6 shadow mask transparent clear/20 shader tags: PASS')
+
+assert 'gxm-emulator-skip-trophies.txt' in source
+assert 'emulatorSkipTrophies?false:VitaTrophies_init()' in source
+print('GXM emulator-only trophy dialog bypass: PASS')
+
+assert 'gxm-emulator-skip-intro.txt' in source
+assert 'native_first_load_video_play(vg);' in source
+print('GXM emulator intro-only diagnostic bypass: PASS')
+
+# v0.79-10 shadow surface projection and composition diagnostics
+assert 'NATIVE_GXM=target_projection' in impl
+assert 'NATIVE_GXM=shadow_composite' in impl
+assert 'targetTransformValid' not in impl
+print('v0.79-10 no camera inheritance on offscreen targets + bounded shadow telemetry PASS')
+
+# v0.79-11 Chapter 3 rendering, exit and borders.
+runner_src=(root/'src/butterscotch/src/runner.c').read_text(encoding='utf-8')
+vm_src=(root/'src/butterscotch/src/vm_builtins.c').read_text(encoding='utf-8')
+border_src=(root/'experiments/native-gxm/native_borders.inc').read_text(encoding='utf-8')
+compat_src=(root/'experiments/native-gxm/native_settings_compat.c').read_text(encoding='utf-8')
+assert 'NATIVE_GXM=game_end requested exit_to_livearea=1' in source
+assert 'BSContractRenderer_lastFrameDraws(bs.renderer)<=6' in source
+assert 'NATIVE_GXM=ch3_border_snap sound=snd_whip_crack_only' in compat_src
+assert 'VitaNativeBorder_noteSound' in vm_src
+assert 'VITA_BORDER_SCENE_CH3_BLUE_STARS' in border_src
+assert 'NATIVE_GXM=draw_order' in runner_src
+assert 'rankA=a->type==DRAWABLE_LAYER?1' in runner_src
+assert 'nvgShapeAntiAlias(b->vg,0)' in impl
+print('v0.79-11 CH3 cutscene layers, snap border, bitmap text edges, retry/quit: PASS')

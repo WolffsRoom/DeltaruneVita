@@ -33,11 +33,18 @@ endif()
 
 add_executable(${PROJECT_NAME}
   ${GXM_ENTRYPOINT} bs_bootstrap_probe.c bs_stb_ds.c bs_renderer_contract.c
-  vita_settings_native.c native_settings_compat.c
+  vita_settings_native.c native_asset_pack.c native_settings_compat.c native_mic.c
   ../../src/vita-common/vita_backend_selection.c
   ../../src/vita-probe/source/vita_border_rules.c
   ../../src/vita-probe/source/vita_gpu_rules.c
   ../../src/vita-probe/source/vita_trophies.c
+  # Reuse the existing bounded VitaGL background-work pipeline. User-core
+  # fallback is automatic: no system kernel, HENkaku plugin or CapUnlocker
+  # is required by the native GXM executable.
+  ../../src/vita-probe/source/vita_thread_policy.c
+  ../../src/vita-probe/source/vita_background_work.c
+  ../../src/vita-probe/source/vita_room_prefetch.c
+  ../../src/vita-probe/source/vita_io_profile.c
   ../../src/butterscotch/src/data_win.c
   ../../src/butterscotch/src/binary_reader.c
   ../../src/butterscotch/src/image/image_decoder.c

@@ -10,6 +10,10 @@ void BSContractRenderer_cacheMaintenance(Renderer* r);
 void BSContractRenderer_devRoomJumpPrepare(Renderer* r);
 /* Scene is already submitted/presented: no NanoVG/GXM frame is active. */
 void BSContractRenderer_framePresented(Renderer* r);
+/* Limited CH3 interstitial/gameshow scene continuity bridge. */
+int BSContractRenderer_ch3Capture(Renderer* r);
+void BSContractRenderer_ch3Activate(Renderer* r);
+void BSContractRenderer_ch3Draw(Renderer* r);
 
 void BSContractRenderer_bind(Renderer* r, NVGcontext* vg);
 void BSContractRenderer_frameStart(Renderer* r);
@@ -24,6 +28,10 @@ unsigned long BSContractRenderer_lastFrameDraws(Renderer* r);
  * complete.vtc marks it complete), and the generator writing them in the
  * VitaGL format. progress(done,total,user) is called after every page. */
 unsigned BSContractRenderer_textureCacheMissing(Renderer* r);
+/* Loads the shared battle UI/party pages before gameplay (not pinned). */
+unsigned BSContractRenderer_preloadBattleCore(Renderer* r);
+unsigned BSContractRenderer_preloadChapter5CastleTown(Renderer* r);
+void BSContractRenderer_ch5CastleWarmTick(Renderer* r);
 unsigned BSContractRenderer_generateTextureCache(Renderer* r,
     void (*progress)(unsigned done, unsigned total, void* user), void* user);
 #endif

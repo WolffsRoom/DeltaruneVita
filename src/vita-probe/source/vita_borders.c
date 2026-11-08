@@ -24,6 +24,7 @@
 extern int g_vitaConsoleBordersEnabled;
 extern int g_vitaConsoleBorderMode;
 extern int g_vitaBetterBordersEnabled;
+extern int g_vitaAnimatedBordersEnabled;
 extern int g_vitaProbeLoggingEnabled;
 extern bool g_vitaModernGlActive;
 
@@ -113,6 +114,7 @@ static int borderMenuSuppressed = 0;
 static int borderSceneSuppressed = 0;
 static int borderBlackHold = 0;
 static int borderBlackHoldCompleteLogged = 0;
+static int borderTransitionHoldFrames = 0; // obj_dw_transition drawn recently: keep the black hold
 static int borderMemoryPressure = 0;
 static int borderMemoryPressureLogged = 0;
 static char bordersConfig[8192] = {0};
@@ -184,7 +186,8 @@ static void startBorderBlackFade(void) {
 static void startImmediateBlackHold(void) {
     const int starting = !borderBlackHold;
     borderBlackHold = 1;
-    borderBlackHoldCompleteLogged = 0;
+    // Called every frame in room_dw_castle_area_1; a reset here wrote one log line per frame.
+    if (starting) borderBlackHoldCompleteLogged = 0;
     borderMenuSuppressed = 0;
     borderSceneSuppressed = 0;
     // This room is already the black approach to Castle Town. Starting a
@@ -195,6 +198,22 @@ static void startImmediateBlackHold(void) {
     borderOverlaySpeed = 1.0f;
     borderOverlayColor = 0x000000U;
     if (starting) borderLog("black_hold_immediate");
+}
+
+/* v0.80-56: going to the main menu used to cut the border. It now fades over the
+ * menu; once black, VitaBorders_draw releases the textures, this stops being
+ * true and the existing menu clear runs. */
+static int borderMenuFadePending(void) {
+    return g_vitaConsoleBordersEnabled && !borderDrawSuppressed && !borderMenuSuppressed &&
+           !borderSceneSuppressed && borderOverlayAlpha < 1.0f &&
+           (borderTexture != 0 || previousBorderTexture != 0 ||
+            borderNativeLayerTexture != 0 || borderNativeRedLayerTexture != 0);
+}
+
+static void startBorderMenuFade(void) {
+    // The game's border controller stops updating here, so this fade takes over.
+    borderSelectedSource = VITA_BORDER_SOURCE_FALLBACK;
+    startBorderBlackFade();
 }
 
 static uint32_t borderReadLe32(const unsigned char* p) {
@@ -532,7 +551,10 @@ static int loadBorderTexture(void) {
     return 1;
 }
 
+#include "vita_animated_borders.inc"
+
 void VitaBorders_init(int chapter) {
+    animatedBordersStop();
     borderChapter = chapter;
     memset(&borderRuleState, 0, sizeof(borderRuleState));
     borderRuleState.chapter = chapter;
@@ -562,6 +584,9 @@ void VitaBorders_init(int chapter) {
 
 static void applyBorderRuleDecision(const VitaBorderDecision* decision) {
     if (decision == NULL) return;
+    /* v0.80-56: this runs every frame and pulled the target back to 0, so a fade
+     * started outside a black-fade room never got past its first step. */
+    if (borderBlackHold) return;
     borderOverlayTarget = decision->overlayTarget ? 1.0f : 0.0f;
     borderOverlaySpeed = decision->overlaySpeed > 0.0f ? decision->overlaySpeed : 0.025f;
     borderOverlayColor = decision->overlayColor;
@@ -718,6 +743,22 @@ static const char* roomBorder(const char* room) {
         strcmp(room, "room_dw_garden_floradinnencounter") == 0)
         return BORDER_ROOT "border_dw_garden_0.png";
     const char* custom = getCustomBorder(room);
+    if (borderChapter == 5 && custom != NULL &&
+        strstr(custom, "border_lw_town_0.png") != NULL &&
+        (strncmp(room, "room_town_", 10) == 0 ||
+         strncmp(room, "room_lw_", 8) == 0 ||
+         strncmp(room, "room_kris", 9) == 0 ||
+         strncmp(room, "room_tor", 8) == 0 ||
+         strncmp(room, "room_alphys", 11) == 0 ||
+         strncmp(room, "room_school", 11) == 0 ||
+         strncmp(room, "room_hospital", 13) == 0 ||
+         strncmp(room, "room_library", 12) == 0 ||
+         strncmp(room, "room_graveyard", 14) == 0 ||
+         strncmp(room, "room_beach", 10) == 0)) {
+        // Do not let a stale generic day border in borders_config.txt override
+        // Chapter 5's time-of-day Hometown border (morning / sunset / night).
+        custom = NULL;
+    }
     const char* betterPath = NULL;
     int chapter1HasUppercase = 0;
     if (borderChapter == 1) {
@@ -960,6 +1001,7 @@ static const char* roomBorder(const char* room) {
 }
 
 static void clearBorderVisualsForMenu(void) {
+    animatedBordersStop();
     int hasTextures = borderTexture != 0 || previousBorderTexture != 0 ||
                       borderOverlayTexture != 0 || borderNativeLayerTexture != 0 ||
                       borderNativeRedLayerTexture != 0;
@@ -1017,6 +1059,11 @@ void VitaBorders_updateRoom(const char* roomName) {
         snprintf(borderRoom, sizeof(borderRoom), "%s", roomName != NULL ? roomName : "<null>");
         return;
     }
+    if (VitaBorderRules_isMenuRoom(roomName) && borderMenuFadePending()) {
+        startBorderMenuFade();
+        snprintf(borderRoom, sizeof(borderRoom), "%s", roomName != NULL ? roomName : "<null>");
+        return;
+    }
     borderRuleDecision = (VitaBorderDecision){ VITA_BORDER_ASSET_NONE, 0, 0.025f, 0x000000U };
     const char* next = roomBorder(roomName);
     if (borderSelectedSource == VITA_BORDER_SOURCE_CONTROLLER) {
@@ -1030,24 +1077,28 @@ void VitaBorders_updateRoom(const char* roomName) {
     char nextPath[512] = {0};
     if (next != NULL) snprintf(nextPath, sizeof(nextPath), "%s", next);
     if (VitaBorderRules_isMenuRoom(roomName)) {
-        if (borderBlackHold || borderTexture != 0 || previousBorderTexture != 0) {
-            startBorderBlackFade();
-            snprintf(borderRoom, sizeof(borderRoom), "%s", roomName != NULL ? roomName : "<null>");
-            return;
-        }
-        int shouldLog = !borderMenuSuppressed || borderTexture != 0 || previousBorderTexture != 0 ||
-                        borderNativeLayerTexture != 0 || borderNativeRedLayerTexture != 0 ||
-                        (roomName != NULL && strcmp(borderRoom, roomName) != 0);
-        borderMenuSuppressed = 1;
-        snprintf(borderRoom, sizeof(borderRoom), "%s", roomName != NULL ? roomName : "<null>");
-        SceUID fd_room = sceIoOpen(BORDER_ROOT "current_room.txt",
-                                  SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
-        if (fd_room >= 0) {
-            sceIoWrite(fd_room, borderRoom, strlen(borderRoom));
+        /* The title/Chapter Select is *not* a scene with an artistic border.
+         * Former code called startBorderBlackFade every update while
+         * borderBlackHold was set, retaining previous art indefinitely.
+         * Retire all GPU border textures as the room enters the menu, and
+         * leave the host margins plain black throughout that menu. */
+        int shouldLog=!borderMenuSuppressed || borderTexture!=0 ||
+            previousBorderTexture!=0 || borderNativeLayerTexture!=0 ||
+            borderNativeRedLayerTexture!=0 ||
+            (roomName!=NULL && strcmp(borderRoom,roomName)!=0);
+        borderMenuSuppressed=1;
+        borderBlackHold=0;
+        borderBlackHoldCompleteLogged=0;
+        borderSceneSuppressed=0;
+        snprintf(borderRoom,sizeof(borderRoom),"%s",roomName?roomName:"<null>");
+        SceUID fd_room=sceIoOpen(BORDER_ROOT "current_room.txt",
+                                 SCE_O_WRONLY|SCE_O_CREAT|SCE_O_TRUNC,0666);
+        if(fd_room>=0){
+            sceIoWrite(fd_room,borderRoom,strlen(borderRoom));
             sceIoClose(fd_room);
         }
         clearBorderVisualsForMenu();
-        if (shouldLog) borderLog("menu_suppressed");
+        if(shouldLog)borderLog("TITLE_BORDER=cleared_on_menu_entry");
         return;
     }
     borderMenuSuppressed = 0;
@@ -1055,13 +1106,22 @@ void VitaBorders_updateRoom(const char* roomName) {
     // Black persists across menus, death and chapter changes. Only an actual
     // border selection releases it; the replacement is loaded behind black
     // and revealed using the same smooth overlay cadence.
-    if (borderBlackHold && nextPath[0] != '\0') {
+    if (borderTransitionHoldFrames > 0) borderTransitionHoldFrames--;
+    if (borderBlackHold && nextPath[0] != '\0' && borderTransitionHoldFrames == 0) {
         borderBlackHold = 0;
         borderBlackHoldCompleteLogged = 0;
         borderOverlayTarget = 0.0f;
         borderOverlaySpeed = 1.0f / 30.0f;
         borderOverlayColor = 0x000000U;
         borderLog("black_hold_released");
+    }
+    /* While a door transition holds black, this room can already resolve to the
+     * next border. Loading it now would stall the frame, and the hold would only
+     * release it again. It loads when the hold ends. */
+    if (borderBlackHold && borderTransitionHoldFrames > 0 &&
+        borderSelectedSource != VITA_BORDER_SOURCE_CONTROLLER) {
+        snprintf(borderRoom, sizeof(borderRoom), "%s", roomName != NULL ? roomName : "<null>");
+        return;
     }
 
     // Chapter 5's Garden opening intentionally has no decorative console
@@ -1155,7 +1215,29 @@ void VitaBorders_updateRoom(const char* roomName) {
     borderLog("room_selected");
 }
 
+void VitaBorders_noteSchooldoorAnimation(void) {
+    /* The opening animation starts inside room_schooldoor, before the
+     * next room is room_dw_castle_area_1. Hold black from that first
+     * frame, across the room transition, in all five chapters. */
+    if(strcmp(borderRoom,"room_schooldoor")==0){
+        borderTransitionHoldFrames = 2;
+        if(!borderBlackHold){
+            startBorderBlackFade();
+            borderLog("schooldoor_opening_early_black");
+        }
+    }
+}
 void VitaBorders_noteVisibleAsset(const char* assetName) {
+    if(assetName!=NULL && strcmp(borderRoom,"room_schooldoor")==0 &&
+       (strcmp(assetName,"spr_darkdoor_open")==0 ||
+        strcmp(assetName,"spr_giantdarkdoor_white")==0)){
+        /* The door animation is already visible before room_area_1 starts. */
+        borderTransitionHoldFrames = 2;
+        if(!borderBlackHold){
+            startBorderBlackFade();
+            borderLog("schooldoor_animation_black");
+        }
+    }
     if (borderChapter != 3 || assetName == NULL || borderRoom[0] == '\0') return;
 
     Chapter3BorderScene next = chapter3BorderScene;
@@ -1230,16 +1312,20 @@ void VitaBorders_prepareRoomChange(const char* nextRoomName) {
     const char* next = roomBorder(nextRoomName);
     char nextPath[512] = {0};
     if (next != NULL) snprintf(nextPath, sizeof(nextPath), "%s", next);
+    if (VitaBorderRules_isMenuRoom(nextRoomName) && borderMenuFadePending()) {
+        startBorderMenuFade();
+        borderLog("TITLE_BORDER=fade_before_menu_room_change");
+        return;
+    }
     if (VitaBorderRules_isMenuRoom(nextRoomName)) {
-        if (borderTexture != 0 || previousBorderTexture != 0 || borderBlackHold) {
-            startBorderBlackFade();
-            borderLog("menu_prepare_black_fade");
-        } else {
-            borderMenuSuppressed = 1;
-            borderSceneSuppressed = 0;
-            clearBorderVisualsForMenu();
-            borderLog("menu_prepare_suppressed");
-        }
+        borderMenuSuppressed=1;
+        borderSceneSuppressed=0;
+        borderBlackHold=0;
+        borderBlackHoldCompleteLogged=0;
+        /* Prepare before leaving gameplay as well as after arriving: no
+         * retained art, crossfade, glow or controller-layer on title. */
+        clearBorderVisualsForMenu();
+        borderLog("TITLE_BORDER=cleared_before_menu_room_change");
         return;
     }
     // Enter Garden intro/video/Floradinn with genuinely black host margins.
@@ -1293,8 +1379,14 @@ void VitaBorders_prepareRoomChange(const char* nextRoomName) {
 }
 
 void VitaBorders_noteTransitionObject(const char* objectName) {
-    if (objectName != NULL && strcmp(objectName, "obj_dw_transition") == 0 &&
-        !borderBlackHold && (borderTexture != 0 || previousBorderTexture != 0)) {
+    if (objectName == NULL || strcmp(objectName, "obj_dw_transition") != 0) return;
+    /* v0.80-47: this room still selects its border on every update, which
+     * released the hold one frame after this started it. Each frame of the
+     * School->Castle Town door therefore restarted the fade (it never reached
+     * black) and wrote three log lines, each its own open/write/close on the
+     * memory card: 45-60 ms per frame, the bulk of the reported 4-7 FPS. */
+    borderTransitionHoldFrames = 2;
+    if (!borderBlackHold && (borderTexture != 0 || previousBorderTexture != 0)) {
         startBorderBlackFade();
         borderLog("transition_black_fade");
     }
@@ -1433,14 +1525,77 @@ void VitaBorders_cycleCurrent(int direction) {
     updateBordersConfig(borderRoom, files[currentIndex]);
 }
 
-static void drawBorderTextureTinted(GLuint texture, int windowW, int windowH, float alpha, int opaque,
-                                    float red, float green, float blue) {
+static void drawBorderQuadFeathered(GLuint texture, int windowW, int windowH,
+                                    float red, float green, float blue,
+                                    float x0, float x1, float u0, float u1,
+                                    float a0, float a1) {
+    if (texture == 0 || (a0 <= 0.0f && a1 <= 0.0f)) return;
+    const BorderVertex updated[4] = {
+        {u0, 0, red, green, blue, a0, x0,  1},
+        {u1, 0, red, green, blue, a1, x1,  1},
+        {u1, 1, red, green, blue, a1, x1, -1},
+        {u0, 1, red, green, blue, a0, x0, -1},
+    };
+    memcpy(borderVertices, updated, sizeof(borderVertices));
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, windowW, windowH);
+    glDisable(GL_SCISSOR_TEST);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glEnable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBindTexture(GL_TEXTURE_2D, texture);
+#ifdef __vita__
+    glBindVertexArray(0);
+#endif
+    if (g_vitaModernGlActive && ensureModernBorderProgram()) {
+        GLint previousProgram = 0;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &previousProgram);
+        glUseProgram(borderModernProgram);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        if (borderModernTexture >= 0) glUniform1i(borderModernTexture, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0); // pointers below are client addresses, not VBO offsets
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(BorderVertex), &borderVertices[0].x);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(BorderVertex), &borderVertices[0].u);
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(BorderVertex), &borderVertices[0].r);
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+        glEnableVertexAttribArray(2);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+        glDisableVertexAttribArray(2);
+        glDisableVertexAttribArray(1);
+        glDisableVertexAttribArray(0);
+        glUseProgram((GLuint)previousProgram);
+        glEnable(GL_BLEND);
+        return;
+    }
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glEnableClientState(GL_COLOR_ARRAY);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glTexCoordPointer(2, GL_FLOAT, sizeof(BorderVertex), &borderVertices[0].u);
+    glColorPointer(4, GL_FLOAT, sizeof(BorderVertex), &borderVertices[0].r);
+    glVertexPointer(2, GL_FLOAT, sizeof(BorderVertex), &borderVertices[0].x);
+    glUseProgram(0);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glEnable(GL_BLEND);
+}
+
+static void drawBorderQuadTinted(GLuint texture, int windowW, int windowH, float alpha, int opaque,
+                                 float red, float green, float blue,
+                                 float x0, float x1, float u0, float u1) {
     if (texture == 0 || alpha <= 0.0f) return;
     const BorderVertex updated[4] = {
-        {0, 0, red, green, blue, alpha, -1,  1},
-        {1, 0, red, green, blue, alpha,  1,  1},
-        {1, 1, red, green, blue, alpha,  1, -1},
-        {0, 1, red, green, blue, alpha, -1, -1},
+        {u0, 0, red, green, blue, alpha, x0,  1},
+        {u1, 0, red, green, blue, alpha, x1,  1},
+        {u1, 1, red, green, blue, alpha, x1, -1},
+        {u0, 1, red, green, blue, alpha, x0, -1},
     };
     memcpy(borderVertices, updated, sizeof(borderVertices));
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1496,8 +1651,49 @@ static void drawBorderTextureTinted(GLuint texture, int windowW, int windowH, fl
     glEnable(GL_BLEND);
 }
 
+static void drawBorderTextureTinted(GLuint texture, int windowW, int windowH, float alpha, int opaque,
+                                    float red, float green, float blue) {
+    drawBorderQuadTinted(texture, windowW, windowH, alpha, opaque, red, green, blue,
+                         -1.0f, 1.0f, 0.0f, 1.0f);
+}
+
 static void drawBorderTexture(GLuint texture, int windowW, int windowH, float alpha, int opaque) {
     drawBorderTextureTinted(texture, windowW, windowH, alpha, opaque, 1.0f, 1.0f, 1.0f);
+}
+
+// frames_side.bani packs the left and right columns of the screen into one
+// texture. Only those columns are drawn; the game image covers the rest.
+// v0.81-9: Always render the static border underneath when available, and feather
+// the inner 24 columns with linear alpha so no sharp seam/cut appears between the
+// moving columns and the static center border.
+static void drawBorderCurrent(GLuint texture, GLuint animatedTexture, int windowW, int windowH,
+                              float alpha, int opaque) {
+    if (texture == 0 || texture != animatedTexture || !animatedBorderIsSide) {
+        drawBorderTexture(texture, windowW, windowH, alpha, opaque);
+        return;
+    }
+    if (borderTexture != 0) {
+        drawBorderTexture(borderTexture, windowW, windowH, alpha, opaque);
+        opaque = 0;
+    }
+    const float fullEdge = (float)ANIM_BORDER_SIDE_COLUMNS * 2.0f / (float)windowW;
+    const float featherCols = 24.0f;
+    const float solidCols = (float)ANIM_BORDER_SIDE_COLUMNS - featherCols;
+    const float solidEdge = solidCols * 2.0f / (float)windowW;
+    const float uSolidLeft = solidCols / ((float)ANIM_BORDER_SIDE_COLUMNS * 2.0f);
+    const float uFeatherRight = ((float)ANIM_BORDER_SIDE_COLUMNS + featherCols) / ((float)ANIM_BORDER_SIDE_COLUMNS * 2.0f);
+
+    // Left column: solid outer strip + feathered inner strip
+    drawBorderQuadFeathered(texture, windowW, windowH, 1.0f, 1.0f, 1.0f,
+                            -1.0f, -1.0f + solidEdge, 0.0f, uSolidLeft, alpha, alpha);
+    drawBorderQuadFeathered(texture, windowW, windowH, 1.0f, 1.0f, 1.0f,
+                            -1.0f + solidEdge, -1.0f + fullEdge, uSolidLeft, 0.5f, alpha, 0.0f);
+
+    // Right column: feathered inner strip + solid outer strip
+    drawBorderQuadFeathered(texture, windowW, windowH, 1.0f, 1.0f, 1.0f,
+                            1.0f - fullEdge, 1.0f - solidEdge, 0.5f, uFeatherRight, 0.0f, alpha);
+    drawBorderQuadFeathered(texture, windowW, windowH, 1.0f, 1.0f, 1.0f,
+                            1.0f - solidEdge, 1.0f, uFeatherRight, 1.0f, alpha, alpha);
 }
 
 static int ensureBorderOverlayTexture(void) {
@@ -1596,16 +1792,18 @@ void VitaBorders_draw(int windowW, int windowH) {
         }
         eased = progress * progress * (3.0f - 2.0f * progress);
     }
-    if (previousBorderTexture != 0 && borderTexture != 0) {
-        drawBorderTexture(borderTexture, windowW, windowH, 1.0f, 1);
+    GLuint animatedTexture=animatedBordersGetTexture();
+    GLuint currentBorderTexture=animatedTexture!=0?animatedTexture:borderTexture;
+    if (previousBorderTexture != 0 && currentBorderTexture != 0) {
+        drawBorderCurrent(currentBorderTexture, animatedTexture, windowW, windowH, 1.0f, 1);
         drawBorderTexture(previousBorderTexture, windowW, windowH, 1.0f - eased, 0);
     } else if (previousBorderTexture != 0) {
         // A native pending border can be deferred under memory pressure. Keep
         // the current border fully visible until the pending texture exists.
         float previousAlpha = (nativeAuthoritative && borderNativeCrossfade) ? 1.0f : (1.0f - eased);
         drawBorderTexture(previousBorderTexture, windowW, windowH, previousAlpha, 0);
-    } else if (borderTexture != 0) {
-        drawBorderTexture(borderTexture, windowW, windowH, eased, eased >= 1.0f);
+    } else if (currentBorderTexture != 0) {
+        drawBorderCurrent(currentBorderTexture, animatedTexture, windowW, windowH, eased, eased >= 1.0f);
     }
 
     if (borderNativeLayerTexture != 0 && borderNativeLayerAlpha > 0.0f)
@@ -1622,6 +1820,7 @@ void VitaBorders_draw(int windowW, int windowH) {
     if (borderBlackHold && borderOverlayAlpha >= 1.0f &&
         (borderTexture != 0 || previousBorderTexture != 0 ||
          borderNativeLayerTexture != 0 || borderNativeRedLayerTexture != 0)) {
+        animatedBordersStop();
         glBindTexture(GL_TEXTURE_2D, 0);
         glFinish();
         if (borderTexture != 0) glDeleteTextures(1, &borderTexture);
@@ -1661,6 +1860,7 @@ int VitaBorders_filesAvailable(void) {
 }
 
 void VitaBorders_shutdown(void) {
+    animatedBordersShutdownWorker();
     if (borderTexture != 0) glDeleteTextures(1, &borderTexture);
     if (previousBorderTexture != 0) glDeleteTextures(1, &previousBorderTexture);
     if (borderOverlayTexture != 0) glDeleteTextures(1, &borderOverlayTexture);

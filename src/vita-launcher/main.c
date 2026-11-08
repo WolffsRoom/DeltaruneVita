@@ -1,122 +1,37 @@
-#include "launcher_ui.h"
+/* Always launch VitaGL without a renderer selection screen.
+ * Native GXM remains packaged for explicit dev use; an old GXM boot marker
+ * must not reopen the selector after crashes. No UI is drawn on success.
+ */
 #include "vita_backend_selection.h"
-
+#include <stdint.h>
+#include "debugScreen.h"
 #include <psp2/appmgr.h>
-#include <psp2/ctrl.h>
 #include <psp2/io/stat.h>
-#include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
-
-#include <stdbool.h>
 #include <stdio.h>
 
-typedef enum LaunchResult {
-    LAUNCH_RESULT_READY = 0,
-    LAUNCH_RESULT_GXM_FALLBACK = 1,
-    LAUNCH_RESULT_MISSING_VITAGL = 2
-} LaunchResult;
-
-static bool fileExists(const char* path) {
-    SceIoStat stat;
-    return path != NULL && sceIoGetstat(path, &stat) >= 0;
-}
-
-static LaunchResult resolveBackend(VitaBackend requested,
-                                   VitaBackend* resolved) {
-    bool vitaGlAvailable = fileExists(VITA_BACKEND_VITAGL_EXECUTABLE);
-    bool gxmAvailable = fileExists(VITA_BACKEND_GXM_EXECUTABLE);
-    *resolved = VitaBackendSelection_resolve(requested, vitaGlAvailable,
-                                             gxmAvailable);
-    if (*resolved == VITA_BACKEND_UNAVAILABLE)
-        return LAUNCH_RESULT_MISSING_VITAGL;
-    if (requested == VITA_BACKEND_GXM && *resolved == VITA_BACKEND_VITAGL)
-        return LAUNCH_RESULT_GXM_FALLBACK;
-    return LAUNCH_RESULT_READY;
-}
-
-static int launchBackend(VitaBackend backend) {
-    return sceAppMgrLoadExec(VitaBackendSelection_executable(backend),
-                             NULL, NULL);
-}
-
 int main(void) {
-    sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
-    LauncherUi_init();
-
-    VitaBackend selected = VitaBackendSelection_load(
-        VITA_BACKEND_PREFERENCE_PATH);
-    bool previousGxmFailure = fileExists(VITA_BACKEND_GXM_BOOT_MARKER);
-    if (previousGxmFailure && selected == VITA_BACKEND_GXM)
-        selected = VITA_BACKEND_VITAGL;
-
-    SceCtrlData pad = {0};
-    sceCtrlPeekBufferPositive(0, &pad, 1);
-    bool countdownHeld = (pad.buttons & SCE_CTRL_LTRIGGER) != 0 &&
-                         (pad.buttons & SCE_CTRL_RTRIGGER) != 0;
-    uint32_t previousButtons = pad.buttons;
-    char status[128] = {0};
-
-    /* Backend selection belongs to Game Settings.  Normal launches jump
-     * straight to the saved backend, so the first-load movie is not delayed
-     * by a second boot menu.  Holding L+R remains an emergency selector. */
-    if (!countdownHeld) {
-        VitaBackend resolved;
-        LaunchResult result = resolveBackend(selected, &resolved);
-        if (result != LAUNCH_RESULT_MISSING_VITAGL) {
-            selected = resolved;
-            VitaBackendSelection_save(VITA_BACKEND_PREFERENCE_PATH, selected);
-            int error = launchBackend(selected);
-            snprintf(status, sizeof(status), "Falha ao iniciar %s: 0x%08X",
-                     VitaBackendSelection_name(selected), (unsigned int)error);
-        } else {
-            snprintf(status, sizeof(status),
-                     "Falha ao iniciar: vitagl.bin ausente. Reinstale o VPK.");
-        }
-        countdownHeld = true;
+    const VitaBackend requested=VitaBackendSelection_load(VITA_BACKEND_PREFERENCE_PATH);
+    SceIoStat stGL,stGxm;
+    const bool glAvailable=sceIoGetstat(VITA_BACKEND_VITAGL_EXECUTABLE,&stGL)>=0;
+    const bool gxmAvailable=sceIoGetstat(VITA_BACKEND_GXM_EXECUTABLE,&stGxm)>=0;
+    const VitaBackend backend=VitaBackendSelection_resolve(requested,glAvailable,gxmAvailable);
+    const char* executable=backend!=VITA_BACKEND_UNAVAILABLE ?
+        VitaBackendSelection_executable(backend) : VITA_BACKEND_VITAGL_EXECUTABLE;
+    SceIoStat st;
+    /* Old renderer_backend.ini may be set to GXM after a previous crash.
+     * Repair that preference before launching to avoid repeated boot loops. */
+    if(backend!=VITA_BACKEND_UNAVAILABLE)
+        VitaBackendSelection_save(VITA_BACKEND_PREFERENCE_PATH,backend);
+    if(backend!=VITA_BACKEND_UNAVAILABLE && sceIoGetstat(executable,&st)>=0){
+        int rc=sceAppMgrLoadExec(executable,NULL,NULL);
+        psvDebugScreenInit();
+        psvDebugScreenPrintf("DELTARUNE VITA\n\nFalha ao iniciar %s: 0x%08X\n",
+                             VitaBackendSelection_name(backend),
+                             (unsigned)rc);
+    }else{
+        psvDebugScreenInit();
+        psvDebugScreenPrintf( "DELTARUNE VITA\n\nExecutavel de renderizador ausente. Reinstale a VPK.\n");
     }
-
-    for (;;) {
-        LauncherUi_draw(selected, 0U, countdownHeld,
-                        previousGxmFailure, status);
-
-        sceCtrlPeekBufferPositive(0, &pad, 1);
-        uint32_t pressed = pad.buttons & ~previousButtons;
-        previousButtons = pad.buttons;
-        bool confirm = false;
-        if ((pressed & (SCE_CTRL_UP | SCE_CTRL_DOWN | SCE_CTRL_LEFT |
-                        SCE_CTRL_RIGHT)) != 0) {
-            selected = selected == VITA_BACKEND_GXM ?
-                       VITA_BACKEND_VITAGL : VITA_BACKEND_GXM;
-            countdownHeld = true;
-            status[0] = '\0';
-        }
-        if ((pressed & SCE_CTRL_CIRCLE) != 0) {
-            selected = VITA_BACKEND_VITAGL;
-            confirm = true;
-        }
-        if ((pressed & SCE_CTRL_CROSS) != 0) confirm = true;
-        if (confirm) {
-            VitaBackend resolved;
-            LaunchResult result = resolveBackend(selected, &resolved);
-            if (result == LAUNCH_RESULT_MISSING_VITAGL) {
-                snprintf(status, sizeof(status),
-                         "Falha ao iniciar: vitagl.bin ausente. Reinstale o VPK.");
-                countdownHeld = true;
-            } else {
-                if (result == LAUNCH_RESULT_GXM_FALLBACK)
-                    snprintf(status, sizeof(status),
-                             "gxm.bin ausente; iniciando VitaGL.");
-                selected = resolved;
-                VitaBackendSelection_save(VITA_BACKEND_PREFERENCE_PATH,
-                                          selected);
-                int error = launchBackend(selected);
-                snprintf(status, sizeof(status),
-                         "Falha ao iniciar %s: 0x%08X",
-                         VitaBackendSelection_name(selected),
-                         (unsigned int)error);
-                countdownHeld = true;
-            }
-        }
-        sceKernelDelayThread(16667);
-    }
+    for(;;)sceKernelDelayThread(16000);
 }

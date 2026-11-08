@@ -227,7 +227,7 @@ struct GXMNVGcontext {
     GXMNVGshader gradient_shader;
     GXMNVGshader img_texture_shader;
     GXMNVGshader text_texture_shader;
-    GXMNVGshader runtime_shader[14];
+    GXMNVGshader runtime_shader[25];
     int runtimeShaderInit,drawShaderTag,activeShaderTag;
     unsigned runtimeShaderMask;
     float drawShaderParams[4],activeShaderParams[4];
@@ -1335,7 +1335,7 @@ static SceGxmFragmentProgram* gxmnvg__variantProgram(GXMNVGcontext* gxm,SceGxmFr
     else if(original==gxm->img_texture_shader.prog.frag)id=gxm->img_texture_shader.prog.frag_id;
     else if(original==gxm->text_texture_shader.prog.frag)id=gxm->text_texture_shader.prog.frag_id;
     else {
-        for(int k=0;k<14;k++)
+        for(int k=0;k<25;k++)
             if(original==gxm->runtime_shader[k].prog.frag){
                 id=gxm->runtime_shader[k].prog.frag_id;
                 break;
@@ -1439,7 +1439,7 @@ static void gxmnvg__setUniforms(GXMNVGcontext *gxm, int uniformOffset, int image
 
     if(need_tex && frag->type==NSVG_SHADER_FILLIMG &&
        gxm->runtimeShaderInit==1 &&
-       gxm->activeShaderTag>=1&&gxm->activeShaderTag<=14&&
+       gxm->activeShaderTag>=1&&gxm->activeShaderTag<=25&&
        (gxm->runtimeShaderMask&(1u<<(gxm->activeShaderTag-1)))){
        GXMNVGshader*custom=&gxm->runtime_shader[gxm->activeShaderTag-1];
        if(custom->prog.frag && custom->loc[GXMNVG_LOC_FRAG]){
@@ -1450,8 +1450,11 @@ static void gxmnvg__setUniforms(GXMNVGcontext *gxm, int uniformOffset, int image
     frag_prog=gxmnvg__variantProgram(gxm,frag_prog);
     gxmnvg__setFragmentProgram(gxm, frag_prog);
 
-    void *buffer;
-    sceGxmReserveFragmentDefaultUniformBuffer(gxm->context, &buffer);
+    /* The reservation fails outside a scene (for example after a rejected
+     * sceGxmBeginScene). Writing through the uninitialised pointer was the
+     * C2-12828 data abort, with stale log text as the address. */
+    void *buffer=NULL;
+    if(sceGxmReserveFragmentDefaultUniformBuffer(gxm->context, &buffer)<0||!buffer)return;
     sceGxmSetUniformDataF(buffer, frag_loc, 0, sizeof(float) * NANOVG_GXM_UNIFORMARRAY_SIZE,
                           (const float *) frag->uniformArray);
     /* Mirror Experimental-GL glUniform* state, but capture it PER DRAW,
@@ -1471,7 +1474,8 @@ static void gxmnvg__setUniforms(GXMNVGcontext *gxm, int uniformOffset, int image
      * Always bind all declared slots; no stale texture state from an older
      * room/shader may leak into the currently bound fragment program. */
     if(need_tex && gxm->runtimeShaderInit==1 &&
-       (gxm->activeShaderTag==10||gxm->activeShaderTag==11||gxm->activeShaderTag==13)){
+       (gxm->activeShaderTag==10||gxm->activeShaderTag==11||
+        gxm->activeShaderTag==13||gxm->activeShaderTag==17)){
         unsigned last=(gxm->activeShaderTag==10)?3:(gxm->activeShaderTag==13?2:1);
         for(unsigned slot=1;slot<=last;slot++){
             int img=gxm->activeStageImages[slot];
@@ -1482,7 +1486,9 @@ static void gxmnvg__setUniforms(GXMNVGcontext *gxm, int uniformOffset, int image
         }
     }
     if(gxm->runtimeShaderInit==1 &&
-       (gxm->activeShaderTag==13||gxm->activeShaderTag==14) &&
+        (gxm->activeShaderTag==13||gxm->activeShaderTag==14||
+         gxm->activeShaderTag==15||gxm->activeShaderTag==17||
+         gxm->activeShaderTag==21) &&
        frag->type==NSVG_SHADER_FILLIMG){
         const SceGxmProgramParameter *vec=sceGxmProgramFindParameterByName(
            gxm->runtime_shader[gxm->activeShaderTag-1].prog.frag_gxp,"gameVectors");
@@ -1718,9 +1724,9 @@ static void gxmnvg__renderFlush(void *uptr) {
 
         // Set view just once per frame.
         {
-            void *uniform_buffer;
-            sceGxmReserveVertexDefaultUniformBuffer(gxm->context, &uniform_buffer);
-            sceGxmSetUniformDataF(uniform_buffer, gxm->shader.loc[GXMNVG_LOC_VIEWSIZE], 0, 2, gxm->view);
+            void *uniform_buffer=NULL;
+            if(sceGxmReserveVertexDefaultUniformBuffer(gxm->context, &uniform_buffer)>=0&&uniform_buffer)
+                sceGxmSetUniformDataF(uniform_buffer, gxm->shader.loc[GXMNVG_LOC_VIEWSIZE], 0, 2, gxm->view);
         }
 
         for (i = 0; i < gxm->ncalls; i++) {
@@ -2056,7 +2062,7 @@ static void gxmnvg__renderDelete(void *uptr) {
     }
 
     if(gxm->runtimeShaderInit==1){
-        for(int i=0;i<14;i++){
+        for(int i=0;i<25;i++){
             GXMNVGshader*custom=&gxm->runtime_shader[i];
             if(custom->prog.frag){
                 sceGxmShaderPatcherReleaseFragmentProgram(
@@ -2470,6 +2476,231 @@ static const char* gxmnvg__game_shader_source(int type){
         " }\n"
         " fin=lerp(fin,gameParams.xyz,hit);\n"
         " return float4(fin*color.a,color.a)*frag[6]*mask.x*mask.y; }\n";
+    /* Chapter 5 Flowey tower (shd_tower): cylindrical UV mapping of a
+     * flat vine surface, rim colour blend and back-face shading. The
+     * original's thin-edge neighbour fill is omitted. gameParams =
+     * rotation, height, scale, face; gameVectors[1].xyz = blendCol. */
+    static const char *tower =
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;\n"
+        "uniform float4 gameVectors[4];\n"
+        "float4 main(uniform sampler2D tex : TEXUNIT0,\n"
+        " float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 coord=mul(pm,float3(fpos,1.0)).xy / frag[9].xy;\n"
+        " float uu=clamp((coord.x*2.0-1.0)*gameParams.z,-1.0,1.0);\n"
+        " float cosine=acos(-uu)/3.14159265;\n"
+        " float cx=cosine/2.0-0.5+gameParams.x;\n"
+        " float cy=coord.y-gameParams.y;\n"
+        " coord=float2(cx-floor(cx),cy-floor(cy));\n"
+        " float4 albedo=tex2D(tex,coord);\n"
+        " float tintA=max(frag[6].a,0.00001);\n"
+        " albedo.rgb*=frag[6].rgb/tintA; albedo.a*=frag[6].a;\n"
+        " float cb=floor(pow(abs(uu),3.0)/2.0*10.0)/10.0;\n"
+        " albedo.rgb=lerp(albedo.rgb,gameVectors[1].xyz,cb);\n"
+        " if(gameParams.w<0.5){\n"
+        "  float back=lerp(cb*2.0,1.0,abs(uu));\n"
+        "  albedo.rgb*=back;\n"
+        " }\n"
+        " return float4(albedo.rgb*albedo.a,albedo.a)*mask.x*mask.y; }\n";
+    /* Chapter 5 tower slices (shd_depthmap): keep texels whose depth alpha
+     * reaches this layer, as opaque pixels. gameParams = top, thickness,
+     * modifier. */
+    static const char *depthmap =
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;\n"
+        "float4 main(uniform sampler2D tex : TEXUNIT0,\n"
+        " float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy / frag[9].xy;\n"
+        " float4 col=tex2D(tex,uv);\n"
+        " float tintA=max(frag[6].a,0.00001);\n"
+        " col.rgb*=frag[6].rgb/tintA; col.a*=frag[6].a;\n"
+        " if(col.a*gameParams.z<gameParams.x) col.a=0.0;\n"
+        " if(col.r+col.g+col.b==0.0) col.a=0.0;\n"
+        " col.a=min(1.0,ceil(col.a-0.01));\n"
+        " return float4(col.rgb*col.a,col.a)*mask.x*mask.y; }\n";
+    /* Palette shaders used by Chapter 2's GAME LED and related HTML/sprite
+     * variants. gameParams.x=u_paletteId, gameVectors[0]=u_Uvs and
+     * gameVectors[1].xy=u_pixelSize. */
+    /* Chapter 5 flower-rain reveal: lineTop/lineBottom specify a moving
+     * oblique clip boundary in the 640x480 application-surface coordinates.
+     * Chapter 3 luminosity-to-transparency: brighten parts of Tenna's
+     * circular texture must fade instead of producing solid white disks. */
+    static const char* petalcut=
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0, float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 c=tex2D(tex,uv)*frag[6];\n"
+        " float f=clamp((fpos.y-gameParams.y)/max(1.0,gameParams.w-gameParams.y),0.0,1.0);\n"
+        " float edge=lerp(gameParams.z,gameParams.x,f);\n"
+        " float reveal=clamp(edge-fpos.x,0.0,1.0);\n"
+        " return c*mask.x*mask.y*reveal;\n"
+        "}\n";
+    static const char* luminosityAlpha=
+        "uniform float4 frag[11];\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0, float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 c=tex2D(tex,uv);\n"
+        " float lum=(c.r+c.g+c.b)/3.0;\n"
+        " float a=c.a*frag[6].a*(1.0-lum);\n"
+        " return float4(0.0,0.0,0.0,a)*mask.x*mask.y;\n"
+        "}\n";
+    /* Exact CH5 shd_screen_blend (SHDR #20): screen texture against GameMaker
+     * vertex paint RGB, preserve texture alpha * vertex alpha. NanoVG paint
+     * colors are premultiplied, hence the unpremultiply of frag[6].rgb. */
+    static const char* screenBlend=
+        "uniform float4 frag[11];\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0, float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 src=tex2D(tex,uv);\n"
+        " float3 tint=frag[6].rgb/max(frag[6].a,0.00001);\n"
+        " float3 screen=1.0-(1.0-src.rgb)*(1.0-tint);\n"
+        " float a=src.a*frag[6].a;\n"
+        " return float4(screen*a,a)*mask.x*mask.y;\n"
+        "}\n";
+    static const char *palette =
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;\n"
+        "uniform float4 gameVectors[4];\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0,\n"
+        " uniform sampler2D pal:TEXUNIT1,\n"
+        " float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 src=tex2D(tex,uv); float4 outc=src;\n"
+        " float4 bounds=gameVectors[0]; float2 pixel=gameVectors[1].xy;\n"
+        " for(int i=0;i<256;i++){\n"
+        "  float2 p=bounds.xy+float2(0.0,(float)i*pixel.y);\n"
+        "  if(p.y>=bounds.w) break; float4 key=tex2D(pal,p);\n"
+        "  if(distance(key,src)<=0.004){\n"
+        "   float col=floor(gameParams.x+1.0);\n"
+        "   float2 q=float2(bounds.x+pixel.x*col,p.y);\n"
+        "   outc=lerp(tex2D(pal,q-float2(pixel.x,0.0)),tex2D(pal,q),frac(gameParams.x)); break;\n"
+        "  }\n"
+        " }\n"
+        " outc*=frag[6]; return float4(outc.rgb*outc.a,outc.a)*mask.x*mask.y; }\n";
+    /* Original Chapter 3 shd_rainbow SHDR: hue from sprite-local atlas UV
+     * plus the original u_time*u_speed; HSV fully saturated brightness 1. */
+    static const char* rainbow =
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;\n"
+        "uniform float4 gameVectors[4];\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0,float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 src=tex2D(tex,uv);\n"
+        " float span=gameVectors[0].y-gameVectors[0].x;\n"
+        " float pos=abs(span)>0.000001?(uv.x-gameVectors[0].x)/span:uv.x;\n"
+        " float hue=frac(gameParams.x*gameParams.y+pos);\n"
+        " float3 h=float3(hue,hue+0.66666667,hue+0.33333333);\n"
+        " float3 rgb=clamp(abs(frac(h)*6.0-3.0)-1.0,0.0,1.0);\n"
+        " float a=src.a*frag[6].a;\n"
+        " return float4(rgb*frag[6].rgb*src.a,a)*mask.x*mask.y;\n"
+        "}\n";
+    /* Chapter 3 television / mini-game CRT: restrained, alpha-safe
+     * scanlines. Never multiply by a heavy vignette or black out the screen. */
+    static const char* crt =
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0,float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 src=tex2D(tex,uv);\n"
+        " float line=0.94+0.06*sin(uv.y*frag[9].y*3.14159265);\n"
+        " float a=src.a*frag[6].a;\n"
+        " return float4(src.rgb*frag[6].rgb*src.a*line,a)*mask.x*mask.y;\n"
+        "}\n";
+    /* Original Chapter 5 shd_overlay_blend formula, sampled RGB overlay
+     * blended with unpremultiplied vertex tint and preserved texture alpha. */
+    static const char* overlayBlend =
+        "uniform float4 frag[11];\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0,float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 src=tex2D(tex,uv);\n"
+        " float3 tint=frag[6].rgb/max(frag[6].a,0.00001);\n"
+        " float3 lo=2.0*src.rgb*tint;\n"
+        " float3 hi=1.0-2.0*(1.0-src.rgb)*(1.0-tint);\n"
+        " float3 rgb=lerp(lo,hi,step(float3(0.5,0.5,0.5),src.rgb));\n"
+        " float a=src.a*frag[6].a;\n"
+        " return float4(rgb*a,a)*mask.x*mask.y;\n"
+        "}\n";
+    /* Original Chapter 3-5 shd_chromakey: UV-chroma distance to key_color
+     * and threshold similarity. Mask output is white, not the original RGB. */
+    static const char* chromakey =
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0,float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 src=tex2D(tex,uv);\n"
+        " float2 c=float2(dot(src.rgb,float3(-0.169,-0.331,0.5))+0.5,dot(src.rgb,float3(0.5,-0.419,-0.081))+0.5);\n"
+        " float2 k=float2(dot(gameParams.xyz,float3(-0.169,-0.331,0.5))+0.5,dot(gameParams.xyz,float3(0.5,-0.419,-0.081))+0.5);\n"
+        " float sim=max(0.001,gameParams.w+0.001);\n"
+        " float d=distance(c,k);\n"
+        " float a=(1.0-pow(clamp((d-sim)/sim,0.0,1.0),1.5))*(src.a>=0.001?1.0:0.0);\n"
+        " a*=mask.x*mask.y;\n"
+        " return float4(a,a,a,a);\n"
+        "}\n";
+    /* Chapter 2-5 original SHDR shd_hue: RGB -> YIQ, rotate chroma
+     * by u_Position radians, YIQ -> RGB. No additional sampler. */
+    static const char* hue =
+        "uniform float4 frag[11];\n"
+        "uniform float4 gameParams;\n"
+        "float4 main(uniform sampler2D tex:TEXUNIT0,float2 ftcoord:TEXCOORD0,float2 fpos:TEXCOORD1):COLOR {\n"
+        " float3x3 pm=float3x3(frag[3].xyz,frag[4].xyz,frag[5].xyz);\n"
+        " float3x3 sm=float3x3(frag[0].xyz,frag[1].xyz,frag[2].xyz);\n"
+        " float2 sc=abs(mul(sm,float3(fpos,1.0)).xy)-frag[8].xy;\n"
+        " float2 mask=clamp(float2(0.5,0.5)-sc*frag[8].zw,0.0,1.0);\n"
+        " float2 uv=mul(pm,float3(fpos,1.0)).xy/frag[9].xy;\n"
+        " float4 src=tex2D(tex,uv);\n"
+        " float3 tint=frag[6].rgb/max(frag[6].a,0.00001);\n"
+        " float3 c=src.rgb*tint;\n"
+        " float yy=dot(c,float3(0.299,0.587,0.114));\n"
+        " float ii=dot(c,float3(0.595716,-0.274453,-0.321263));\n"
+        " float qq=dot(c,float3(0.211456,-0.522591,0.311135));\n"
+        " float ang=atan2(qq,ii)+gameParams.x;\n"
+        " float mag=sqrt(ii*ii+qq*qq);\n"
+        " float i2=mag*cos(ang),q2=mag*sin(ang);\n"
+        " float3 rgb=float3(yy+0.9563*i2+0.6210*q2,yy-0.2721*i2-0.6474*q2,yy-1.1070*i2+1.7046*q2);\n"
+        " float a=src.a*frag[6].a;\n"
+        " return float4(rgb*a,a)*mask.x*mask.y;\n"
+        "}\n";
     switch(type){
         case 1:return gray;
         case 2:return invert;
@@ -2485,6 +2716,17 @@ static const char* gxmnvg__game_shader_source(int type){
         case 12:return castlereflect;
         case 13:return castlereflect_layerblend;
         case 14:return grayscalesand;
+        case 15:return tower;
+        case 16:return depthmap;
+        case 17:return palette;
+        case 18:return petalcut;
+        case 19:return luminosityAlpha;
+        case 20:return screenBlend;
+        case 21:return rainbow;
+        case 22:return crt;
+        case 23:return overlayBlend;
+        case 24:return chromakey;
+        case 25:return hue;
         default:return NULL;
     }
 }
@@ -2508,7 +2750,7 @@ int nvgxmEnableRuntimeShaders(NVGcontext*ctx,const char*modulePath){
     info.alphaDst=SCE_GXM_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
     int error=0;
     int successes=0;
-    for(int k=0;k<14;k++){
+    for(int k=0;k<25;k++){
         GXMNVGshader*shader=&gxm->runtime_shader[k];
         const char*source=gxmnvg__game_shader_source(k+1);
         uint32_t size=(uint32_t)strlen(source);
@@ -2572,7 +2814,7 @@ void nvgxmSelectRuntimeShader(NVGcontext*ctx,int shaderTag){
     GXMNVGcontext*gxm=(GXMNVGcontext*)nvgInternalParams(ctx)->userPtr;
     if(!gxm)return;
     if(gxm->runtimeShaderInit!=1)shaderTag=0;
-    gxm->drawShaderTag=(shaderTag>=1&&shaderTag<=14&&
+    gxm->drawShaderTag=(shaderTag>=1&&shaderTag<=25&&
           (gxm->runtimeShaderMask&(1u<<(shaderTag-1))))?shaderTag:0;
 }
 void nvgxmSetRuntimeShaderParams(NVGcontext*ctx,const float params[4]){

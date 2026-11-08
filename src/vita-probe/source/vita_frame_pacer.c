@@ -34,7 +34,8 @@ void VitaFramePacer_setRate(VitaFramePacer* pacer, uint32_t fps,
     pacer->periodUs = fps != 0 ? 1000000U / fps : 0;
     pacer->periodRemainder = fps != 0 ? 1000000U % fps : 0;
     pacer->remainderCarry = 0;
-    pacer->deadlineUs = nowUs;
+    uint64_t period = pacerPeriodCeil(pacer);
+    pacer->deadlineUs = nowUs + period;
     ++pacer->resetEvents;
 }
 
@@ -47,19 +48,24 @@ VitaFramePacerPlan VitaFramePacer_plan(VitaFramePacer* pacer,
     if (nowUs > pacer->deadlineUs + period * 2ULL) {
         VitaFramePacer_reset(pacer, nowUs);
     }
-    pacerAdvanceDeadline(pacer);
+
     plan.enabled = true;
     plan.deadlineUs = pacer->deadlineUs;
     if (nowUs >= pacer->deadlineUs) {
         ++pacer->lateFrames;
-        pacer->deadlineUs = nowUs;
-        plan.deadlineUs = nowUs;
+        while (pacer->deadlineUs <= nowUs) {
+            pacerAdvanceDeadline(pacer);
+        }
+        plan.deadlineUs = pacer->deadlineUs;
+        plan.coarseSleepUs = 0;
         return plan;
     }
 
     uint64_t remaining = pacer->deadlineUs - nowUs;
     if (remaining > pacer->sleepGuardUs)
         plan.coarseSleepUs = (uint32_t)(remaining - pacer->sleepGuardUs);
+
+    pacerAdvanceDeadline(pacer);
     return plan;
 }
 
@@ -86,7 +92,8 @@ void VitaFramePacer_finish(VitaFramePacer* pacer, uint64_t nowUs) {
 
 void VitaFramePacer_reset(VitaFramePacer* pacer, uint64_t nowUs) {
     if (pacer == NULL) return;
-    pacer->deadlineUs = nowUs;
+    uint64_t period = pacerPeriodCeil(pacer);
+    pacer->deadlineUs = nowUs + period;
     pacer->remainderCarry = 0;
     ++pacer->resetEvents;
 }

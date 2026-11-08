@@ -1,4 +1,5 @@
 #include "data_win.h"
+#include "binary_utils.h"
 #include "binary_reader.h"
 
 #include <stdbool.h>
@@ -2646,6 +2647,51 @@ static void parseAUDO(BinaryReader* reader, DataWin* dw, bool lazyLoadAudio) {
     free(ptrs);
 }
 
+// Reads only the AUDO tables, for lazily loaded audio. Each entry's size sits right
+// before its sound, so entries are spread across the whole chunk. A small buffer
+// keeps each one from pulling in the 128 KiB that the main file handle would read.
+static void parseAUDOTable(BinaryReader* reader, DataWin* dw, const char* filePath,
+                           size_t chunkDataStart, size_t fileSize) {
+    FILE* file = fopen(filePath, "rb");
+    if (!file) {
+        BinaryReader_seek(reader, chunkDataStart);
+        parseAUDO(reader, dw, true);
+        return;
+    }
+    setvbuf(file, nullptr, _IOFBF, 4096);
+    BinaryReader tableReader = BinaryReader_create(file, fileSize);
+    BinaryReader_seek(&tableReader, chunkDataStart);
+    parseAUDO(&tableReader, dw, true);
+    fclose(file);
+}
+
+// Returns how many bytes at the start of TXTR hold the pointer table and the
+// entries it points to. Leaves the file position at the start of the chunk.
+static size_t txtrTableLength(FILE* file, size_t chunkLength) {
+    long start = ftell(file);
+    size_t length = chunkLength;
+    uint32_t count = 0;
+    if (chunkLength >= 4 && fread(&count, 1, 4, file) == 4) {
+        count = BinaryUtils_toLittle32(count);
+        uint32_t* ptrs = count <= (chunkLength - 4) / 4 ? (uint32_t *)malloc(count * sizeof(uint32_t) + 1) : nullptr;
+        if (ptrs && fread(ptrs, sizeof(uint32_t), count, file) == count) {
+            // Pointers are absolute. The largest entry layout is 28 bytes.
+            uint32_t last = 0;
+            repeat(count, i) {
+                uint32_t pointer = BinaryUtils_toLittle32(ptrs[i]);
+                if (pointer > last) last = pointer;
+            }
+            size_t tableEnd = (size_t) start + 4 + count * sizeof(uint32_t);
+            size_t entriesEnd = (size_t) last + 28;
+            size_t end = entriesEnd > tableEnd ? entriesEnd : tableEnd;
+            if (end - (size_t) start < chunkLength) length = end - (size_t) start;
+        }
+        free(ptrs);
+    }
+    fseek(file, start, SEEK_SET);
+    return length;
+}
+
 // ===[ MAIN PARSE FUNCTION ]===
 
 DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
@@ -2810,15 +2856,21 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
 
         // Bulk-read the chunk data into memory for fast parsing
         uint8_t* chunkBuffer = nullptr;
-        if (shouldParse && chunkLength > 0 && options.loadType == DATAWINLOADTYPE_LOAD_PER_CHUNK) {
-            chunkBuffer = (uint8_t *)malloc(chunkLength);
+        // TXTR and AUDO are mostly image and sound payloads (290 MB of Chapter 5).
+        // When those load lazily, only their small tables are needed here.
+        bool lazyAudoTable = options.parseAudo && options.lazyLoadAudio && memcmp(chunkName, "AUDO", 4) == 0;
+        if (shouldParse && chunkLength > 0 && !lazyAudoTable && options.loadType == DATAWINLOADTYPE_LOAD_PER_CHUNK) {
+            size_t bulkLength = chunkLength;
+            if (options.lazyLoadTextures && memcmp(chunkName, "TXTR", 4) == 0)
+                bulkLength = txtrTableLength(reader.file, chunkLength);
+            chunkBuffer = (uint8_t *)malloc(bulkLength);
             if (chunkBuffer) {
-                size_t read = fread(chunkBuffer, 1, chunkLength, reader.file);
-                if (read != chunkLength) {
-                    fprintf(stderr, "DataWin: short read on chunk %.4s (expected %u, got %zu)\n", chunkName, chunkLength, read);
+                size_t read = fread(chunkBuffer, 1, bulkLength, reader.file);
+                if (read != bulkLength) {
+                    fprintf(stderr, "DataWin: short read on chunk %.4s (expected %zu, got %zu)\n", chunkName, bulkLength, read);
                     exit(1);
                 }
-                BinaryReader_setBuffer(&reader, chunkBuffer, chunkDataStart, chunkLength);
+                BinaryReader_setBuffer(&reader, chunkBuffer, chunkDataStart, bulkLength);
             }
         }
 
@@ -2886,7 +2938,8 @@ DataWin* DataWin_parse(const char* filePath, DataWinParserOptions options) {
         } else if (options.parseTxtr && memcmp(chunkName, "TXTR", 4) == 0) {
             parseTXTR(&reader, dw, chunkEnd, options.lazyLoadTextures);
         } else if (options.parseAudo && memcmp(chunkName, "AUDO", 4) == 0) {
-            parseAUDO(&reader, dw, options.lazyLoadAudio);
+            if (lazyAudoTable) parseAUDOTable(&reader, dw, filePath, chunkDataStart, fileSize);
+            else parseAUDO(&reader, dw, options.lazyLoadAudio);
         } else {
             printf("Unknown chunk: %.4s (length %u at offset 0x%zX)\n", chunkName, chunkLength, chunkDataStart - 8);
         }

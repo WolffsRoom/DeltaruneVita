@@ -1,5 +1,171 @@
 # Changelog
 
+> Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
+> Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
+
+## v0.81-11 — Resolução Definitiva da Dupla Barra de TP no Floradinn, Eliminação do Thrashing de Memória em Castle Town/Hometown (Trim de 56 MiB) e VSync Incondicional a 30 FPS
+
+- **Eliminação Definitiva da Dupla Barra de TP no Floradinn (`room_dw_garden_floradinnencounter`)**:
+  - **O que foi feito**: em `src/butterscotch/src/runner.c` (`Runner_executeResolvedEvent` e `Runner_drawViews`), `obj_sakurafubuki_new` detecta transição concluída (`stage >= 2 || pct >= 2.0`) ou batalha ativa (`obj_tensionbar` / `obj_battlecontroller`), reseta `surf_view1 = -4`, retorna incondicionalmente de qualquer evento de Draw e desativa a câmera secundária (`views[1].enabled = false; views[1].surfaceId = -1;`); em `src/butterscotch/src/gl_legacy/gl_legacy_renderer.c` (`glLegacyDrawSurface`), removida a busca por instâncias externas de sakura e restringida a interceptação apenas quando a chamada de desenho parte da própria instância de `obj_sakurafubuki_new` com dimensões diferentes de 640x480.
+  - **Por quê**: ao encerrar a animação de pétalas, o GameMaker liberava `surf_view1` mantendo o ID na variável. Ao entrar em batalha, a surface legítima da barra de TP (`healthbar_surf`, 96x250) recebia o mesmo ID reciclado, fazendo o evento `Draw_73` desenhar a barra de TP espelhada em `(0, 0)` no canto da tela, enquanto o renderer anterior suprimia desenhos legítimos do `obj_tensionbar`.
+  - **Pra quê**: eliminar completamente a barra de TP duplicada em `(0, 0)` e garantir que a barra oficial de TP desenhe normalmente com todos os textos e glifos na coordenada correta (`x ≈ 42`).
+- **Eliminação do Thrashing de Memória em Castle Town e Hometown no Chapter 5**:
+  - **O que foi feito**: em `src/butterscotch/src/runner.c` (`Runner_handlePendingRoomChange`), adicionadas regras de 56 MiB para `vitaSharedDarkCastleTransition` e `vitaSharedTownTransition` no Chapter 5; e em `src/butterscotch/src/gl_legacy/gl_legacy_renderer.c` (`GLLegacyRenderer_prepareRoomTextureSet`), estendida a regra de preaquecimento de atores dinâmicos do Dark World (`spr_krisd`, `spr_susied`, `spr_ralseid`, etc.) para o Chapter 5.
+  - **Por quê**: transições entre salas de Castle Town e Hometown caíam no fallback de 32 MiB de VRAM, gerando expurgos de 12 a 20 MiB seguidos de recodificação imediata e travadas de 90 a 195 ms por porta.
+  - **Pra quê**: manter os atlas de Kris, Susie, Ralsei e cenário aquecidos, eliminando travadas e oscilações ao transitar entre salas do castelo e da cidade.
+- **VSync Incondicional a 30 FPS (`waitForVblank = true`)**:
+  - **O que foi feito**: em `src/vita-probe/source/playable_main.c`, `waitForVblank` agora é verdadeiro sempre que `settings.fpsTargetMode == 0` (30 FPS), independentemente da opção `vsyncEnabled`.
+  - **Por quê**: com VSync desativado na UI, o modo 30 FPS realizava trocas de buffer sem sincronização vertical, causando tearing e descompasso com os 60 Hz do LCD do Vita.
+  - **Pra quê**: assegurar cadência perfeita de 33,333 ms (exatamente 2 ciclos de VBlank por quadro) a 30 FPS.
+
+## v0.81-10 — Resolução da queda a 30 FPS (Pacer Bugfix), Fastpaths Nativos em C para Ch. 4/5 (Floortex & Sunlayer), Glifos DualShock 4 no Krákrá e Prevenção da Dupla Barra de TP
+
+- **Frame Pacer / VSync a 30 FPS (eliminação de queda abrupta de 30 para 15 FPS)**:
+  - **O que foi feito**: em `src/vita-probe/source/vita_frame_pacer.c` (`VitaFramePacer_setRate`, `VitaFramePacer_reset`, `VitaFramePacer_plan`), inicialização do deadline em `nowUs + period`, remoção do avanço de deadline incondicional no início de `plan()`, retorno imediato de `coarseSleepUs = 0` quando há atraso de quadro e avanço do deadline em passos inteiros até o próximo múltiplo do período no final do plano.
+  - **Por quê**: nos logs de Hometown (`room_town_north`), o jogo rodava solto a 46 FPS no modo 60 FPS/Unlocked, mas desabava para 15 FPS ao travar em 30 FPS. O pacer executava um double-advance no topo e no laço de atraso, adiando o deadline em 2 períodos (~66 ms) e impondo um sleep forçado de ~55 ms via `sceKernelDelayThread`.
+  - **Pra quê**: estabilizar o frame time a exatos 33,333 ms em 30 FPS contínuos, acabando com as quedas artificiais induzidas pelo frame pacer.
+- **Fastpaths Nativos em C para Salas Pesadas do Cap. 4 e 5 (`obj_plat_floortex_FLOOR` e `obj_parallax_cliffs_sunlayer`)**:
+  - **O que foi feito**: implementado `VMBuiltins_tryFloortexDraw` em `src/butterscotch/src/vm_builtins.c` interceptando `gml_Object_obj_plat_floortex_FLOOR_Draw_0` e variante `AlignBottom1TILE`, ignorando plataformas culled/não geradas e desenhando superfícies assadas (`front_surf`, `surf`, `back_surf`) diretamente em C sem re-interpretar 9 KB de bytecode GML; e em `src/butterscotch/src/runner.c` (`Runner_tryNativeCliffLayersDraw`), cache da surface 400x300 de `obj_parallax_cliffs_sunlayer`, desenhada via vtable sem re-executar `OTHER_USER0` todo frame.
+  - **Por quê**: nos penhascos (`room_dw_cliff_twirlflowerwind`) e no castelo, `floortex` consumia 33,7 ms/frame em centenas de chamadas GML e criava 3 superfícies por plataforma, inflando a VRAM para 96,5 MB e acionando o LRU do VitaGL, que desalocava texturas essenciais (ataques dos inimigos, Kris, Krákrá e chão).
+  - **Pra quê**: elevar o FPS nos penhascos/castelo e evitar a exaustão de VRAM, mantendo todos os ataques, chão e personagens visíveis.
+- **Glifos DualShock 4 / PS4 na Batalha do Krákrá (`room_dw_cliff_kawkawdash`)**:
+  - **O que foi feito**: em `src/vita-probe/source/playable_main.c`, chamada da nova função `vitaEnsureGamepadActive` logo após `Runner_step(runner)`, garantindo `obj_gamecontroller.gamepad_active = true`, `gamepad_id = 0` e `gamepad_type = "Sony DualShock 4"` antes da etapa de Draw.
+  - **Por quê**: `obj_gamecontroller_Step_1` resetava `gamepad_active = 0` para o slot 0 do Vita, fazendo com que o texto de ACT exibisse `[Z]` e `[X]` do PC.
+  - **Pra quê**: exibir ícones e botões nativos do controle PS4 na interface e batalhas.
+- **Prevenção Definitiva da Dupla Barra de TP no Floradinn**:
+  - **O que foi feito**: em `src/butterscotch/src/runner.c`, `obj_sakurafubuki_new` detecta a presença de `obj_tensionbar` em qualquer sala; ao encontrar, reseta `surf_view1 = -4` e aborta `Draw_72` e `Draw_73`.
+  - **Por quê**: `Draw_73` desenhava `surf_view1` em `(camerax(), cameray())`. A reciclagem do mesmo ID de surface pelo `healthbar_surf` gerava uma segunda barra duplicada no topo esquerdo da tela.
+  - **Pra quê**: eliminar completamente a barra de TP duplicada.
+- **Som de Inicialização (`AUDIO_INTRONOISE.ogg`) no Cold Boot do Chapter 5**:
+  - **O que foi feito**: em `src/vita-probe/source/playable_main.c`, transição para `PLACE_LOGO` assegurada via flag persistente `s_has_shown_boot_logo` no primeiro carregamento de `PLACE_MENU`.
+  - **Por quê**: Chapter 5 inicia por `room_intro_ch5` em vez de `INITIALIZE`, desviando da checagem anterior.
+  - **Pra quê**: reproduzir a vinheta e o áudio `AUDIO_INTRONOISE.ogg` ao iniciar o jogo no Vita.
+
+## v0.81-9 — Bordas animadas sem corte visível, VSync/estabilidade de frames a 30 FPS e intro noise `AUDIO_INTRONOISE.ogg` no boot
+
+- **Bordas Animadas (eliminação do corte seco entre parte móvel e estática)**:
+  - **O que foi feito**: em `src/vita-probe/source/vita_borders.c` (`drawBorderCurrent` e `drawBorderQuadFeathered`), renderização garantida da borda estática completa de fundo (`borderTexture`) e divisão das colunas animadas laterais (`frames_side.bani`) em faixa sólida externa e faixa de transição interna de 24 pixels com gradiente linear suave de alfa (`alpha -> 0.0` / `0.0 -> alpha`).
+  - **Por quê**: os quads rígidos de 120 pixels criavam uma linha visível vertical de corte entre os pixels que movimentavam e a arte estática do fundo em qualquer zoom (especialmente no zoom de 88% de bordas de console).
+  - **Pra quê**: eliminar a linha de emenda e mesclar a animação de forma suave e contínua com a arte estática de fundo.
+- **VSync e Estabilidade de Quadros a 30 FPS**:
+  - **O que foi feito**: inclusão de `settings.fpsTargetMode == 0` em `waitForVblank` quando `settings.vsyncEnabled` estiver ativo em `src/vita-probe/source/playable_main.c`, e avanço de prazo em múltiplos inteiros do período em `VitaFramePacer_plan` (`src/vita-probe/source/vita_frame_pacer.c`).
+  - **Por quê**: 30 FPS estava com `waitForVblank` desativado, sofrendo trocas assíncronas sem sincronia com o LCD de 60 Hz do Vita, além de jitter do kernel e perda de fase do pacer a cada milissegundo de atraso.
+  - **Pra quê**: travar o frame time de 30 FPS a exatos 2 ciclos de VBlank (33,333 ms constantes), acabando com os micro-engasgos e oscilações de cadência.
+- **Áudio `AUDIO_INTRONOISE.ogg` antes do Menu Inicial**:
+  - **O que foi feito**: redirecionamento de cold boot de `ROOM_INITIALIZE -> PLACE_MENU` para a sala `PLACE_LOGO` em `src/vita-probe/source/playable_main.c`, garantindo a execução de `PROCESS_LOGO`, volume SFX ativo e liberação imediata do áudio (`AlAudioSystem_setTransitionHold(audio, false)`).
+  - **Por quê**: no código original, `menu_go == 1` pulava direto para `PLACE_MENU` em silêncio (o logo só tocava com capítulo zerado `menu_go == 2`), e o `transitionHold` mantinha o áudio silenciado.
+  - **Pra quê**: tocar a vinheta clássica e o áudio `AUDIO_INTRONOISE.ogg` ao inicializar o jogo antes do menu em qualquer circunstância.
+
+## v0.81-8 — Chapter 5 (dupla barra de TP, FPS antes/depois da transição de pétalas, travada de troca de sala, penhascos/Krákrá, glifos PS4, bordas de Hometown/floricultura e Room Navigator)
+
+- **Jardim (`room_dw_garden_floradinnencounter` e `room_dw_garden_mushrooms`)**:
+  - **O que foi feito**: limpeza de `surf_view1 = -4` ao atingir `transition_stage >= 2` em `Runner_executeEvent` (`src/butterscotch/src/runner.c`) e `glLegacyDrawSurface` (`src/butterscotch/src/gl_legacy/gl_legacy_renderer.c`), remoção do throttle de frames ímpares da `view 1` durante `transition_stage == 0`, supressão de `obj_blocktree_bg` na `view 0` enquanto coberta por `surf_view1`, frustum culling das árvores fora da câmera, preload de `gardenCore`, inclusão de `vitaSharedGardenTransition` / `vitaSharedCliffTransition` em `vitaSharedTransition` e agrupamento em lote (`vitaBatchRoomTrimActive`) de `glFinish()` / `vglForceGarbageCollection()` na troca de sala.
+  - **Por quê**: `obj_sakurafubuki_new` liberava `surf_view1` sem zerar a variável, fazendo `Draw_73` desenhar a surface reciclada `healthbar_surf` (`96x250`) da barra de TP em `(0, 0)`; pular a `view 1` em frames ímpares durante `stage == 0` derrubava a tela visível para 15 FPS antes da transição; e a saída para `room_dw_garden_mushrooms` executava 68 `glFinish() + vglForceGarbageCollection()` síncronos (`2,24 s`).
+  - **Pra quê**: eliminar a dupla barra de TP na batalha contra Floradinn, manter 30 FPS antes e depois da transição das pétalas e eliminar a travada ao mudar de sala.
+- **Penhascos (`room_dw_cliff_kawkawdash` e `room_dw_cliff_twirlflowerwind`) e Glifos PS4**:
+  - **O que foi feito**: `VitaGpuRules_ch5CliffSimpleMode` (`src/vita-probe/source/vita_gpu_rules.c`) e `vitaEnableChapter5CliffSimpleMode` (`src/butterscotch/src/runner.c`) agora cobrem todas as salas `room_dw_cliff_*` e a subclasse `obj_parallax_cliffs_moving_layers_back`; surfaces intermediárias dos penhascos usam `GL_RGBA4` (`~9,7 MiB` poupados); `visualCore` fixa todas as variantes `spr_kawkaw_tongue`, `spr_kawkaw_sparkle`, `spr_kawkaw_hurt*`, `spr_kawakaw_happy`, `spr_featherbullet`, grama e personagens; e `playable_main.c` força `obj_gamecontroller.gamepad_active = true` com `"Sony DualShock 4"`.
+  - **Por quê**: `obj_parallax_cliffs_moving_layers_back` escapava do filtro por nome exato e consumia `~10 ms/frame` em GML; ataques múltiplos do Krákrá usavam sprites com grafia `spr_kawkaw_*` / `spr_kawakaw_*` ausentes do pin list; e `obj_gamecontroller.gamepad_active` permanecia `0` no slot `0`, exibindo `[Z]`/`[X]` do PC.
+  - **Pra quê**: estabilizar o FPS nos penhascos, manter visíveis o chão, personagens e ataques múltiplos do Krákrá e exibir os glifos do PS4.
+- **Bordas (`room_town_mid`, `room_flowershop_1f` e `room_flowershop_2f`) e Room Navigator**:
+  - **O que foi feito**: adicionadas `room_flowershop_1f` e `room_flowershop_2f` em `VitaBorderRules_shouldBlankSurround` (`src/vita-probe/source/vita_border_rules.c`); ignorado o override estático diurno `border_lw_town_0.png` em salas de Hometown no Chapter 5 (`src/vita-probe/source/vita_borders.c`); e atualizados `VitaSettings_drawDevNavigatorHint` e `VitaSettings_drawDevQuickScenes` (`src/vita-probe/source/vita_settings.c`) para mostrar `232 - room_name` e os glifos `L`, `R` e `X` abaixo do título.
+  - **Por quê**: `borders_config.txt` forçava a borda de dia em `room_town_mid` mesmo à noite, a floricultura não usa borda, e o Room Navigator precisava exibir o índice da sala atual e os glifos de botões na janela maior.
+  - **Pra quê**: corrigir as bordas de Hometown/floricultura no Chapter 5 e melhorar a leitura do Room Navigator no modo Debug.
+
+## v0.81-7 — transição diagonal de pétalas (`shd_petalcut` + cortina `pt_petal_whirl`) e persistência do `CRT Agressivo`
+
+- **Transição de pétalas (`room_dw_garden_floradinnencounter`)**:
+  - **O que foi feito**: `glLegacyDrawSurface` e `glGpuSetShader` (`src/butterscotch/src/gl_legacy/gl_legacy_renderer.c`) agora aplicam o recorte oblíquo de `shd_petalcut` diretamente ao desenhar `surf_view1` sobre a `view 0` em faixas horizontais de `4px` (`lineTop = 690 - pct*640` até `lineBottom = 1130 - pct*640`), mantendo `currentShader = -1` na `view 1`. Em `draw_ch5_sakura_host` (`src/vita-probe/source/playable_main.c`), foi adicionada a cortina diagonal densa de 96 pétalas (`pt_petal_whirl`) acompanhando `transition_percent` ao longo da linha de recorte dentro do viewport 4:3.
+  - **Por quê**: no log `butterlog1-room_dw_cliff_kawkawdash_20261107-123708.log`, `shd_petalcut` caía em `reason=unsupported`, fazendo `surf_view1` (árvores vermelhas) cobrir 100% da tela até o fim da transição em vez de revelar gradualmente as árvores rosas, e `draw_ch5_sakura_host` apenas espalhava pétalas soltas pela tela inteira sem formar a faixa diagonal vista no PC.
+  - **Pra quê**: reproduzir fielmente a varredura diagonal de pétalas rosas trocando as árvores vermelhas e a grama escura pelo jardim rosa como no PC, preservando o frustum culling e o batching na `view 1`.
+- **Persistência do filtro `CRT Agressivo`**:
+  - **O que foi feito**: `VitaSettings_save` e `VitaSettings_load` (`src/vita-probe/source/vita_settings.c`) passam a gravar `screen_filter=crt-aggressive` e aceitar tanto `crt-aggressive` quanto `crt-advanced` ao carregar, igualando `experiments/native-gxm/vita_settings_native.c`.
+  - **Por quê**: evitar perda da opção selecionada ao reiniciar ou alternar entre os backends VitaGL e Native GXM.
+  - **Pra quê**: manter a configuração do filtro `CRT Agressivo` consistente em `config.ini`.
+
+## v0.81-4 a v0.81-6 — FPS e texturas nos penhascos, barra de TP, bordas animadas no Cap. 5 e filtros CRT (`Suave`, `Médio`, `Agressivo`)
+
+- **Penhascos (`room_dw_cliff_kawkawdash` e `room_dw_cliff_twirlflowerwind`)**:
+  - **O que foi feito**: removida a exigência de `__transition_yscale` em `Runner_tryNativeCliffLayersDraw` (`src/butterscotch/src/runner.c`) e aplicado `vitaPinSpritePagesByName` em `visualCore` (`spr_kakaw_*`, `spr_kawkaw_small`, `spr_cliff_crater`) e `windCore` (`spr_plat_twirlflower_vine`, `spr_plat_twirlflower_petals`) em `GLLegacyRenderer_prepareRoomTextureSet` (`src/butterscotch/src/gl_legacy/gl_legacy_renderer.c`).
+  - **Por quê**: salas sem `obj_platswap` não possuíam `__transition_yscale`, derrubando o fundo do penhasco de volta para o Draw interpretado lento (`580 ms+` na entrada), enquanto as páginas de ataque do inimigo e das flores de vento eram apenas marcadas e sofriam evicção LRU sob o teto de 40–50 MiB, deixando o ataque invisível e sumindo com texturas.
+  - **Pra quê**: ativar o fast-path nativo em C nos penhascos e manter residentes na VRAM os sprites de ataque e vento durante toda a sala.
+- **Moldura duplicada na barra de TP (`obj_tensionbar`)**:
+  - **O que foi feito**: adicionado `vitaQuadBatchFlush()` no início de `glGpuSetBlendMode` e `glGpuSetBlendModeExt` (`src/butterscotch/src/gl_legacy/gl_legacy_renderer.c`).
+  - **Por quê**: a troca de modo de blend acontecia antes de descarregar os quads acumulados no lote anterior, fazendo o segundo sprite da barra de TP ser desenhado com o blend errado por cima do texto `TP %`.
+  - **Pra quê**: preservar a máscara/recorte da barra de TP e eliminar a segunda borda sobreposta na batalha.
+- **Bordas animadas no Chapter 5 (`vita_animated_borders.inc`)**:
+  - **O que foi feito**: `animatedBordersGetTexture` agora seleciona `frames_side.bani` (`wantSide = 1`, apenas 3 texturas RGB565 de `255 KiB` para os pilares laterais de `120px`) quando `borderMemoryPressure` está ativo, em vez de desligar a animação.
+  - **Por quê**: no Chapter 5 a pressão de memória (`> 44 MiB`) fica ativa durante quase todo o jogo, o que desabilitava totalmente as bordas animadas.
+  - **Pra quê**: manter as bordas animadas funcionando em todo o Chapter 5 com consumo mínimo de VRAM (`< 768 KiB`).
+- **Filtros de tela CRT (`CRT Suave`, `CRT Médio` e `CRT Agressivo`)**:
+  - **O que foi feito**: renomeado `"CRT Mod (Experimental)"` para **`"CRT Suave"`** (`u_strength = 1.0f`), criado **`"CRT Médio"`** (`u_strength = 1.15f`, `+15%` de intensidade), criado **`"CRT Agressivo"`** (renomeado de `"CRT Avançado"` na `v0.81-6`, somando `u_strength = 1.15f` + scanlines de TV + vinheta + cantos curvos de tubo) e removidos `"CRT Tube"` e `"Scanlines"` avulsos da lista.
+  - **Por quê**: organizar os filtros CRT em três níveis progressivos conforme pedido, sem manter opções antigas duplicadas.
+  - **Pra quê**: entregar três perfis CRT graduados de passe único sem readback de framebuffer.
+
+## v0.81-2 e v0.81-3 — atalhos nativos em C para o Chapter 5
+
+- **O que foi feito**: implementados os 4 candidatos em C (`src/butterscotch/src/runner.c` e `src/butterscotch/src/vm_builtins.c`):
+  1. `VMBuiltins_tryGrassStripDraw` (`obj_plat_vertical_floor_grass_strip`): reutiliza a surface estática da faixa de grama (`__vita_grass_ready`) sem recriar os tiles a cada quadro.
+  2. `Runner_tryNativeCliffLayersDraw` (`obj_parallax_cliffs_moving_layers`): desenha em C as camadas móveis do penhasco no perfil Simple.
+  3. `Runner_prepareFusumaCull` / `Runner_restoreFusumaCull` (`obj_plat_fusuma_mask`): oculta temporariamente durante o Draw as portas deslizantes fora da câmera, restaurando `is_visible` logo em seguida.
+  4. `VMBuiltins_tryBluePlatformDraw` (`obj_blue_platform`): executa o `Draw_0` das plataformas azuis em C mantendo `Step`/colisão em GML.
+- **Por quê**: reduzir o custo de GML interpretado nos objetos mais pesados identificados no perfilamento do Chapter 5 (`docs/candidatos-c-caps4-5-v0.80-59.md`).
+- **Pra quê**: ganhar margem de CPU por frame nas salas de penhasco, vento e castelo do Chapter 5 sem alterar a lógica nem a colisão do jogo.
+
+## v0.81-1 — abertura da versão v0.81 e pacote de bordas animadas
+
+- **O que foi feito**: atualização da versão-base para `0.81` (`config/version.txt`) e integração do pacote de bordas animadas `.bani` (`src/vita-probe/source/vita_animated_borders.inc`).
+- **Por quê**: iniciar a linha `v0.81` a partir da base validada `v0.80-59`.
+- **Pra quê**: suportar bordas animadas em streaming RGB565 e versionamento automático `v0.81-<N>` no gerador de VPK.
+
+## v0.79-5 — torre do Flowey e cache de texturas (teste)
+
+- GXM: `draw_surface`/`draw_surface_ext` enviam largura e altura -1 para "a
+  surface inteira". O GXM descartava esses desenhos, entre eles a cópia final
+  da torre do Flowey (`NATIVE_GXM=tower_draw ... part=0,0,-1x-1`), que por
+  isso nunca aparecia.
+- GXM: o orçamento do cache de texturas pode crescer até 128 MiB enquanto
+  sobrarem mais de 48 MiB de RAM livre. Na batalha final, o limite de 56 MiB
+  do VitaGL causava 141 evicções e 17 s de recargas, sentidas nas trocas de
+  cenário.
+- A v0.79-4 confirmou a correção das cenas por quadro: `pre_us` caiu de
+  ~33 ms para ~2,6 ms.
+
+## v0.79-4 — espera da GPU entre cenas (teste)
+
+- GXM: a tela era criada com 1 cena por quadro, mas é iniciada várias vezes
+  em cada quadro (limpeza, composição depois do mundo e depois de cada troca
+  de surface). Cada reinício fazia a CPU esperar a GPU terminar a cena
+  anterior; no log isso aparecia como 25–33 ms em `draw_detail pre_us`
+  (`room_dw_ranking_hub`, salas do Chapter 5). A tela passa a 8 cenas por
+  quadro, a application surface também a 8 e as demais surfaces a 4.
+
+## v0.79-3 — Chapter 0 durante o vídeo (teste)
+
+- GXM: o `data.win` do Chapter 0 é lido numa thread enquanto o vídeo de
+  abertura toca, e o Chapter 0 não mostra tela de loading. Só a troca para os
+  Chapters 1–5 exibe o loading.
+- GXM: a pré-carga das páginas de batalha fica limitada a 12 páginas e não
+  roda no Chapter 5. No log, ela carregava 33 páginas em 3,3 s e enchia o
+  orçamento de textura antes da sala do save.
+- GXM: registros `NATIVE_GXM=tower_draw` e dos uniforms de `shd_tower` e
+  `shd_depthmap` para investigar a torre do Flowey, que continua invisível.
+
+## v0.79-2 — torre do Flowey e loading no GXM (teste)
+
+- GXM: shaders nativos `shd_depthmap` (fatias do tronco) e `shd_tower`
+  (mapeamento cilíndrico, cor da borda e face traseira) da torre do Flowey no
+  Chapter 5. Sem eles só as folhas e flores apareciam.
+- GXM: tela de loading (animação do Toby e rótulo "Carregando") enquanto o
+  `data.win` do capítulo é lido numa thread.
+- GXM: o Filtro de tela pode ser escolhido no menu Gráficos (a linha estava
+  bloqueada como somente leitura).
+- GXM: pré-carga das páginas comuns de batalha (grupo/UI) antes do jogo, como
+  `GLLegacyRenderer_preloadChapterBattleCore`, contra o travamento ao iniciar
+  a batalha.
+- Áudio: registro de pausa, retomada e liberação de músicas
+  (`AUDIO_STREAM=music_*`) para diagnosticar a música que não volta após
+  batalhas no Chapter 1.
+
 ## v0.79-1 — unificação VitaGL + Native GXM (pre-release)
 
 - Une a linha pública VitaGL com o trabalho Native GXM das builds v0.78-12 a

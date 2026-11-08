@@ -75,6 +75,47 @@ static bool submitRoom(int32_t roomIndex) {
     return true;
 }
 
+/* Pumping the job only on the game thread preserves all GameMaker/DataWin
+ * ownership semantics. Worker may READ/parse with its own FILE* but must
+ * never publish pointers or touch the renderer/GXM structures. */
+void VitaRoomPrefetch_pump(void) {
+    if(!g_roomPrefetch.active || !g_roomPrefetch.work) return;
+    VitaBackgroundJob completed;
+    while(VitaBackgroundWork_poll(g_roomPrefetch.work,&completed)){
+        if(completed.ticket != g_roomPrefetch.ticket){
+            VitaBackgroundJob_release(&completed);
+            continue;
+        }
+        int32_t idx=g_roomPrefetch.roomIndex;
+        g_roomPrefetch.active=false;
+        g_roomPrefetch.roomIndex=-1;
+        bool adopted=false;
+        if(completed.state==VITA_BACKGROUND_JOB_READY &&
+           idx>=0 && g_roomPrefetch.dataWin &&
+           (uint32_t)idx < g_roomPrefetch.dataWin->room.count){
+            DataWinRoomPayload* payload=(DataWinRoomPayload*)completed.result;
+            adopted=DataWin_adoptRoomPayload(g_roomPrefetch.dataWin,idx,payload);
+            DataWin_freeStagedRoomPayload(payload);
+            completed.result=NULL;
+        }
+        VitaBackgroundJob_release(&completed);
+        fprintf(stderr,
+            "VITA_ROOM_PREFETCH=%s room=%d generation=%u source=background\n",
+            adopted?"adopted":"fallback",idx,g_roomPrefetch.generation);
+        return;
+    }
+}
+bool VitaRoomPrefetch_prime(int32_t roomIndex) {
+    if(!g_roomPrefetch.work || !g_roomPrefetch.dataWin || roomIndex<0 ||
+       (uint32_t)roomIndex >= g_roomPrefetch.dataWin->room.count)
+        return false;
+    if(g_roomPrefetch.dataWin->room.rooms[roomIndex].payloadLoaded)
+        return true;
+    if(g_roomPrefetch.active)
+        return g_roomPrefetch.roomIndex==roomIndex;
+    return submitRoom(roomIndex);
+}
+
 bool VitaRoomPrefetch_prepare(int32_t roomIndex) {
     if (g_roomPrefetch.dataWin == NULL || roomIndex < 0 ||
         (uint32_t)roomIndex >= g_roomPrefetch.dataWin->room.count)
@@ -89,6 +130,9 @@ bool VitaRoomPrefetch_prepare(int32_t roomIndex) {
     }
     if (g_roomPrefetch.roomIndex != roomIndex) {
         VitaRoomPrefetch_cancel();
+        /* Higher-priority real transition supersedes speculative I/O.
+         * The next frame checks/adopts the requested destination. */
+        submitRoom(roomIndex);
         return false;
     }
 

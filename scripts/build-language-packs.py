@@ -96,7 +96,7 @@ def build_language(lang: str, version: str) -> dict:
         for i, p in enumerate(files, 1):
             rel = p.relative_to(src_root)
             lower_parts = {x.lower() for x in rel.parts}
-            if p.name.lower() in SKIP_NAMES or lower_parts & SKIP_PARTS:
+            if p.name.lower() in SKIP_NAMES or lower_parts & SKIP_PARTS or any(x.startswith("_") or x.endswith("_windows") for x in lower_parts):
                 continue
             source = steam_source(rel)
             if source and source.is_file():

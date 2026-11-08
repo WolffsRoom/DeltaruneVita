@@ -20,6 +20,9 @@ int main(void) {
     assert(VitaBorderRules_isMenuRoom("PLACE_MENU") == 1);
     assert(VitaBorderRules_isMenuRoom("PLACE_LOGO") == 1);
     assert(VitaBorderRules_isMenuRoom("room_legend") == 1);
+    assert(VitaBorderRules_isMenuRoom("room_gms_debug_failsafe") == 1);
+    assert(VitaBorderRules_isMenuRoom("ROOM_INITIALIZE") == 1);
+    assert(VitaBorderRules_isMenuRoom("room_intro_ch5") == 1);
     VitaBorderRuleState s = {0};
     s.chapter = 3; s.plot = 320;
     expect_asset("room_dw_snow_zone", s, "border_dw_tv_black_0.png");
@@ -109,7 +112,7 @@ int main(void) {
     expect_asset("room_dw_churchb_rotatingtower", s, "border_dw_church_c_0.png");
     s.plot = 230;
     expect_asset("room_dw_churchc_encounter1", s, "border_dw_church_b_0.png");
-    s.plot = 250;    expect_asset("room_dw_churchc_titanclimb1", s, "border_dw_titan_base_0.png");
+    s.plot = 250;    expect_asset("room_dw_churchc_titanclimb1", s, "border_dw_titan_eyes_0.png");
     s.plot = 300; s.darkzone = 0;
     expect_asset("room_town_mid", s, "border_lw_town_night_0.png");
 

@@ -1,4 +1,5 @@
 #include "vita_settings.h"
+#include "native_mic.h"
 
 #include <psp2/io/fcntl.h>
 #include <psp2/io/dirent.h>
@@ -279,6 +280,31 @@ static void loadTrophyState(VitaSettings* s) {
 
 #define SETTINGS_PATH "ux0:data/deltarune/config.ini"
 #define SETTINGS_CATEGORIES 5
+/* Shared config.ini key. Accept prologue='s', prologue = 'n' and
+ * unquoted values for hand-edited files, without mistaking other keys. */
+static char parsePrologueChoice(const char* text){
+    if(!text)return 0;
+    const char* line=text;
+    while(*line){
+        while(*line==' '||*line=='\t'||*line=='\r')line++;
+        if(strncmp(line,"prologue",8)==0){
+            const char* val=line+8;
+            while(*val==' '||*val=='\t')val++;
+            if(*val=='='){
+                val++;
+                while(*val==' '||*val=='\t')val++;
+                if(*val==39||*val==34)val++;
+                if(*val=='s'||*val=='n')return *val;
+            }
+        }
+        const char* next=strchr(line,'\n');
+        if(!next)break;
+        line=next+1;
+    }
+    return 0;
+}
+
+
 #define MODS_ROOT "ux0:data/deltarune/deltarunevita/mods/Lang/"
 
 static bool g_devMode = false;
@@ -314,12 +340,12 @@ static int settingsItemCount(int category) {
         if (category == 0) return 5; // DEV
         if (category == 1) return 3; // CONTROLES TOUCH
         if (category == 2) return getVideoItemCount(); // TELA
-        if (category == 3) return 4; // AUDIO
+        if (category == 3) return 6; // AUDIO + MIC
         if (category == 4) return 5; // SISTEMA
     } else {
         if (category == 0) return 3; // CONTROLES TOUCH
         if (category == 1) return getVideoItemCount(); // TELA
-        if (category == 2) return 4; // AUDIO
+        if (category == 2) return 6; // AUDIO + MIC
         if (category == 3) return 5; // SISTEMA
     }
     return 0;
@@ -377,10 +403,12 @@ static void resetDefaults(VitaSettings* s) {
     s->pvrEnabled = true;
     s->bc3Enabled = true;
     s->rendererMode = VITA_RENDERER_AUTOMATIC;
-    s->graphicsBackend = VITA_BACKEND_VITAGL;
+    s->graphicsBackend = VITA_BACKEND_GXM;
     s->modernGlEnabled = true;
-    s->shadersEnabled = false;
-    g_vitaShadersEnabled = 0;
+    /* Native GXM defaults to optional adapted shaders ON. Saved preferences
+     * (including shaders=0) still take precedence after config.ini load. */
+    s->shadersEnabled = true;
+    g_vitaShadersEnabled = 1;
     s->displayOffsetX = 0;
     s->displayOffsetY = 0;
     s->displayZoom = 100;
@@ -389,8 +417,12 @@ static void resetDefaults(VitaSettings* s) {
     s->pendingPvrEnabled = false;
     s->pendingBc3Enabled = false;
     s->pendingRendererMode = VITA_RENDERER_AUTOMATIC;
-    s->pendingGraphicsBackend = VITA_BACKEND_VITAGL;
-    s->pendingShadersEnabled = false;
+    s->pendingGraphicsBackend = VITA_BACKEND_GXM;
+    s->pendingShadersEnabled = true;
+    s->asyncRoomPrefetchEnabled = true;
+    s->pendingAsyncRoomPrefetchEnabled = true;
+    s->microphoneEnabled = true;
+    s->microphoneSensitivity = 5;
     s->modIndex = 0;
     s->pendingModIndex = 0;
     s->showRestartPrompt = false;
@@ -527,10 +559,12 @@ static void saveSettings(const VitaSettings* s) {
                           s->betterBordersEnabled ? 1 : 0,
                           s->masterVolume, s->musicVolume, s->sfxVolume, s->audioDisabled ? 1 : 0, s->vsyncEnabled ? 1 : 0,
                           s->fpsTargetMode,
-                          s->screenFilterMode == 1 ? "scanlines" :
+                          s->screenFilterMode == 1 ? "crt-soft" :
                           (s->screenFilterMode == 2 ? "sharp-bilinear" :
                           (s->screenFilterMode == 3 ? "dithering-blending" :
-                          (s->screenFilterMode == 4 ? "vhs" : "none"))),
+                          (s->screenFilterMode == 4 ? "vhs" :
+                           (s->screenFilterMode == 5 ? "crt-medium" :
+                           (s->screenFilterMode == 6 ? "crt-aggressive" : "none"))))),
                            s->pvrEnabled ? 1 : 0,
                            s->textureFormatProfile == 1 ? "native" : (s->textureFormatProfile == 2 ? "low" : "optimized"),
                           s->rendererMode == VITA_RENDERER_EXPERIMENTAL ? "experimental-gl" :
@@ -546,6 +580,24 @@ static void saveSettings(const VitaSettings* s) {
                           s->shortcutSkipDialogs ? 1 : 0,
                           s->internalTrophyNotifications ? 1 : 0,
                           s->internalTrophyNotificationsConfigured ? 1 : 0);
+    /* Append exactly one prologue state to the normal persisted options.
+     * Every settings save preserves its value instead of resetting it. */
+    if(length>0 && (size_t)length<sizeof(text)){
+        int extra=snprintf(text+length,sizeof(text)-(size_t)length,
+                           "prologue = '%c'\n",s->prologuePending?'s':'n');
+        if(extra>0 && (size_t)extra<sizeof(text)-(size_t)length)length+=extra;
+    }
+    if(length>0&&(size_t)length<sizeof(text)){
+        int appended=snprintf(text+length,sizeof(text)-(size_t)length,
+          "microphone_enabled=%d\nmicrophone_sensitivity=%d\n",
+          s->microphoneEnabled?1:0,s->microphoneSensitivity);
+        if(appended>0&&(size_t)appended<sizeof(text)-(size_t)length)length+=appended;
+    }
+    if(length>0&&(size_t)length<sizeof(text)){
+        int extra=snprintf(text+length,sizeof(text)-(size_t)length,
+            "gxm_async_room_prefetch=%d\n",s->asyncRoomPrefetchEnabled?1:0);
+        if(extra>0&&(size_t)extra<sizeof(text)-(size_t)length)length+=extra;
+    }
     SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
     if (fd >= 0) {
         sceIoWrite(fd, text, length);
@@ -647,6 +699,7 @@ static inline int getIniCategoryIndex(int logicalCat) {
 void VitaSettings_load(VitaSettings* s) {
     memset(s, 0, sizeof(*s));
     resetDefaults(s);
+    s->prologuePending = true; /* missing key/first install: show once */
     discoverMods(s);
     bool migrateScreenProfile = false;
     char text[1024] = {0};
@@ -655,6 +708,10 @@ void VitaSettings_load(VitaSettings* s) {
         int read = sceIoRead(fd, text, sizeof(text) - 1);
         sceIoClose(fd);
         if (read > 0) text[read] = '\0';
+        /* The key is deliberately shared across VitaGL and Native GXM
+         * so changing settings/backends cannot resurrect the prologue.
+         * Legacy configs without the key migrate to s automatically. */
+        s->prologuePending = parsePrologueChoice(text)!='n';
         char* touchSetting = strstr(text, "touch=");
         s->touchEnabled = touchSetting != NULL && strstr(touchSetting, "touch=1") == touchSetting;
         // DevMode visibility may persist, but active diagnostic overlays are
@@ -694,7 +751,13 @@ void VitaSettings_load(VitaSettings* s) {
         // while Unlock submits immediately.  This also migrates old configs.
         s->vsyncEnabled = s->fpsTargetMode != 3;
         s->screenFilterMode = 0;
-        if (strstr(text, "screen_filter=scanlines") != NULL) s->screenFilterMode = 1;
+        if (strstr(text, "screen_filter=crt-aggressive") != NULL ||
+            strstr(text, "screen_filter=crt-advanced") != NULL) s->screenFilterMode = 6;
+        else if (strstr(text, "screen_filter=crt-medium") != NULL) s->screenFilterMode = 5;
+        else if (strstr(text, "screen_filter=crt-soft") != NULL) s->screenFilterMode = 1;
+        else if (strstr(text, "screen_filter=crt-mod") != NULL) s->screenFilterMode = 1;
+        else if (strstr(text, "screen_filter=crt-tube") != NULL) s->screenFilterMode = 5;
+        else if (strstr(text, "screen_filter=scanlines") != NULL) s->screenFilterMode = 6;
         else if (strstr(text, "screen_filter=sharp-bilinear") != NULL) s->screenFilterMode = 2;
         else if (strstr(text, "screen_filter=dithering-blending") != NULL) s->screenFilterMode = 3;
         else if (strstr(text, "screen_filter=old-tv") != NULL || strstr(text, "screen_filter=vhs") != NULL) s->screenFilterMode = 4;
@@ -811,6 +874,20 @@ void VitaSettings_load(VitaSettings* s) {
         if (s->touchControlScale[i] < 60) s->touchControlScale[i] = 60;
         if (s->touchControlScale[i] > 160) s->touchControlScale[i] = 160;
     }
+    { const char* micEnabled=strstr(text,"microphone_enabled=");
+      const char* micSensitivity=strstr(text,"microphone_sensitivity=");
+      if(micEnabled)s->microphoneEnabled=atoi(micEnabled+19)!=0;
+      if(micSensitivity)s->microphoneSensitivity=atoi(micSensitivity+23);
+      if(s->microphoneSensitivity<1)s->microphoneSensitivity=1;
+      if(s->microphoneSensitivity>10)s->microphoneSensitivity=10;
+    }
+    /* Default enabled for old config.ini files without this setting. */
+    {
+        const char*key=strstr(text,"gxm_async_room_prefetch=");
+        if(key)s->asyncRoomPrefetchEnabled=
+            atoi(key+strlen("gxm_async_room_prefetch="))!=0;
+        s->pendingAsyncRoomPrefetchEnabled=s->asyncRoomPrefetchEnabled;
+    }
     s->pendingPvrEnabled = s->pvrEnabled;
     s->pendingBc3Enabled = s->bc3Enabled;
     s->pendingRendererMode = s->rendererMode;
@@ -826,7 +903,7 @@ void VitaSettings_load(VitaSettings* s) {
     loadTrophyState(s);
     s->trophyStateInitialized = true;
     VitaSettings_loadLanguage(s);
-    if (migrateScreenProfile) saveSettings(s);
+    if (migrateScreenProfile || parsePrologueChoice(text)==0) saveSettings(s);
 }
 
 void VitaSettings_applyAudio(VitaSettings* s, AudioSystem* audio) {
@@ -848,6 +925,9 @@ void VitaSettings_setSliderFromTouch(VitaSettings* s, AudioSystem* audio,
         else s->musicVolume = value;
         VitaSettings_applyAudio(s, audio);
         saveSettings(s);
+    } else if (logicalCategory == 3 && item == 5) {
+        int mic=value<1?1:value;
+        if(s->microphoneSensitivity!=mic){s->microphoneSensitivity=mic;saveSettings(s);}
     } else if (logicalCategory == 2 && item == 4) {
         int brightness = value == 0 ? 10 : value * 10;
         if (s->brightness == brightness) return;
@@ -1043,8 +1123,18 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
                     s->pvrEnabled = s->pendingPvrEnabled;
                     s->bc3Enabled = s->pendingBc3Enabled;
                     s->rendererMode = s->pendingRendererMode;
+                    bool retryNativeGxm =
+                        s->graphicsBackend != VITA_BACKEND_GXM &&
+                        s->pendingGraphicsBackend == VITA_BACKEND_GXM;
                     s->graphicsBackend = s->pendingGraphicsBackend;
+                    /* This switch is an explicit new attempt by the player.
+                     * A stale marker from a previous crashed boot must not
+                     * hijack this newly confirmed choice. It is rewritten
+                     * by GXM at the start of the new process. */
+                    if(retryNativeGxm)
+                        sceIoRemove(VITA_BACKEND_GXM_BOOT_MARKER);
                     s->shadersEnabled = s->pendingShadersEnabled;
+                    s->asyncRoomPrefetchEnabled=s->pendingAsyncRoomPrefetchEnabled;
                     g_vitaShadersEnabled = s->shadersEnabled ? 1 : 0;
                     s->modIndex = s->pendingModIndex;
                     s->textureFormatProfile = s->pendingTextureFormatProfile;
@@ -1067,6 +1157,7 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             s->pendingRendererMode = s->rendererMode;
             s->pendingGraphicsBackend = s->graphicsBackend;
             s->pendingShadersEnabled = s->shadersEnabled;
+            s->pendingAsyncRoomPrefetchEnabled=s->asyncRoomPrefetchEnabled;
             s->pendingModIndex = s->modIndex;
             s->pendingTextureFormatProfile = s->textureFormatProfile;
             s->pendingFpsTargetMode = s->fpsTargetMode;
@@ -1104,22 +1195,26 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
     }
 
     if (s->graphicsMenuOpen) {
-        /* The menu layout and selection logic are the playable VitaSettings
-         * source. GL renderer switches, runtime shader toggles and texture
-         * format profiles cannot be applied by the fixed native GXM backend.
-         * Keep these settings read-only rather than writing deceptive values
-         * to the shared config.ini used by the playable VitaGL port. */
-        if (s->graphicsMenuSelected != 1 && s->graphicsMenuSelected != 4 &&
+        const int graphicsRows = (s->pendingGraphicsBackend == VITA_BACKEND_GXM) ? 6 : 7;
+        if(s->graphicsMenuSelected >= graphicsRows)
+            s->graphicsMenuSelected = graphicsRows - 1;
+        /* GXM texture format and VitaGL renderer mode are fixed, but
+         * adapted shader programs ARE supported by native GXM. Switching
+         * their state requires a backend restart, not a scene-only reload. */
+        if (s->graphicsMenuSelected != 1 && s->graphicsMenuSelected != 2 &&
+            s->graphicsMenuSelected != 3 && s->graphicsMenuSelected != 4 &&
+            s->graphicsMenuSelected != 5 &&
+            s->graphicsMenuSelected != 6 &&
             (pressed & (SCE_CTRL_LEFT | SCE_CTRL_RIGHT | SCE_CTRL_CROSS))) {
             playSettingSound(s, 2);
             return false;
         }
         if (pressed & SCE_CTRL_UP) {
-            s->graphicsMenuSelected = (s->graphicsMenuSelected + 5) % 6;
+            s->graphicsMenuSelected = (s->graphicsMenuSelected + graphicsRows - 1) % graphicsRows;
             playSettingSound(s, 0);
         }
         if (pressed & SCE_CTRL_DOWN) {
-            s->graphicsMenuSelected = (s->graphicsMenuSelected + 1) % 6;
+            s->graphicsMenuSelected = (s->graphicsMenuSelected + 1) % graphicsRows;
             playSettingSound(s, 0);
         }
         bool left = (pressed & SCE_CTRL_LEFT) != 0;
@@ -1142,7 +1237,7 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             playSettingSound(s, 0);
         } else if (s->graphicsMenuSelected == 2 && (left || right)) {
             int step = right ? 1 : -1;
-            s->pendingScreenFilterMode = (s->pendingScreenFilterMode + step + 5) % 5;
+            s->pendingScreenFilterMode = (s->pendingScreenFilterMode + step + 7) % 7;
             s->screenFilterMode = s->pendingScreenFilterMode;
             g_vitaTextureLinearFilter = s->screenFilterMode == 2 ? 1 : 0;
             g_vitaTextureFilterRevision++;
@@ -1151,7 +1246,8 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             playSettingSound(s, 0);
         } else if (s->graphicsMenuSelected == 3 && (left || right)) {
             s->pendingShadersEnabled = !s->shadersEnabled;
-            s->confirmShaderChange = true;
+            s->showRestartPrompt = true; /* recreate native GXM shader programs */
+            s->promptSelection = 0;
             playSettingSound(s, 0);
             return requestRestart;
         } else if (s->graphicsMenuSelected == 4 && (left || right)) {
@@ -1160,6 +1256,12 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
                 VITA_BACKEND_VITAGL : VITA_BACKEND_GXM;
             playSettingSound(s, 0);
         } else if (s->graphicsMenuSelected == 5 && (left || right)) {
+            s->pendingAsyncRoomPrefetchEnabled=!s->asyncRoomPrefetchEnabled;
+            s->showRestartPrompt=true; /* avoid changing running worker */
+            s->promptSelection=0;
+            playSettingSound(s,0);
+            return requestRestart;
+        } else if (s->graphicsMenuSelected == 6 && (left || right)) {
             if (right) {
                 s->pendingRendererMode = (s->pendingRendererMode + 1) % 4;
             } else {
@@ -1168,9 +1270,17 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             playSettingSound(s, 0);
         }
         if (confirm) {
+            if (s->graphicsMenuSelected == 5) {
+                s->pendingAsyncRoomPrefetchEnabled=!s->asyncRoomPrefetchEnabled;
+                s->showRestartPrompt=true;
+                s->promptSelection=0;
+                playSettingSound(s,1);
+                return requestRestart;
+            }
             if (s->graphicsMenuSelected == 3) {
                 s->pendingShadersEnabled = !s->shadersEnabled;
-                s->confirmShaderChange = true;
+                s->showRestartPrompt = true;
+                s->promptSelection = 0;
                 playSettingSound(s, 1);
                 return requestRestart;
             }
@@ -1206,6 +1316,7 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             s->pendingRendererMode = s->rendererMode;
             s->pendingGraphicsBackend = s->graphicsBackend;
             s->pendingShadersEnabled = s->shadersEnabled;
+            s->pendingAsyncRoomPrefetchEnabled=s->asyncRoomPrefetchEnabled;
             s->pendingTextureFormatProfile = s->textureFormatProfile;
             s->pendingFpsTargetMode = s->fpsTargetMode;
             s->pendingScreenFilterMode = s->screenFilterMode;
@@ -1400,6 +1511,15 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
         } else if (logicalCategory == 3 && s->selected == 3) {
             s->audioDisabled = !s->audioDisabled;
             VitaSettings_applyAudio(s, audio);
+            saveSettings(s);
+        } else if (logicalCategory == 3 && s->selected == 4) {
+            s->microphoneEnabled=!s->microphoneEnabled;
+            saveSettings(s);
+        } else if (logicalCategory == 3 && s->selected == 5) {
+            if(pressed&SCE_CTRL_LEFT)s->microphoneSensitivity--;
+            else if(pressed&(SCE_CTRL_RIGHT|SCE_CTRL_CROSS))s->microphoneSensitivity++;
+            if(s->microphoneSensitivity<1)s->microphoneSensitivity=1;
+            if(s->microphoneSensitivity>10)s->microphoneSensitivity=10;
             saveSettings(s);
         } else if (logicalCategory == 4 && s->selected == 0) {
             if (pressed & SCE_CTRL_LEFT) {
@@ -1776,7 +1896,8 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         settingsText(s, "Dynamic", "Dinâmicas", "Dinámicos") :
         (s->consoleBorderMode == 2 ?
             settingsText(s, "Simple", "Simples", "Simples") : valueOff);
-    char masterVolume[32], sfxVolume[32], musicVolume[32], brightness[32];
+    char masterVolume[32], sfxVolume[32], musicVolume[32], brightness[32], micSense[32];
+    snprintf(micSense,sizeof(micSense),"%d%%",s->microphoneSensitivity*20);
     snprintf(masterVolume, sizeof(masterVolume), "%d%%", s->masterVolume * 10);
     snprintf(sfxVolume, sizeof(sfxVolume), "%d%%", s->sfxVolume * 10);
     snprintf(musicVolume, sizeof(musicVolume), "%d%%", s->musicVolume * 10);
@@ -1799,19 +1920,26 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
             (s->pendingRendererMode == VITA_RENDERER_LEGACY ?
                 settingsText(s, "Legacy GL (safe)", "Legacy GL (seguro)", "Legacy GL (seguro)") :
                 settingsText(s, "Automatic", "Automático", "Automático")));
-        const char* screenFilter = s->pendingScreenFilterMode == 1 ? "Scanlines" :
+        const char* screenFilter = s->pendingScreenFilterMode == 1 ? "CRT Suave" :
             (s->pendingScreenFilterMode == 2 ? "Sharp Bilinear" :
             (s->pendingScreenFilterMode == 3 ? "Dithering Blending" :
             (s->pendingScreenFilterMode == 4 ? "VHS" :
-             settingsText(s, "None", "Nenhum", "Ninguno"))));
+             (s->pendingScreenFilterMode == 5 ? "CRT Médio" :
+             (s->pendingScreenFilterMode == 6 ? "CRT Agressivo" :
+              settingsText(s, "None", "Nenhum", "Ninguno"))))));
         const char* graphicsApi = s->pendingGraphicsBackend == VITA_BACKEND_GXM ?
             "Native-GXM" : "VitaGL";
-        const char* values[6] = {"RGBA4444 (fixed)", sync,
+        const char* rendererChoice=s->pendingRendererMode==VITA_RENDERER_LEGACY?
+            "Legacy GL":(s->pendingRendererMode==VITA_RENDERER_MODERN?
+            "Modern GL":(s->pendingRendererMode==VITA_RENDERER_EXPERIMENTAL?
+            "Experimental GL":"Automatic"));
+        const char* values[7] = {"RGBA4444 (fixed)", sync,
             screenFilter, s->pendingShadersEnabled?"Native GXP":"Off",
-            graphicsApi, "Native GXM"};
+            graphicsApi, s->pendingAsyncRoomPrefetchEnabled?"On":"Off",rendererChoice};
         drawCenteredText(r, settingsText(s, "GRAPHICS SETTINGS", "CONFIGURAÇÕES GRÁFICAS", "AJUSTES GRÁFICOS"), 480, 112, 1.4f, 0x00FFFF);
-        for (int i = 0; i < 6; ++i) {
-            float y = 148.0f + i * 37.0f;
+        int graphicsRows=(s->pendingGraphicsBackend==VITA_BACKEND_GXM)?6:7;
+        for (int i = 0; i < graphicsRows; ++i) {
+            float y = 142.0f + i * 33.0f;
             uint32_t color = i == s->graphicsMenuSelected ? 0x00FFFF : 0xFFFFFF;
             if (i == s->graphicsMenuSelected) drawBundledControl("hearth1", 208.0f, y + 12.0f, 22.0f, 1.0f);
             const char* subLabel = i == 0 ? settingsText(s, "Texture Format", "Formato de textura", "Formato de textura") :
@@ -1829,7 +1957,9 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
             } else if (strcmp(s->activeLanguage, "Russian") == 0 || strcmp(s->activeLanguage, "Russkiy") == 0) {
                 subLabel = i == 0 ? "Szhatie tekstur" : i == 1 ? "Limit FPS" : i == 2 ? "Fil'tr ekrana" : i == 3 ? "Sheydery" : i == 4 ? "Graphics API" : "Renderer";
             }
-            drawLabel(r, subLabel, 230, y, color, 1.55f);
+            if(i==5)subLabel=settingsText(s,
+                "Async Room Load","Carregamento assíncrono","Carga asíncrona");
+            drawLabel(r, subLabel, 230, y, color, i==5?1.35f:1.55f);
             drawRightText(r, values[i], 750, y, 1.45f, color);
         }
         const char* desc = "";
@@ -1843,23 +1973,36 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
                 settingsText(s, "Unlocked disables VSync; capped modes enable it automatically.", "Desbloqueado desativa o VSync; limites ativam automaticamente.", "Desbloqueado desactiva VSync; los límites lo activan automáticamente.") :
                 settingsText(s, "The selected cap enables VSync automatically.", "O limite selecionado ativa o VSync automaticamente.", "El límite seleccionado activa VSync automáticamente.");
         } else if (s->graphicsMenuSelected == 2) {
-            if (s->pendingScreenFilterMode == 1) desc = settingsText(s, "Adds lightweight horizontal scanlines.", "Adiciona linhas de varredura horizontais leves.", "Añade líneas de escaneo horizontales ligeras.");
+            if (s->pendingScreenFilterMode == 1) desc = settingsText(s, "Applies a subtle CRT mask.", "Aplica uma máscara CRT suave.", "Aplica una máscara CRT suave.");
             else if (s->pendingScreenFilterMode == 2) desc = settingsText(s, "Single-pass hardware smoothing without an extra surface.", "Suavização de hardware em um passe, sem surface extra.", "Suavizado por hardware en un pase, sin surface extra.");
             else if (s->pendingScreenFilterMode == 3) desc = settingsText(s, "Blends color transitions using a subtle dither pattern.", "Suaviza transições de cor com um padrão sutil de dithering.", "Suaviza transiciones de color con un patrón sutil de dithering.");
             else if (s->pendingScreenFilterMode == 4) desc = settingsText(s, "Lightweight scanlines, VHS tracking and analog noise in one pass.", "Scanlines, tracking VHS e ruído analógico leves em um único passe.", "Scanlines, tracking VHS y ruido analógico ligeros en una sola pasada.");
+            else if (s->pendingScreenFilterMode == 5) desc = settingsText(s,
+                "Uses a CRT mask 15% stronger than Soft.",
+                "Usa uma máscara CRT 15% mais forte que Suave.",
+                "Usa una máscara CRT 15% más fuerte que Suave.");
+            else if (s->pendingScreenFilterMode == 6) desc = settingsText(s,
+                "Adds mild tube curvature, vignette and scanlines.",
+                "Adiciona curvatura leve de tubo, vinheta e scanlines.",
+                "Añade curvatura leve de tubo, viñeta y líneas.");
             else desc = settingsText(s, "Displays the original unfiltered image.", "Exibe a imagem original sem filtro.", "Muestra la imagen original sin filtro.");
         } else if (s->graphicsMenuSelected == 3) {
             desc = s->pendingShadersEnabled ?
-                settingsText(s, "Uses the Vita shader compatibility layer for supported effects.", "Usa a camada de compatibilidade de shaders do Vita nos efeitos suportados.", "Usa la capa de compatibilidad de shaders de Vita en los efectos compatibles.") :
-                settingsText(s, "Uses the fixed pipeline and skips GameMaker shader effects.", "Usa o pipeline fixo e ignora efeitos de shader do GameMaker.", "Usa el pipeline fijo e ignora efectos de shader de GameMaker.");
+                settingsText(s, "Native GXM adapted shaders enabled. A restart applies the change.", "Shaders adaptados do GXM ativados. Reinicie para aplicar.", "Shaders GXM activados. Reinicia para aplicar.") :
+                settingsText(s, "Adapted GXM effects disabled. Restart to enable shaders.", "Efeitos GXM desativados. Reinicie para habilitar shaders.", "Efectos GXM desactivados. Reinicia para activar shaders.");
         } else if (s->graphicsMenuSelected == 4) {
             desc = s->pendingGraphicsBackend == VITA_BACKEND_GXM ?
                 settingsText(s, "Restarts with the experimental direct GXM backend.",
                     "Reinicia usando o backend GXM direto experimental.",
                     "Reinicia usando el backend GXM directo experimental.") :
-                settingsText(s, "Restarts with the stable VitaGL backend.",
-                    "Reinicia usando o backend VitaGL estável.",
-                    "Reinicia usando el backend VitaGL estable.");
+                settingsText(s, "VitaGL maintenance paused. Most v0.80 graphics improvements target Native GXM.",
+                    "Evolução do VitaGL pausada. As melhorias gráficas da v0.80 priorizam Native GXM.",
+                    "Desarrollo de VitaGL pausado. Las mejoras gráficas v0.80 priorizan Native GXM.");
+        } else if (s->graphicsMenuSelected == 5) {
+            desc = settingsText(s,
+              "Prepare rooms in the background. Restart to apply.",
+              "Prepara salas em segundo plano. Reinicie para aplicar.",
+              "Prepara salas en segundo plano. Reinicia para aplicar.");
         } else {
             if (s->pendingRendererMode == VITA_RENDERER_AUTOMATIC)
                 desc = settingsText(s,
@@ -1882,17 +2025,24 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
                     "Combina o renderizador estável com shaders adaptados.",
                     "Combina el renderizador estable con shaders adaptados.");
         }
-        if (s->graphicsMenuSelected == 0 || s->graphicsMenuSelected == 2 ||
-            s->graphicsMenuSelected == 3 || s->graphicsMenuSelected == 5)
+        if (s->graphicsMenuSelected == 0 ||
+            s->graphicsMenuSelected == 6)
             desc = settingsText(s,
               "Native GXM auto-loads BC3 PVR or RGBA4444; custom GML shaders and GL selection remain unavailable.",
               "GXM usa BC3 PVR ou RGBA4444; shaders personalizados e GL indisponiveis.",
               "GXM usa BC3 PVR o RGBA4444; shaders personalizados y GL no disponibles.");
         if (!s->confirmShaderChange)
             drawCenteredUpperTextFitted(r, desc, 480, 390, 0.98f, 690.0f, 0xB8B8B8);
+        if (s->confirmShaderChange || s->showRestartPrompt) {
+            /* UI icons/corners use a deferred texture pass. Flush ALL base
+             * panel icons before dimming or they'll float above the modal. */
+            drawQueuedUIIconPass(r);
+            collectingUIIcons=true;
+            r->vtable->drawRectangle(r,0,0,960,544,0x000000,0.72f,false);
+        }
         if (s->confirmShaderChange) {
-            r->vtable->drawRectangle(r, 176, 174, 784, 370, 0x000000, 0.98f, false);
-            drawDialogBorder(r, 176, 174, 784, 370);
+            r->vtable->drawRectangle(r, 140, 140, 820, 402, 0x000000, 0.98f, false);
+            drawDialogBorder(r, 140, 140, 820, 402);
             drawCenteredText(r,
                 settingsText(s, "APPLY SHADER CHANGE?", "APLICAR ALTERAÇÃO DE SHADERS?", "¿APLICAR CAMBIO DE SHADERS?"),
                 480, 208, 1.42f, 0xFFFFFF);
@@ -1900,11 +2050,23 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
                 settingsText(s, "THE CURRENT SCENE WILL RELOAD.", "A CENA ATUAL SERÁ RECARREGADA.", "LA ESCENA ACTUAL SE RECARGARÁ."),
                 480, 260, 1.05f, 0xFFFF00);
         } else if (s->showRestartPrompt) {
-            r->vtable->drawRectangle(r, 176, 174, 784, 370, 0x000000, 0.98f, false);
-            drawDialogBorder(r, 176, 174, 784, 370);
-            drawCenteredText(r, settingsText(s, "RESTART TO APPLY?", "REINICIAR PARA APLICAR?", "¿REINICIAR PARA APLICAR?"), 480, 208, 1.50f, 0xFFFFFF);
-            drawCenteredUpperText(r, restartWarningText(s), 480, 246, 0.95f, 0xFFFF00);
-            drawCenteredUpperText(r, restartSaveWarningText(s), 480, 274, 0.95f, 0xFFFF00);
+            r->vtable->drawRectangle(r, 120, 122, 840, 410, 0x000000, 0.99f, false);
+            drawDialogBorder(r, 120, 122, 840, 410);
+            drawCenteredUpperTextFitted(r,settingsText(s,
+                "RESTART TO APPLY?","REINICIAR PARA APLICAR?","¿REINICIAR PARA APLICAR?"),
+                480,168,1.80f,685.0f,0xFFFFFF);
+            drawCenteredUpperTextFitted(r,restartWarningText(s),
+                480,228,1.42f,675.0f,0x00FFFF); /* YELLOW: BGR */
+            drawCenteredUpperTextFitted(r,restartSaveWarningText(s),
+                480,281,1.55f,675.0f,0x3030FF); /* RED: BGR */
+            if(s->pendingGraphicsBackend==VITA_BACKEND_VITAGL &&
+               s->pendingGraphicsBackend!=s->graphicsBackend){
+                drawCenteredUpperTextFitted(r,settingsText(s,
+                  "VitaGL is being discontinued.",
+                  "VitaGL está sendo descontinuado.",
+                  "VitaGL se está descontinuando."),
+                  480,318,1.40f,670.0f,0x009FFF); /* ORANGE: BGR */
+            }
         }
         drawQueuedUIIconPass(r);
         if (s->confirmShaderChange) drawConfirmControlFooter(r, s);
@@ -2006,7 +2168,8 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         {s->devRoomNavEnabled ? valueOn : valueOff, s->debugDevEnabled ? valueOn : valueOff, s->debugCollisionMasks ? valueOn : valueOff, ">", ">", ""},
         {s->shortcutSkipDialogs ? valueOn : valueOff, touch, s->controlEditMode ? settingsText(s, "Open", "Aberto", "Abierto") : ">", ""}, 
         {screen, s->betterBordersEnabled ? valueOn : valueOff, adjustment, ">", brightness, ""},
-        {masterVolume, sfxVolume, musicVolume, s->audioDisabled ? valueOn : valueOff}, 
+        {masterVolume, sfxVolume, musicVolume, s->audioDisabled ? valueOn : valueOff,
+         s->microphoneEnabled?valueOn:valueOff,micSense},
         {modDisplay, "", ">", s->internalTrophyNotifications ? valueOn : valueOff, "", ""}
     };
     int visibleItems = settingsItemCount(s->category);
@@ -2024,17 +2187,32 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
                (strcmp(s->activeLanguage, "German") == 0 ? labelsDe[logicalSelectedCategory][dataIndex] :
                ((strcmp(s->activeLanguage, "Russian") == 0 || strcmp(s->activeLanguage, "Russkiy") == 0) ? labelsRu[logicalSelectedCategory][dataIndex] :
                labelsEn[logicalSelectedCategory][dataIndex]))))));
-        drawLabel(r, label, 252, y, textColor, 1.60f);
-        if ((logicalSelectedCategory == 3 && i < 3) ||
+        if(logicalSelectedCategory==3&&i==4)
+            label=settingsText(s,"Microphone","Microfone","Micrófono");
+        else if(logicalSelectedCategory==3&&i==5)
+            label=settingsText(s,"Sensitivity","Sensibilidade","Sensibilidad");
+        drawLabel(r, label, 252, y, textColor, 1.42f);
+        if ((logicalSelectedCategory == 3 && (i < 3 || i==5)) ||
             (logicalSelectedCategory == 2 && dataIndex == 4)) {
             int sliderValue = logicalSelectedCategory == 2 ? s->brightness / 10 :
-                              (i == 0 ? s->masterVolume : (i == 1 ? s->sfxVolume : s->musicVolume));
+                              (i == 5 ? s->microphoneSensitivity :
+                               (i == 0 ? s->masterVolume : (i == 1 ? s->sfxVolume : s->musicVolume)));
             float sliderLeft = 570.0f, sliderRight = 698.0f, sliderY = y + 10.0f;
             r->vtable->drawRectangle(r, sliderLeft, sliderY, sliderRight, sliderY + 8.0f,
                                      0x505050, 1.0f, false);
             r->vtable->drawRectangle(r, sliderLeft, sliderY,
                                      sliderLeft + (sliderRight - sliderLeft) * ((float)sliderValue / 10.0f),
                                      sliderY + 8.0f, i == s->selected ? 0x00FFFF : 0xFFFFFF, 1.0f, false);
+            if(logicalSelectedCategory==3&&i==5){
+                /* Cyan is configured sensitivity; yellow is live capture from the
+                 * microphone and only appears when it is actually enabled. */
+                int gain=s->microphoneEnabled&&VitaMic_isAvailable()?
+                         VitaMic_getLevel()*s->microphoneSensitivity/5:0;
+                if(gain>100)gain=100;
+                if(s->microphoneEnabled)
+                    r->vtable->drawRectangle(r,570,y+18,
+                        570+128.0f*(float)gain/100.0f,y+24,0xFFE060,1.0f,false);
+            }
             drawRightText(r, values[logicalSelectedCategory][dataIndex], 742, y, 1.25f,
                           i == s->selected ? 0x00FFFF : 0xFFFFFF);
         } else {
@@ -2068,7 +2246,17 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         if (selectedDataIndex == 0) selectedHelp = settingsText(s, "Controls the complete game volume.", "Controla o volume total do jogo.", "Controla el volumen total del juego.");
         else if (selectedDataIndex == 1) selectedHelp = settingsText(s, "Controls sound-effect volume.", "Controla o volume dos efeitos sonoros.", "Controla el volumen de los efectos de sonido.");
         else if (selectedDataIndex == 2) selectedHelp = settingsText(s, "Controls music volume.", "Controla o volume das músicas.", "Controla el volumen de la música.");
-        else selectedHelp = settingsText(s, "Disables all audio to reduce processing cost.", "Desativa todo o áudio para reduzir processamento.", "Desactiva todo el audio para reducir procesamiento.");
+        else if(selectedDataIndex==3) selectedHelp=settingsText(s,
+            "Disables playback audio only.","Desativa apenas a reprodução de áudio.",
+            "Desactiva solo la reproducción de audio.");
+        else if(selectedDataIndex==4) selectedHelp=settingsText(s,
+            "Enable Vita mic; if unavailable, press R or tap rapidly in Mike's battle.",
+            "Ativa o microfone; sem ele, use R ou toques rápidos no Mike.",
+            "Activa el micro; si falla, usa R o toca rápido en Mike.");
+        else selectedHelp=settingsText(s,
+            "Cyan = sensitivity, yellow = captured sound (no recording saved).",
+            "Ciano = sensibilidade, amarelo = som captado (sem salvar gravação).",
+            "Cian = sensibilidad; amarillo = sonido capturado (sin grabación).");
     } else if (logicalSelectedCategory == 4) {
         if (selectedDataIndex == 0) selectedHelp = settingsText(s, "Changes the game language data.", "Altera os dados de idioma do jogo.", "Cambia los datos de idioma del juego.");
         else if (selectedDataIndex == 1) selectedHelp = settingsText(s, "Returns to Chapter Select.", "Volta para a seleção de capítulos.", "Vuelve a la selección de capítulos.");
@@ -2089,6 +2277,12 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
             480, 372, 1.05f, 0xFFFF00);
     }
 
+    if (s->confirmChapterSelect||s->confirmRotateLog||s->showRestartPrompt) {
+        /* Flush deferred Game Settings border corners before overlay. */
+        drawQueuedUIIconPass(r);
+        collectingUIIcons=true;
+        r->vtable->drawRectangle(r,0,0,960,544,0x000000,0.72f,false);
+    }
     if (s->confirmChapterSelect) {
         r->vtable->drawRectangle(r, 176, 174, 784, 370, 0x000000, 0.98f, false);
         drawDialogBorder(r, 176, 174, 784, 370);
@@ -2108,13 +2302,22 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
     }
     
     if (s->showRestartPrompt) {
-        r->vtable->drawRectangle(r, 176, 174, 784, 370, 0x000000, 0.98f, false);
-        drawDialogBorder(r, 176, 174, 784, 370);
-        drawCenteredText(r, settingsText(s, "RESTART TO APPLY?", "REINICIAR PARA APLICAR?", "¿REINICIAR PARA APLICAR?"),
-                         480, 208, 1.50f, 0xFFFFFF);
-        drawCenteredUpperText(r, restartWarningText(s), 480, 246, 0.95f, 0xFFFF00);
-        drawCenteredUpperText(r, restartSaveWarningText(s), 480, 274, 0.95f, 0xFFFF00);
-        
+        r->vtable->drawRectangle(r,120,122,840,410,0x000000,0.99f,false);
+        drawDialogBorder(r,120,122,840,410);
+        drawCenteredUpperTextFitted(r,settingsText(s,
+            "RESTART TO APPLY?","REINICIAR PARA APLICAR?","¿REINICIAR PARA APLICAR?"),
+            480,168,1.80f,685.0f,0xFFFFFF);
+        drawCenteredUpperTextFitted(r,restartWarningText(s),
+            480,228,1.42f,675.0f,0x00FFFF); /* YELLOW: BGR */
+        drawCenteredUpperTextFitted(r,restartSaveWarningText(s),
+            480,281,1.55f,675.0f,0x3030FF); /* RED: BGR */
+        if(s->pendingGraphicsBackend==VITA_BACKEND_VITAGL &&
+           s->pendingGraphicsBackend!=s->graphicsBackend)
+            drawCenteredUpperTextFitted(r,settingsText(s,
+                "VitaGL is being discontinued.",
+                "VitaGL está sendo descontinuado.",
+                "VitaGL se está descontinuando."),
+                480,318,1.40f,670.0f,0x009FFF); /* ORANGE: BGR */
     }
     drawQueuedUIIconPass(r);
     if (s->confirmChapterSelect || s->confirmRotateLog)
@@ -2234,6 +2437,46 @@ void VitaSettings_drawTrophyNotification(VitaSettings* s, Renderer* r) {
     r->drawFont = oldFont;
 }
 
+void VitaSettings_drawDevQuickScenes(VitaSettings* s, Renderer* r,
+    int chapter,int selected,const char*const labels[5],
+    const int targets[5],const char*const rooms[5],const char* status) {
+    if(!s || !r || !s->devMode || s->open)return;
+    int fontOld=r->drawFont;
+    r->drawFont=findSettingsFont(r,strcmp(s->activeLanguage,"English")!=0);
+    g_vitaPortOverlayFullScreen=1;
+    r->vtable->beginGUI(r,960,544,0,0,960,544,RENDER_TARGET_HOST_FRAMEBUFFER);
+    r->vtable->drawRectangle(r,0,0,960,544,0x000000,0.73f,false);
+    r->vtable->drawRectangle(r,74,54,886,506,0x000000,0.98f,false);
+    drawDialogBorder(r,74,54,886,506);
+    char line[180];
+    snprintf(line,sizeof(line),"DEV QUICK TESTS  |  CHAPTER %d",chapter);
+    drawCenteredUpperTextFitted(r,line,480,74,1.53f,740,0x00FFFF);
+    drawCenteredUpperTextFitted(r,"SELECT A ROOM TO TEST  -  X: LOAD",480,114,1.02f,720,0xFFFFFF);
+    for(int i=0;i<5;i++){
+        float y=158.0f+i*59.0f;
+        if(i==selected){
+            r->vtable->drawRectangle(r,103,y-7,854,y+45,0x323232,0.97f,false);
+            r->vtable->drawRectangle(r,103,y-7,854,y+45,0x00FFFF,0.84f,true);
+        }
+        snprintf(line,sizeof(line),"%c  %s  %s",
+            i==selected?'>':' ',labels[i]?labels[i]:"TEST",
+            targets[i]>=0?"":"(not found)");
+        drawLabel(r,line,122,y,i==selected?0x00FFFF:0xFFFFFF,1.34f);
+        if(targets[i]>=0){
+            snprintf(line,sizeof(line),"[%d] %.63s",targets[i],
+                rooms[i]?rooms[i]:"unknown");
+            drawLabel(r,line,144,y+26,0xB0B0B0,1.07f);
+        }
+    }
+    if(status&&status[0])
+        drawCenteredUpperTextFitted(r,status,480,469,0.99f,740,0x00FFFF);
+    drawCenteredUpperTextFitted(r,
+       "UP/DOWN  SELECT    X  TELEPORT    O  BACK",480,447,1.04f,735,0xFFFFFF);
+    r->vtable->endGUI(r);
+    g_vitaPortOverlayFullScreen=0;
+    r->drawFont=fontOld;
+}
+
 void VitaSettings_drawBrightness(VitaSettings* s, Renderer* r) {
     if (s == NULL || r == NULL || s->brightness >= 100) return;
     float darkness = 1.0f - (float)s->brightness / 100.0f;
@@ -2285,36 +2528,64 @@ void VitaSettings_drawDevOverlay(VitaSettings* s, Renderer* r,
         // requested 20% typography increase without clipping long room names.
         const float left = 214.0f, top = s->debugDevEnabled ? 176.0f : 42.0f;
         const float right = 952.0f, bottom = 536.0f;
-        r->vtable->drawRectangle(r, left, top, right, bottom, 0x000000, 0.95f, false);
-        r->vtable->drawRectangle(r, left, top, right, bottom, 0xFFFFFF, 0.78f, true);
+        /* Deeper inset and separate navigation rows improve contrast on
+         * 960x544 without hiding much more of the underlying gameplay. */
+        r->vtable->drawRectangle(r, left, top, right, bottom, 0x000000, 0.96f, false);
+        r->vtable->drawRectangle(r, left, top, right, bottom, 0x606060, 0.88f, true);
+        r->vtable->drawRectangle(r,left+8,top+6,right-8,top+42,0x202020,0.96f,false);
+        r->vtable->drawRectangle(r,left+12,top+74,right-12,bottom-80,0x101010,0.80f,false);
         char navLine[192];
         snprintf(navLine, sizeof(navLine), "%s",
-                 settingsText(s, "ROOM NAVIGATOR", "NAVEGADOR DE ROOMS", "NAVEGADOR DE ROOMS"));
-        r->vtable->drawTextColor(r, navLine, left + 20, top + 12, 1.64f, 1.64f, 0,
+                 settingsText(s, "ROOM NAVIGATOR | L+TRIANGLE QUICK TESTS",
+                     "NAVEGADOR | L+TRIANGULO TESTES RAPIDOS",
+                     "NAVEGADOR | L+TRIANGULO TESTS RAPIDOS"));
+        r->vtable->drawTextColor(r, navLine, left + 20, top + 12, 1.18f, 1.18f, 0,
                                  0xFFFF00, 0xFFFF00, 0xFFFF00, 0xFFFF00, 1, -1);
-        snprintf(navLine, sizeof(navLine), "%s: %s",
-                 settingsText(s, "CURRENT", "ATUAL", "ACTUAL"),
+        const char*currentMode=room &&
+            (strncmp(room,"room_dw_",8)==0 ||
+             strncmp(room,"room_dark",9)==0)?"DARK WORLD":"LIGHT WORLD";
+        snprintf(navLine, sizeof(navLine), "%s [%.11s]  %s",
+                 settingsText(s,"CURRENT","ATUAL","ACTUAL"),
+                 currentMode,
                  room != NULL ? room : settingsText(s, "<none>", "<nenhuma>", "<ninguna>"));
         r->vtable->drawTextColor(r, navLine, left + 20, top + 47, 1.27f, 1.27f, 0,
                                  0xA0A0A0, 0xA0A0A0, 0xA0A0A0, 0xA0A0A0, 1, -1);
 
         if (r->dataWin->room.count > 0) {
-            for (int offset = -3; offset <= 3; ++offset) {
+            /* Keep room rows above footer even while verbose DEV metrics
+             * reserve the upper screen for their larger diagnostic panel. */
+            const int nearby = s->debugDevEnabled ? 2 : 3;
+            for (int offset = -nearby; offset <= nearby; ++offset) {
                 int32_t index = devTargetIndex + offset;
                 while (index < 0) index += (int32_t)r->dataWin->room.count;
                 while ((uint32_t)index >= r->dataWin->room.count)
                     index -= (int32_t)r->dataWin->room.count;
                 const char* name = r->dataWin->room.rooms[index].name;
-                snprintf(navLine, sizeof(navLine), "%s %03d  %s",
-                         offset == 0 ? ">" : " ", index, name != NULL ? name : "<unnamed>");
-                uint32_t color = offset == 0 ? 0x00FFFF : 0xB0B0B0;
-                float scale = offset == 0 ? 1.52f : 1.27f;
-                r->vtable->drawTextColor(r, navLine, left + 20,
-                                         top + 82 + (offset + 3) * 32,
-                                         scale, scale, 0, color, color, color, color, 1, -1);
+                const char*world=name&&
+                    (strncmp(name,"room_dw_",8)==0 ||
+                     strncmp(name,"room_dark",9)==0)?"DW":"LW";
+                float rowY=top+83+(offset+nearby)*33;
+                if(offset==0){
+                    r->vtable->drawRectangle(r,left+14,rowY-4,right-14,rowY+29,
+                         0x183A46,0.92f,false);
+                    r->vtable->drawRectangle(r,left+14,rowY-4,right-14,rowY+29,
+                         0x00FFFF,0.68f,true);
+                }else if((offset+nearby)%2==0)
+                    r->vtable->drawRectangle(r,left+14,rowY-3,right-14,rowY+28,
+                         0x222222,0.55f,false);
+                snprintf(navLine,sizeof(navLine),"%c %03d [%s] %.55s",
+                    offset==0?'>':' ',index,world,
+                    name?name:"<unnamed>");
+                uint32_t color=offset==0?0x00FFFF:0xC3C3C3;
+                float scale=offset==0?1.27f:1.19f;
+                r->vtable->drawTextColor(r,navLine,left+24,rowY,
+                        scale,scale,0,color,color,color,color,1,-1);
             }
         }
 
+        drawCenteredUpperTextFitted(r,
+            "L + TRIANGLE : QUICK TESTS (BOSS / AREA / SHADERS / FX)",
+            (left+right)*0.5f,bottom-92,0.96f,right-left-36,0x00FFFF);
         // Three self-contained command cards are easier to scan than the old
         // staggered icons, separators and labels.
         const float footerTop = bottom - 68.0f;
@@ -2698,7 +2969,7 @@ static void drawConfirmControlFooter(Renderer* r, VitaSettings* s) {
 }
 
 static void drawRestartControlFooter(Renderer* r, VitaSettings* s) {
-    const float textY = 330.0f, iconY = 341.0f;
+    const float textY = 367.0f, iconY = 378.0f;
     drawLabel(r, s->uiFooters[6], 366.0f, textY, 0xA0A0A0, 1.15f);
     drawLabel(r, s->uiFooters[4], 575.0f, textY, 0xA0A0A0, 1.15f);
     drawBundledControl("button_ps4_cross_0", 338.0f, iconY, 25.0f, 1.0f);
@@ -2777,32 +3048,41 @@ void VitaSettings_drawCalibration(VitaSettings* s, Renderer* r) {
                              (float)(x + width - 1), (float)(y + height - 1),
                              0xFFFFFF, 1.0f, true);
 
-    // Compact HUD: D-Pad fine adjustment is intentionally not repeated in the
-    // legend. Left analog remains the fast move control; Triangle exposes the
-    // aspect/fill toggle that was previously hidden.
-    const float panelLeft = 126.0f, panelRight = 834.0f;
-    r->vtable->drawRectangle(r, panelLeft, 14, panelRight, 126, 0x000000, 0.90f, false);
-    r->vtable->drawRectangle(r, panelLeft, 14, panelRight, 126, 0x808080, 0.72f, true);
-    drawCenteredText(r, settingsText(s, "ADJUST SCREEN", "AJUSTAR TELA", "AJUSTAR PANTALLA"),
-                     480, 24, 1.08f, 0x00FFFF);
+    /* Improved calibration overlay: clean dark top card, readable real-time
+     * numerical measurements, evenly spaced control hints and an unobstructed
+     * central preview. Existing D-pad fine control and all actions preserved. */
+    const float left=78.0f,right=882.0f;
+    r->vtable->drawRectangle(r,left,12,right,160,0x08070C,0.94f,false);
+    r->vtable->drawRectangle(r,left,12,right,160,0x8D8D8D,0.85f,true);
+    r->vtable->drawRectangle(r,left+10,25,left+15,57,0x00FFFF,1.0f,false);
+    drawCenteredText(r,settingsText(s,"ADJUST SCREEN","AJUSTAR TELA","AJUSTAR PANTALLA"),
+                     480,22,1.58f,0xFFFFFF);
+    char values[125];
+    snprintf(values,sizeof(values),"X %+d     Y %+d      %s %d%%      %s",
+        s->displayOffsetX,s->displayOffsetY,
+        settingsText(s,"ZOOM","ZOOM","ZOOM"),s->displayZoom,
+        s->displayStretchToFill ? settingsText(s,"FULL SCREEN","TELA CHEIA","PANTALLA COMPLETA") :
+                                  settingsText(s,"KEEP ASPECT","MANTER PROPORCAO","MANTENER ASPECTO"));
+    drawCenteredText(r,values,480,68,1.10f,0xF6DA70);
 
-    drawBundledControl("button_psv_joyL", 155.0f, 70.0f, 34.0f, 1.0f);
-    drawLabel(r, settingsText(s, "Move", "Mover", "Mover"), 179.0f, 57.0f, 0xFFFFFF, 0.88f);
-    drawBundledControl("button_psv_joyR", 275.0f, 70.0f, 34.0f, 1.0f);
-    drawLabel(r, "Zoom", 299.0f, 57.0f, 0xFFFFFF, 0.88f);
-    drawBundledControl("button_ps4_triangle_0", 384.0f, 70.0f, 32.0f, 1.0f);
-    drawLabel(r, settingsText(s, "Aspect", "Proporção", "Proporción"), 408.0f, 57.0f, 0xFFFFFF, 0.88f);
-    drawBundledControl("button_ps4_cross_0", 538.0f, 70.0f, 32.0f, 1.0f);
-    drawLabel(r, settingsText(s, "Save", "Salvar", "Guardar"), 562.0f, 57.0f, 0xFFFFFF, 0.88f);
-    drawBundledControl("button_ps4_circle_0", 666.0f, 70.0f, 32.0f, 1.0f);
-    drawLabel(r, "Reset", 690.0f, 57.0f, 0xFFFFFF, 0.88f);
-
-    char values[96];
-    snprintf(values, sizeof(values), "X %+d   Y %+d   ZOOM %d%%   %s",
-             s->displayOffsetX, s->displayOffsetY, s->displayZoom,
-             s->displayStretchToFill ? settingsText(s, "FILL", "PREENCHER", "LLENAR")
-                                     : settingsText(s, "ASPECT", "PROPORÇÃO", "PROPORCIÓN"));
-    drawCenteredText(r, values, 480, 98, 0.88f, 0xC8C8C8);
+    drawBundledControl("button_psv_joyL",135.0f,124.0f,34.0f,1.0f);
+    drawLabel(r,settingsText(s,"Move","Mover","Mover"),159,110,0xFFFFFF,1.06f);
+    drawBundledControl("button_psv_joyR",264.0f,124.0f,34.0f,1.0f);
+    drawLabel(r,"Zoom",288,110,0xFFFFFF,1.06f);
+    drawBundledControl("button_ps4_triangle_0",397,124,32,1);
+    drawLabel(r,settingsText(s,"Aspect","Proporcao","Proporcion"),421,110,0xFFFFFF,1.02f);
+    drawBundledControl("button_ps4_cross_0",585,124,32,1);
+    drawLabel(r,settingsText(s,"Save","Salvar","Guardar"),609,110,0xFFFFFF,1.06f);
+    drawBundledControl("button_ps4_circle_0",737,124,32,1);
+    drawLabel(r,settingsText(s,"Reset","Redefinir","Restablecer"),761,110,0xFFFFFF,1.02f);
+    /* Lower caption is separate, keeping border preview visible. */
+    r->vtable->drawRectangle(r,176,489,784,532,0x000000,0.88f,false);
+    r->vtable->drawRectangle(r,176,489,784,532,0x686868,0.64f,true);
+    drawCenteredUpperTextFitted(r,settingsText(s,
+      "D-PAD: FINE MOVE  |  LEFT STICK: MOVE  |  RIGHT STICK: ZOOM",
+      "D-PAD: AJUSTE FINO  |  ANALOGICO E: MOVER  |  ANALOGICO D: ZOOM",
+      "CRUCETA: AJUSTE FINO  |  STICK IZQ: MOVER  |  STICK DER: ZOOM"),
+      480,500,0.96f,570.0f,0xCCCCCC);
 
     r->vtable->endGUI(r);
     g_vitaPortOverlayFullScreen = 0;
@@ -2837,3 +3117,23 @@ void VitaSettings_setActiveChapter(int chapter) {
     g_activeChapter = chapter;
 }
 
+
+bool VitaSettings_selectIntroLanguage(VitaSettings* settings,const char* modName){
+    if(!settings||!modName)return false;
+    for(int index=0;index<settings->modCount;index++){
+        if(strcmp(settings->modNames[index],modName)==0){
+            settings->modIndex=index;
+            settings->pendingModIndex=index;
+            VitaSettings_loadLanguage(settings);
+            saveSettings(settings); /* also syncs true_config.ini LANG */
+            return true;
+        }
+    }
+    return false;
+}
+
+void VitaSettings_markPrologueComplete(VitaSettings* settings){
+    if(!settings)return;
+    settings->prologuePending=false;
+    saveSettings(settings);
+}

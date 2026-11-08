@@ -1789,6 +1789,33 @@ int main(int argc, char* argv[]) {
                 }
                 Runner_step(runner);
 
+                if (getenv("BS_TEST_DARKSHAPES") && runner->frameCount == 60) {
+                    // Static enemies for A/B runs: Step exits without obj_darkshape_manager.
+                    int32_t growtangle = -1, darkshape = -1;
+                    repeat(runner->dataWin->objt.count, oi) {
+                        const char* objectName = runner->dataWin->objt.objects[oi].name;
+                        if (strcmp(objectName, "obj_growtangle") == 0) growtangle = (int32_t) oi;
+                        if (strcmp(objectName, "obj_darkshape") == 0) darkshape = (int32_t) oi;
+                        if (strcmp(objectName, "obj_heart") == 0) Runner_createInstance(runner, 0.0, 0.0, (int32_t) oi);
+                    }
+                    GMLCamera* testCamera = Runner_getCameraById(runner, runner->views[0].cameraId);
+                    float originX = testCamera != nullptr ? testCamera->viewX : 0.0f;
+                    float originY = testCamera != nullptr ? testCamera->viewY : 0.0f;
+                    Instance* box = Runner_createInstance(runner, originX + 320.0, originY + 240.0, growtangle);
+                    box->visible = false;
+                    int count = atoi(getenv("BS_TEST_DARKSHAPES"));
+                    VMContext* testVm = runner->vmContext;
+                    repeat(count, di) {
+                        Instance* shape = Runner_createInstance(runner, originX + 40.0 + (di % 8) * 75.0,
+                            originY + 40.0 + (di / 8) * 75.0, darkshape);
+                        shape->imageAlpha = 1.0f;
+                        Instance_setSelfVar(shape, VM_getOrAllocateVarID(testVm, "xscale"), RValue_makeReal(1.0));
+                        Instance_setSelfVar(shape, VM_getOrAllocateVarID(testVm, "yscale"), RValue_makeReal(1.0));
+                        if (di % 3 == 1) Instance_setSelfVar(shape, VM_getOrAllocateVarID(testVm, "light"), RValue_makeReal(0.5));
+                        if (di % 3 == 2) Instance_setSelfVar(shape, VM_getOrAllocateVarID(testVm, "image"), RValue_makeReal(2.0));
+                        if (di % 5 == 4) shape->imageAngle = 90.0f;
+                    }
+                }
                 if (getenv("BS_TEST_FESTIVAL_STATE") && runner->frameCount == 60) {
                     // Inspect both layer handles and live membership: removing only
                     // the handle would leave invisible collision/Step instances behind.

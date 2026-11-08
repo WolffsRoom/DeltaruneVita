@@ -11,6 +11,19 @@
 #ifndef NATIVE_GXM_PROBE_VERSION
 #define NATIVE_GXM_PROBE_VERSION "v0.78-gxm-dev"
 #endif
+/* Chapter 3: the scene border must switch on Tenna's snap, not when
+ * entering the battle room or when a cutscene drawable is first created.
+ * The sound hook runs in the GameMaker VM; this flag is process-local. */
+void VitaProbe_logLine(const char* text);
+int g_nativeCh3TennaSnap=0;
+void VitaNativeBorder_noteSound(const char* name){
+    extern int g_vitaActiveChapter;
+    if(g_vitaActiveChapter!=3||!name)return;
+    if(strcmp(name,"snd_whip_crack_only")==0 && !g_nativeCh3TennaSnap){
+        g_nativeCh3TennaSnap=1;
+        VitaProbe_logLine("NATIVE_GXM=ch3_border_snap sound=snd_whip_crack_only");
+    }
+}
 bool g_vitaModernGlActive=false;
 bool g_vitaExperimentalGlActive=false;
 /* Set by main.c; read by the shared per-room rules in runner.c. */
@@ -38,8 +51,23 @@ static unsigned gxm_archive_next_sequence(const char* dir) {
  SceIoDirent entry;
  memset(&entry, 0, sizeof(entry));
  while (sceIoDread(d, &entry) > 0) {
-  unsigned value = 0;
-  if (sscanf(entry.d_name, "gxmlog%u-", &value) == 1 && value >= next) next = value + 1;
+  /* Crash-dump guard: do not invoke libc's heavy __ssvfscanf_r while
+   * scanning Vita dirents during long DEV room-navigation sessions.
+   * Bound every read to sizeof(d_name); only accept gxmlog<digits>-.
+   * This preserves the original archive numbering semantics. */
+  if (memcmp(entry.d_name, "gxmlog", 6) == 0) {
+   unsigned value = 0, i = 6, digits = 0;
+   const unsigned limit = (unsigned)sizeof(entry.d_name);
+   for (; i < limit; ++i) {
+    unsigned c = (unsigned char)entry.d_name[i];
+    if (c < '0' || c > '9') break;
+    unsigned n = c - '0';
+    if (value > (0xffffffffu - n) / 10u) { digits = 0; break; }
+    value = value * 10u + n; digits++;
+   }
+   if (digits && i < limit && entry.d_name[i] == '-' &&
+       value >= next && value != 0xffffffffu) next = value + 1u;
+  }
   memset(&entry, 0, sizeof(entry));
  }
  sceIoDclose(d);

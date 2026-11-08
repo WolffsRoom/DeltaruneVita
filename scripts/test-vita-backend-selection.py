@@ -20,7 +20,8 @@ for token in (
     assert token in text, f"missing contract token: {token}"
 
 source = SOURCE.read_text(encoding="utf-8")
-assert 'valueEquals(value, "gxm") ? VITA_BACKEND_GXM' in source
+assert 'valueEquals(value,"gxm") ? VITA_BACKEND_GXM' in source
+assert "if (file == NULL) return VITA_BACKEND_VITAGL;" in source
 assert "return VITA_BACKEND_VITAGL" in source
 assert "if (requested == VITA_BACKEND_GXM && gxmAvailable)" in source
 assert "if (vitaGlAvailable) return VITA_BACKEND_VITAGL" in source

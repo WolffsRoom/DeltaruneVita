@@ -10,22 +10,22 @@ OUT = ROOT / "data" / "frames" / "Lang"
 OUT_MINIGAME = ROOT / "data" / "frames" / "LangMiniGame"
 LATIN_FONT = ROOT / "data" / "frames" / "undertale.otf"
 
-# Rows 0-5 map to LOADING, textures, GENERATING, UPDATING, game files and
+# Rows 0-5 map to LOADING, textures, GENERATING, LOADING, game data and
 # shaders. Row 6 contains two compact 160x64 localized progress labels (TEXTURES and
 # SHADERS). Row 7 keeps the fixed-width 0-9/ strip used to compose X / Y and
 # reserves its final 160 pixels for native-size 80x32 PLAY/STOP labels used only
 # by the Generating minigame footer.
 LABELS = {
-    # state, detail, generating, updating, game files, shaders, legacy ETA, PLAY, STOP
-    "English": ("LOADING", "textures", "GENERATING", "UPDATING", "game files", "shaders", "ESTIMATED TIME", "PLAY", "STOP"),
-    "Portuguese-BR": ("CARREGANDO", "texturas", "GERANDO", "ATUALIZANDO", "arquivos do jogo", "shaders", "TEMPO ESTIMADO", "JOGAR", "PARAR"),
-    "Spanish": ("CARGANDO", "texturas", "GENERANDO", "ACTUALIZANDO", "archivos del juego", "shaders", "TIEMPO ESTIMADO", "JUGAR", "PARAR"),
-    "German": ("LADEN", "texturen", "ERZEUGEN", "AKTUALISIERUNG", "spieldateien", "shaders", "GESCHÄTZTE ZEIT", "SPIELEN", "STOPP"),
-    "French": ("CHARGEMENT", "textures", "GÉNÉRATION", "MISE À JOUR", "fichiers du jeu", "shaders", "TEMPS ESTIMÉ", "JOUER", "ARRÊTER"),
-    "Italian": ("CARICAMENTO", "texture", "GENERAZIONE", "AGGIORNAMENTO", "file di gioco", "shaders", "TEMPO STIMATO", "GIOCA", "FERMA"),
-    "Turkish": ("YÜKLENİYOR", "dokular", "OLUŞTURULUYOR", "GÜNCELLENİYOR", "oyun dosyaları", "shaders", "TAHMİNİ SÜRE", "OYNA", "DUR"),
-    "Russian": ("ЗАГРУЗКА", "текстуры", "СОЗДАНИЕ", "ОБНОВЛЕНИЕ", "файлы игры", "shaders", "ОСТАЛОСЬ ВРЕМЕНИ", "ИГРАТЬ", "СТОП"),
-    "Japanese": ("読み込み中", "テクスチャ", "生成中", "更新中", "ゲームファイル", "shaders", "残り時間", "プレイ", "停止"),
+    # state, detail, generating, reading data, game data, shaders, legacy ETA, PLAY, STOP
+    "English": ("LOADING", "textures", "GENERATING", "LOADING", "game files", "shaders", "ESTIMATED TIME", "PLAY", "STOP"),
+    "Portuguese-BR": ("CARREGANDO", "texturas", "GERANDO", "CARREGANDO", "arquivos do jogo", "shaders", "TEMPO ESTIMADO", "JOGAR", "PARAR"),
+    "Spanish": ("CARGANDO", "texturas", "GENERANDO", "CARGANDO", "datos del juego", "shaders", "TIEMPO ESTIMADO", "JUGAR", "PARAR"),
+    "German": ("LADEN", "texturen", "ERZEUGEN", "LADEN", "spieldaten", "shaders", "GESCHÄTZTE ZEIT", "SPIELEN", "STOPP"),
+    "French": ("CHARGEMENT", "textures", "GÉNÉRATION", "CHARGEMENT", "données du jeu", "shaders", "TEMPS ESTIMÉ", "JOUER", "ARRÊTER"),
+    "Italian": ("CARICAMENTO", "texture", "GENERAZIONE", "CARICAMENTO", "dati di gioco", "shaders", "TEMPO STIMATO", "GIOCA", "FERMA"),
+    "Turkish": ("YÜKLENİYOR", "dokular", "OLUŞTURULUYOR", "YÜKLENİYOR", "oyun verileri", "shaders", "TAHMİNİ SÜRE", "OYNA", "DUR"),
+    "Russian": ("ЗАГРУЗКА", "текстуры", "СОЗДАНИЕ", "ЗАГРУЗКА", "данные игры", "shaders", "ОСТАЛОСЬ ВРЕМЕНИ", "ИГРАТЬ", "СТОП"),
+    "Japanese": ("読み込み中", "テクスチャ", "生成中", "読み込み中", "ゲームデータ", "shaders", "残り時間", "プレイ", "停止"),
 }
 
 # Compact labels used only by the optional Generating Textures mini-game.
@@ -91,10 +91,10 @@ def draw_progress_label(draw: ImageDraw.ImageDraw, language: str, text: str, cel
 
 
 def draw_progress_digits(atlas: Image.Image) -> None:
-    """Put 0-9 and '/' in 32x64 cells on the final atlas row."""
+    """Put 0-9 and % in 32x64 cells on the final atlas row."""
     draw = ImageDraw.Draw(atlas)
     font = ImageFont.truetype(str(LATIN_FONT), 30)
-    for index, character in enumerate("0123456789/"):
+    for index, character in enumerate("0123456789%"):
         box = draw.textbbox((0, 0), character, font=font, stroke_width=0)
         width, height = box[2] - box[0], box[3] - box[1]
         x = index * 32 + (32 - width) // 2 - box[0]

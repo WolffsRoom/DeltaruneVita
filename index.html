@@ -316,30 +316,9 @@ const A = {
   doorclose:$("a-doorclose") 
 };
 let audioUnlocked = false;
-function unlockAudio(){
-  if(typeof initAudio === "function") initAudio();
-  if(audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(()=>{});
-  audioUnlocked = true;
-}
-window.addEventListener("click", unlockAudio, {capture: true});
-window.addEventListener("pointerdown", unlockAudio, {capture: true});
-window.addEventListener("mousedown", unlockAudio, {capture: true});
-window.addEventListener("keydown", unlockAudio, {capture: true});
-document.addEventListener("click", unlockAudio, {capture: true});
-document.addEventListener("pointerdown", unlockAudio, {capture: true});
-
-function play(a){ 
-  if(!sfxOn||!a)return; 
-  unlockAudio();
-  try {
-    a.currentTime=0; 
-    a.volume=.55;
-    const p = a.play();
-    if(p !== undefined && p.catch) p.catch(()=>{});
-  } catch(e) {}
-}
 let audioCtx = null;
 let blipBuffer = null;
+
 async function initAudio() {
   if (audioCtx) return;
   try {
@@ -355,11 +334,44 @@ async function initAudio() {
   }
 }
 
+function unlockAudio(){
+  if (audioUnlocked) {
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().catch(()=>{});
+    }
+    return;
+  }
+  audioUnlocked = true;
+  initAudio();
+  if (audioCtx && audioCtx.state === "suspended") {
+    audioCtx.resume().catch(()=>{});
+  }
+}
+window.addEventListener("click", unlockAudio, {capture: true});
+window.addEventListener("pointerdown", unlockAudio, {capture: true});
+window.addEventListener("mousedown", unlockAudio, {capture: true});
+window.addEventListener("keydown", unlockAudio, {capture: true});
+document.addEventListener("click", unlockAudio, {capture: true});
+document.addEventListener("pointerdown", unlockAudio, {capture: true});
+
+function play(a){ 
+  if(!sfxOn || !a || !audioUnlocked) return; 
+  try {
+    a.currentTime=0; 
+    a.volume=.55;
+    const p = a.play();
+    if(p !== undefined && p.catch) p.catch(()=>{});
+  } catch(e) {}
+}
+
 function blip(){ 
-  if(!sfxOn)return; 
+  if(!sfxOn || !audioUnlocked) return; 
   if(audioCtx && blipBuffer) {
     try {
-      if (audioCtx.state === "suspended") audioCtx.resume();
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(()=>{});
+        return;
+      }
       const source = audioCtx.createBufferSource();
       source.buffer = blipBuffer;
       const gainNode = audioCtx.createGain();
@@ -372,10 +384,14 @@ function blip(){
       console.warn("Web Audio blip failed, falling back", e);
     }
   }
-  A.text.currentTime=0; 
-  A.text.volume=.4;
-  const p = A.text.play();
-  if(p !== undefined) p.catch(()=>{});
+  if(A.text){
+    try {
+      A.text.currentTime=0; 
+      A.text.volume=.4;
+      const p = A.text.play();
+      if(p !== undefined && p.catch) p.catch(()=>{});
+    } catch(e) {}
+  }
 }
 let sfxOn=true, musicOn=true;   // som ligado por padrão
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -1707,6 +1723,43 @@ async function sha256Hex(buf){
   const digest=await crypto.subtle.digest("SHA-256", buf);
   return Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
+function getCandidateUrls(partOrEntry){
+  const urls = [];
+  const rawUrl = (partOrEntry && (partOrEntry.url || partOrEntry.path)) || "";
+  let relPath = partOrEntry && partOrEntry.path;
+  if(!relPath && rawUrl){
+    const idx = rawUrl.indexOf("language-packs/");
+    if(idx !== -1) relPath = rawUrl.slice(idx);
+  }
+  if(relPath){
+    try {
+      urls.push(new URL(relPath, location.href).href);
+    } catch(e) {}
+  }
+  if(rawUrl){
+    try {
+      const absUrl = new URL(rawUrl, location.href).href;
+      if(!urls.includes(absUrl)) urls.push(absUrl);
+    } catch(e) {}
+  }
+  return urls;
+}
+
+function returnToShop(){
+  if(busy) return;
+  screen = "main";
+  active = 0;
+  pending = false;
+  pendingAction = null;
+  $("single").style.cursor = "";
+  $("single").onclick = null;
+  toSplit();
+  setSeam("idle");
+  $("speech").classList.remove("lang-options");
+  render();
+  speech(SEAM_LINES.choose);
+}
+
 async function applySelectedLanguagePacks(zip){
   if(!selectedExtras.size) return;
   const catalog=await loadLanguageCatalog();
@@ -1721,9 +1774,24 @@ async function applySelectedLanguagePacks(zip){
       let total=0;
       for(let pi=0; pi<entry.parts.length; pi++){
         const part=entry.parts[pi];
-        const partUrl=new URL(part.url, location.href).href;
-        const partRes=await fetch(partUrl, {cache:"no-store"});
-        if(!partRes.ok) throw new Error("Falha ao baixar "+L.label+" parte "+(pi+1)+" (HTTP "+partRes.status+")");
+        const candidates = getCandidateUrls(part);
+        let partRes = null;
+        let lastStatus = 0;
+        for(const u of candidates){
+          try {
+            const res = await fetch(u, {cache:"no-store"});
+            if(res.ok){ partRes = res; break; }
+            lastStatus = res.status;
+          } catch(err) {}
+        }
+        if(!partRes && (location.hostname==="127.0.0.1" || location.hostname==="localhost") && part.url){
+          try {
+            const proxyRes = await fetch("/proxy_download?url="+encodeURIComponent(part.url));
+            if(proxyRes.ok) partRes = proxyRes;
+            else lastStatus = proxyRes.status;
+          } catch(err) {}
+        }
+        if(!partRes || !partRes.ok) throw new Error("Falha ao baixar "+L.label+" parte "+(pi+1)+" (HTTP "+(lastStatus || 404)+")");
         const partBuf=await partRes.arrayBuffer();
         if(part.size && partBuf.byteLength!==part.size) throw new Error("Tamanho inválido: "+L.label+" parte "+(pi+1));
         if(part.sha256 && (await sha256Hex(partBuf)).toLowerCase()!==part.sha256.toLowerCase()) throw new Error("SHA-256 inválido: "+L.label+" parte "+(pi+1));
@@ -1733,13 +1801,28 @@ async function applySelectedLanguagePacks(zip){
       for(const chunk of chunks){ merged.set(chunk,off); off+=chunk.length; }
       packBuf=merged.buffer;
     }else{
-      const packFetchOptions={cache:"no-store"};
-      if(entry.api_asset || entry.url.includes("api.github.com/repos/")){
-        packFetchOptions.headers={"Accept":"application/octet-stream","X-GitHub-Api-Version":"2022-11-28"};
+      const candidates = getCandidateUrls(entry);
+      let res = null;
+      let lastStatus = 0;
+      for(const u of candidates){
+        try {
+          const packFetchOptions={cache:"no-store"};
+          if(entry.api_asset || u.includes("api.github.com/repos/")){
+            packFetchOptions.headers={"Accept":"application/octet-stream","X-GitHub-Api-Version":"2022-11-28"};
+          }
+          const r = await fetch(u, packFetchOptions);
+          if(r.ok){ res = r; break; }
+          lastStatus = r.status;
+        } catch(err) {}
       }
-      let res=await fetch(entry.url, packFetchOptions);
-      if(!res.ok && location.hostname==="127.0.0.1") res=await fetch("/proxy_download?url="+encodeURIComponent(entry.url));
-      if(!res.ok) throw new Error("Falha ao baixar "+L.label+" (HTTP "+res.status+")");
+      if(!res && (location.hostname==="127.0.0.1" || location.hostname==="localhost") && entry.url){
+        try {
+          const proxyRes = await fetch("/proxy_download?url="+encodeURIComponent(entry.url));
+          if(proxyRes.ok) res = proxyRes;
+          else lastStatus = proxyRes.status;
+        } catch(err) {}
+      }
+      if(!res || !res.ok) throw new Error("Falha ao baixar "+L.label+" (HTTP "+(lastStatus || 404)+")");
       packBuf=await res.arrayBuffer();
     }
     if(entry.sha256 && (await sha256Hex(packBuf)).toLowerCase()!==entry.sha256.toLowerCase()) throw new Error("SHA-256 inválido: "+L.label);
@@ -1834,11 +1917,28 @@ async function generate(mirrorId, attachedZipFile){
     setTimeout(()=>{ URL.revokeObjectURL(downloadUrl); link.remove(); }, 60000);
 
     showBar(false); setSeam("laugh", 2000);
-    setLine($("single"), SEAM_LINES.done);
+    const donePrompt = (webLang === "ptbr" || webLang === "pt") 
+      ? "\n\n* [ Clique ou pressione Z/Enter/X para voltar ]" 
+      : "\n\n* [ Click or press Z/Enter/X to return ]";
+    setLine($("single"), SEAM_LINES.done + donePrompt);
+    $("single").style.cursor = "pointer";
+    $("single").onclick = (ev) => {
+      if(ev) ev.stopPropagation();
+      returnToShop();
+    };
   } catch(e) {
     console.error("Error generating patch", e);
     showBar(false); setSeam("oh", 2000);
-    setLine($("single"), "* "+((UI_TEXT[webLang]||UI_TEXT.en).processing_error || "An error occurred during processing. Check the console."));
+    const errText = (e && e.message) ? e.message : ((UI_TEXT[webLang]||UI_TEXT.en).processing_error || "An error occurred during processing. Check the console.");
+    const clickPrompt = (webLang === "ptbr" || webLang === "pt") 
+      ? "\n\n* [ Clique ou pressione Z/Enter/X para voltar à loja ]" 
+      : "\n\n* [ Click or press Z/Enter/X to return to shop ]";
+    setLine($("single"), "* " + errText + clickPrompt);
+    $("single").style.cursor = "pointer";
+    $("single").onclick = (ev) => {
+      if(ev) ev.stopPropagation();
+      returnToShop();
+    };
   } finally { busy = false; }
 }
 
@@ -1926,11 +2026,26 @@ document.addEventListener("keydown", (e) => {
     }
     return;
   }
+  if (!busy && $("single").style.display === "block" && $("single").style.cursor === "pointer") {
+    if (e.key === "z" || e.key === "Enter" || e.key === "x" || e.key === "Backspace" || e.key === "Escape") {
+      returnToShop();
+      return;
+    }
+  }
   if(e.key === "ArrowUp"){ active = Math.max(0, active - 1); play(A.move); render(); }
   else if(e.key === "ArrowDown"){ const list = screen === "main" ? mainItems() : subList(); active = Math.min(list.length - 1, active + 1); play(A.move); render(); }
   else if(e.key === "z" || e.key === "Enter"){ activate(); }
   else if(e.key === "x" || e.key === "Backspace"){ back(); }
 });
+
+const frameEl = $("frame");
+if (frameEl) {
+  frameEl.addEventListener("click", () => {
+    if(!busy && $("single").style.display === "block" && $("single").style.cursor === "pointer"){
+      returnToShop();
+    }
+  });
+}
 
 window.addEventListener("load", () => {
   setTimeout(() => {

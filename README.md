@@ -1,12 +1,32 @@
+
 <p align="center">
   <a href="#">
-    <img  width="500" alt="LogoDeltaruneVita" src="https://github.com/user-attachments/assets/0f25636f-3ef7-4fde-ae01-6cc775ce9d9e" alt="Logo Deltarune PSVita Edition" width="500"/>
-
+    <picture>
+      <source
+        media="(prefers-color-scheme: light)"
+        srcset="https://github.com/user-attachments/assets/e828e610-42b5-4c9a-afad-d8228be8256c"
+      />
+      <source
+        media="(prefers-color-scheme: dark)"
+        srcset="https://github.com/user-attachments/assets/9bd2ad85-1660-4443-8677-d107365e1cb9"
+      />
+      <img
+        src="https://github.com/user-attachments/assets/9bd2ad85-1660-4443-8677-d107365e1cb9"
+        alt="Logo Deltarune PS Vita Edition"
+        width="500"
+      />
+    </picture>
   </a>
 </p>
 <p align="center">
-  <img src="Assets/DeltaruneVita.png" alt="DELTARUNE Chapters 1–5 on PS Vita" width="900">
+  <img
+    src="Assets/DeltaruneVita.png"
+    alt="DELTARUNE Chapters 1–5 on PS Vita"
+    width="900"
+  />
 </p>
+
+
 
 An _unofficial_ port of **DELTARUNE Chapters 1–5** for the PlayStation Vita.
 

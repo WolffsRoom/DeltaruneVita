@@ -82,7 +82,7 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
       </td>
       <td align="center"><b>Playable</b></td>
       <td align="center">
-        Some rooms need optimization.<br>
+        Some rooms need more optimization.<br>
         Choppy climbing sequence, but smooth final battle.
       </td>
       <td align="center"><b>85%</b></td>
@@ -92,10 +92,10 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
         <img src="https://camo.githubusercontent.com/cdb165ac69009027243b34e3800ecfe6596cf84d92ec49edca2c0c59458f0545/68747470733a2f2f7374617469632e77696b69612e6e6f636f6f6b69652e6e65742f64656c746172756e652f696d616765732f662f66632f44656c746172756e655f4368355f69636f6e2e706e672f7265766973696f6e2f6c61746573743f63623d3230323630363234313734343232" width="48" alt="Chapter 5">
         <br><b>Chapter 5</b>
       </td>
-      <td align="center"><b>Experimental</b></td>
+      <td align="center"><b>Playable</b></td>
       <td align="center">
         Smooth final battle, but optimization is incomplete.<br>
-        Possible FPS drops, freezes, and GPU crashes.<br>
+        Possible FPS drops<br>
         Full completion not yet verified.
       </td>
       <td align="center"><b>80%</b></td>

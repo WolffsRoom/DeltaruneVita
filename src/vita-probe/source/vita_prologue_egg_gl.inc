@@ -202,12 +202,15 @@ static void egg_draw_text(NVGcontext*vg,int sheet,int lang,int slot,
      * glyphs and all wrapped lines within its 17px top/bottom padding:
      * JP has denser, wider fallback glyphs, RU has long compound words.
      * Latin positions are lowered by 8px per user request. */
+    /* v0.82: one rule for every script. Fallback glyphs are now on the
+     * Latin baseline (egg_live_kind_shift), and the scale is the largest at
+     * which the whole string fits above the box's bottom border (y 513), so
+     * Russian/Japanese no longer rise into the top border or run off the
+     * bottom with the old fixed 0.70/0.75 scales. */
     float prevScale=egg_live_dialog_scale;
-    egg_live_dialog_scale=(lang==2)?0.70f:
-                          (lang==8||lang==9)?0.75f:1.0f;
-    egg_live_draw(vg,egg_strings[lang][slot],
-                  x+9,y+(lang==2||lang==8||lang==9?6:14),
-                  838,frame,visible,255,255,255,1,1,1);
+    const char*text=egg_strings[lang][slot];
+    egg_live_dialog_scale=egg_live_fit_scale(text,x+9,y+14,838,513,1);
+    egg_live_draw(vg,text,x+9,y+14,838,frame,visible,255,255,255,1,1,1);
     egg_live_dialog_scale=prevScale;
 }
 /* Prologue presentation order: language first, then independent pages
@@ -269,8 +272,12 @@ static int egg_language_installed(const VitaSettings* settings,int index){
 static int egg_available_languages(const VitaSettings* settings,int* indices){
     static const int order[]={0,2,1,3,4,5,6,7,8,9};
     int count=0;
-    for(unsigned i=0;i<sizeof(order)/sizeof(order[0]);i++)
+    for(unsigned i=0;i<sizeof(order)/sizeof(order[0]);i++){
+        /* Russian and Russkiy are two folder names for the same Русский
+         * entry; listing both showed the same card twice in a row. */
+        if(order[i]==9 && count>0 && indices[count-1]==8)continue;
         if(egg_language_installed(settings,order[i]))indices[count++]=order[i];
+    }
     return count;
 }
 static int egg_change_language(VitaSettings *settings,NVGcontext *vg,
@@ -523,6 +530,7 @@ static int egg_intro_run(NVGcontext *vg, VitaSettings *settings,int nativeTrophi
     int stage=0,selectedYes=1,fade=0,success=0,userExit=0;
     unsigned dialogFrame=0;
     int facing=1,moving=0; /* Kris starts facing UP, towards the tree. */
+    float farHintAlpha=0.0f,nearHintAlpha=0.0f;
     while(1){
         SceCtrlData pad={0};
         sceCtrlPeekBufferPositive(0,&pad,1);
@@ -632,17 +640,29 @@ static int egg_intro_run(NVGcontext *vg, VitaSettings *settings,int nativeTrophi
         egg_world_img(vg,sprite,playerX,playerY,38,76,1);
         nvgRestore(vg);
         if(stage==0){
-            if(playerY>286){
-                /* One transparent centered prompt with authentic CROSS
-                 * sprite in place of the ASCII X, no border or backdrop. */
-                /* Start the centered hint after 2 seconds, fade over 0.65s. */
-                float promptAlpha=(float)((int)frame-120)/40.0f;
-                if(promptAlpha>1.0f)promptAlpha=1.0f;
-                if(promptAlpha>0.0f)
-                    egg_live_draw(vg,egg_strings[lang][0],
-                       115,455,820,frame,-1,255,255,255,
-                       promptAlpha,0,1);
-            }else{
+            /* v0.83: two centred hints with smooth fades. Far from the tree:
+             * "Walk toward the tree..." (after 2 s). Close to it: "Press X",
+             * with the PS Vita Cross glyph. Each eases in and out over ~0.5 s
+             * as Kris crosses the interaction line, instead of popping. */
+            const int nearTree=playerY<=286;
+            float farTarget=(!nearTree && frame>=120)?1.0f:0.0f;
+            float nearTarget=nearTree?1.0f:0.0f;
+            farHintAlpha+=(farTarget-farHintAlpha)*0.08f;
+            nearHintAlpha+=(nearTarget-nearHintAlpha)*0.08f;
+            if(farHintAlpha>0.01f){
+                const char*hint=egg_strings[lang][0];
+                egg_live_draw(vg,hint,(960-egg_live_width(hint))*0.5f,455,820,
+                              frame,-1,255,255,255,farHintAlpha,0,1);
+            }
+            if(nearHintAlpha>0.01f){
+                const char*hint=egg_near_prompt[lang];
+                /* egg_live_width counts the Cross as a letter (19 px); it
+                 * is drawn 27 px wide, so centre with the difference. */
+                float w=egg_live_width(hint)+(strchr(hint,'X')?8.0f:0.0f);
+                egg_live_draw(vg,hint,(960-w)*0.5f,455,820,
+                              frame,-1,255,255,255,nearHintAlpha,0,1);
+            }
+            if(nearTree){
                 /* Animated star from data/addons/ui/estrela.gif, small and
                  * centered where the old white 7px square was drawn. */
                 int fi=(frame/10)%6;
@@ -668,10 +688,12 @@ static int egg_intro_run(NVGcontext *vg, VitaSettings *settings,int nativeTrophi
                  * The flag stays small, shaded and the label remains below. */
                 /* Rounded, feathered charcoal shadow behind the language
                  * flag. The old hard purple 2px top rule is removed. */
+                /* v0.82: darker and taller, so the name and the language
+                 * dots stay readable where they cross the red canopy. */
                 NVGpaint flagShadow=nvgBoxGradient(vg,282,38,396,140,8,20,
-                       nvgRGBA(0,0,0,116),nvgRGBA(0,0,0,0));
+                       nvgRGBA(0,0,0,196),nvgRGBA(0,0,0,0));
                 nvgBeginPath(vg);
-                nvgRect(vg,261,17,438,182);
+                nvgRect(vg,261,17,438,192);
                 nvgFillPaint(vg,flagShadow);
                 nvgFill(vg);
                 egg_image(vg,flagIcon,445,80,70,58,1);
@@ -680,9 +702,25 @@ static int egg_intro_run(NVGcontext *vg, VitaSettings *settings,int nativeTrophi
                 egg_live_draw(vg,heading,
                   (960-egg_live_width(heading))*0.5f,39,440,
                   frame,-1,255,255,255,1,0,0);
+                /* v0.83: the selected language name is yellow and bounces
+                 * gently (a soft hop every ~1.7 s). */
+                float bounce=fabsf(sinf((float)frame*0.06f))*4.0f;
                 egg_live_draw(vg,display,
-                  (960-egg_live_width(display))*0.5f,156,450,
-                  frame,-1,255,255,255,1,0,0);
+                  (960-egg_live_width(display))*0.5f,156-bounce,450,
+                  frame,-1,255,225,63,1,0,0);
+                /* v0.82: one dot per installed language, the current one
+                 * in yellow, so the player sees how many choices exist and
+                 * where they are in the list. */
+                if(languageCount>1){
+                    int pos=0;
+                    for(int i=0;i<languageCount;i++)if(available[i]==lang)pos=i;
+                    float dotsW=(float)languageCount*14.0f-6.0f;
+                    float dotX=(960.0f-dotsW)*0.5f;
+                    for(int i=0;i<languageCount;i++)
+                        egg_panel(vg,dotX+i*14.0f,190,8,8,
+                                  i==pos?255:110,i==pos?225:110,i==pos?63:130,
+                                  i==pos?245:200);
+                }
                 /* Pixel-font '<' and '>' glyphs (5 rows, 3 columns);
                  * yellow and gently floating horizontally. */
                 const unsigned char left[5]={4,2,1,2,4};

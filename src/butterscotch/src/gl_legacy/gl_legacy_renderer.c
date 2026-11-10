@@ -23,6 +23,7 @@ static GLenum vitaTextureFilter(void) {
 #include <psp2/io/dirent.h>
 #include <psp2/io/stat.h>
 #include <psp2/kernel/sysmem.h>
+#include <psp2/kernel/processmgr.h>
 #include <stdio.h>
 // The bundled no-splash VitaGL exports this helper, while some installed
 // VitaSDK headers omit its declaration.
@@ -2278,6 +2279,7 @@ static void glEndFrameEnd(Renderer* renderer) {
     }
     int32_t appId = gl->base.runner->applicationSurfaceId;
     GLCommon_beginLetterboxBlit(gl->surfaces[appId], 0);
+    g_glCommonCompositeTexture = gl->surfaceTexture[appId];
     GLCommon_endLetterboxBlit(gl->surfaceWidth[appId], gl->surfaceHeight[appId], gl->gameW, gl->gameH, gl->windowW, gl->windowH, 0);
 }
 
@@ -3050,6 +3052,33 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
             gl->textureLoaded[pageId] = false;
             return false;
         }
+        /* v0.82: per-frame upload budget in the final battle. The v0.80-57
+         * Vita log shows its phase changes uploading 5-8 large pages (plus
+         * LRU evictions) inside ONE frame: 0.5-1.0 s render frames and a
+         * 2.75 s stall (frame 8263). Spread them: at most ~3 MiB of new
+         * pages per frame; the rest waits one frame. A sprite may appear a
+         * frame or two late during the transition instead of freezing the
+         * battle. Pinned (UI/party) pages are never delayed. */
+        if (vitaFloweryBattleMemoryMode && !gl->texturePinned[pageId] &&
+            gl->textureRetryAfterFrame != nullptr) {
+            static uint32_t budgetFrame = UINT32_MAX;
+            static uint64_t budgetBytes = 0;
+            if (budgetFrame != gl->textureFrame) {
+                budgetFrame = gl->textureFrame;
+                budgetBytes = 0;
+            }
+            if (budgetBytes > 0 && budgetBytes + preflightBytes > 3ULL * 1024ULL * 1024ULL) {
+                gl->textureRetryAfterFrame[pageId] = gl->textureFrame + 1;
+                gl->textureLoaded[pageId] = false;
+                static uint32_t spreadLogs = 0;
+                if (spreadLogs < 40) {
+                    spreadLogs++;
+                    vitaTextureLog(pageId, sourceW, sourceH, 4096, "flowery_upload_spread_next_frame");
+                }
+                return false;
+            }
+            budgetBytes += preflightBytes;
+        }
     }
     uint8_t* pvrPayload = nullptr;
     uint32_t pvrPayloadSize = 0;
@@ -3607,8 +3636,23 @@ uint32_t GLLegacyRenderer_preloadChapterBattleCore(GLLegacyRenderer* gl) {
         fprintf(stderr,"VITAGL_CH4_BOOT=bounded_battle_preload %u_of_%u sprites\n",
                 coreCount,allCoreCount);
     uint32_t loaded = 0;
+#ifdef PLATFORM_VITA
+    /* v0.82: time budget. The Chapter 5 cached boot spent ~4.9 s here
+     * (TEXTURE_PRELOAD=timed 5069810 us with an O(1) cache check), most of
+     * the loading screen. The list is ordered by importance: the battle box,
+     * party and hit feedback (the first 25 entries, which the Chapter 4
+     * bound already kept) always load; after 1.5 s the rest stays lazy and is
+     * uploaded on first use, as Native GXM does. */
+    const uint64_t budgetStartUs = sceKernelGetProcessTimeWide();
+    const uint32_t essentialCount = coreCount < 25U ? coreCount : 25U;
+    uint32_t attempted = 0;
+#endif
     for (uint32_t i = 0; i < coreCount; ++i) {
 #ifdef PLATFORM_VITA
+        if (i >= essentialCount &&
+            sceKernelGetProcessTimeWide() - budgetStartUs > 1500000ULL)
+            break;
+        attempted = i + 1;
         extern void VitaProbe_pumpLoadingScreen(void);
         VitaProbe_pumpLoadingScreen();
 #endif
@@ -3628,6 +3672,18 @@ uint32_t GLLegacyRenderer_preloadChapterBattleCore(GLLegacyRenderer* gl) {
     // attacks from unrelated battles. The exact shared UI/party core above is
     // enough to remove the first battle-box hitch; room-specific effects stay
     // lazy and remain eligible for normal LRU eviction.
+#ifdef PLATFORM_VITA
+    {
+        extern void VitaProbe_logLine(const char* line);
+        char line[160];
+        snprintf(line, sizeof(line),
+                 "BATTLE_PRELOAD=budget chapter=%d sprites=%u_of_%u pages=%u elapsed_us=%llu",
+                 g_vitaActiveChapter, (unsigned)attempted, (unsigned)coreCount,
+                 (unsigned)loaded,
+                 (unsigned long long)(sceKernelGetProcessTimeWide() - budgetStartUs));
+        VitaProbe_logLine(line);
+    }
+#endif
     return loaded;
 }
 

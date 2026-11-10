@@ -190,3 +190,170 @@ static bool vita_crt_mod_render(Renderer* renderer,uint32_t frame,float strength
     }
     return true;
 }
+
+/* v0.82 CRT Agressivo: a real tube. Instead of darkening the composed screen,
+ * this REPLACES the final application_surface blit (GLCommon composite hook):
+ * one full-screen pass samples the game surface through a barrel warp, so the
+ * picture bulges and its corners round off, then applies scanlines that follow
+ * the game's own 480 rows, an aperture grille, a vignette and a faint glass
+ * glare. Same single draw as the blit it replaces: no extra render target, no
+ * read-back. Borders are drawn before it and stay flat; the GUI and the port's
+ * menus are drawn after it and stay undistorted. */
+static GLuint vitaCrtTubeProgram=0;
+static int vitaCrtTubeDisabled=0;
+static GLint vitaCrtTubeTexLoc=-1,vitaCrtTubeRowsLoc=-1,vitaCrtTubeCurveLoc=-1;
+static bool vita_crt_tube_init(void){
+    if(vitaCrtTubeDisabled)return false;
+    if(vitaCrtTubeProgram)return true;
+    static const char* vertex=
+        "attribute vec2 a_position; attribute vec2 a_uv;\n"
+        "varying vec2 v_uv;\n"
+        "void main(){v_uv=a_uv;gl_Position=vec4(a_position,0.0,1.0);}\n";
+    static const char* fragment=
+        "precision highp float;\n"
+        "varying vec2 v_uv;\n"
+        "uniform sampler2D u_tex;\n"
+        "uniform float u_rows;\n"
+        "uniform float u_curve;\n"
+        "void main(){\n"
+        " vec2 c=v_uv*2.0-1.0;\n"
+        /* Barrel warp normalised so the middle of each edge stays put:
+         * only the corners leave the picture and round off. */
+        " c*=(1.0+u_curve*dot(c,c))/(1.0+u_curve);\n"
+        " vec2 uv=c*0.5+0.5;\n"
+        " vec2 inside=smoothstep(vec2(0.0),vec2(0.004),uv)*smoothstep(vec2(1.0),vec2(0.996),uv);\n"
+        " vec3 col=texture2D(u_tex,clamp(uv,0.0,1.0)).rgb;\n"
+        " float s=sin(uv.y*u_rows*3.14159265);\n"
+        " float scan=mix(0.74,1.0,s*s);\n"
+        " float m=mod(floor(gl_FragCoord.x),3.0);\n"
+        " vec3 mask=vec3(0.88)+0.12*vec3(step(m,0.5),step(0.5,m)*step(m,1.5),step(1.5,m));\n"
+        " vec2 e=uv*(1.0-uv);\n"
+        " float vig=clamp(pow(max(e.x*e.y*16.0,0.0),0.22),0.0,1.0);\n"
+        " float glare=0.035*(1.0-smoothstep(0.0,0.22,uv.y))*(1.0-abs(c.x));\n"
+        " vec3 outc=col*1.14*scan*mask*vig+vec3(glare);\n"
+        " gl_FragColor=vec4(outc*inside.x*inside.y,1.0);\n"
+        "}\n";
+    GLuint vs=vitaCrtModCompile(GL_VERTEX_SHADER,vertex);
+    GLuint fs=vs?vitaCrtModCompile(GL_FRAGMENT_SHADER,fragment):0;
+    if(!vs||!fs){
+        if(vs)glDeleteShader(vs);
+        if(fs)glDeleteShader(fs);
+        vitaCrtTubeDisabled=1;
+        log_line("VITAGL_CRT_TUBE=compile_failed_overlay_fallback");
+        return false;
+    }
+    GLuint program=glCreateProgram();
+    if(!program){glDeleteShader(vs);glDeleteShader(fs);vitaCrtTubeDisabled=1;return false;}
+    glAttachShader(program,vs);glAttachShader(program,fs);
+    glBindAttribLocation(program,0,"a_position");
+    glBindAttribLocation(program,1,"a_uv");
+    glLinkProgram(program);
+    GLint ok=0;glGetProgramiv(program,GL_LINK_STATUS,&ok);
+    glDeleteShader(vs);glDeleteShader(fs);
+    if(!ok){
+        char err[256]={0};glGetProgramInfoLog(program,255,NULL,err);
+        log_line(err);glDeleteProgram(program);
+        vitaCrtTubeDisabled=1;
+        log_line("VITAGL_CRT_TUBE=link_failed_overlay_fallback");
+        return false;
+    }
+    vitaCrtTubeProgram=program;
+    vitaCrtTubeTexLoc=glGetUniformLocation(program,"u_tex");
+    vitaCrtTubeRowsLoc=glGetUniformLocation(program,"u_rows");
+    vitaCrtTubeCurveLoc=glGetUniformLocation(program,"u_curve");
+    log_line("VITAGL_CRT_TUBE=ready barrel_warp=1 scanlines=source_rows");
+    return true;
+}
+static int vitaCrtTubeEnabledThisFrame=0;
+static int vitaCrtTubeDrewThisFrame=0;
+static bool vita_crt_tube_composite(GLuint texture,int32_t texW,int32_t texH,
+                                    int32_t sx,int32_t sy,int32_t ex,int32_t ey,
+                                    int32_t windowW,int32_t windowH){
+    (void)texW;
+    if(!vitaCrtTubeEnabledThisFrame||texture==0||windowW<=0||windowH<=0||
+       !vita_crt_tube_init())
+        return false;
+    GLint oldProgram=0,oldBuffer=0,oldTexture=0,oldActive=GL_TEXTURE0;
+    GLint oldAttribEnabled[2]={0,0};
+    GLboolean oldBlend=glIsEnabled(GL_BLEND);
+    GLboolean oldScissor=glIsEnabled(GL_SCISSOR_TEST);
+    GLboolean oldDepth=glIsEnabled(GL_DEPTH_TEST);
+    GLboolean oldStencil=glIsEnabled(GL_STENCIL_TEST);
+    GLboolean oldCull=glIsEnabled(GL_CULL_FACE);
+    glGetIntegerv(GL_CURRENT_PROGRAM,&oldProgram);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING,&oldBuffer);
+    glGetIntegerv(GL_ACTIVE_TEXTURE,&oldActive);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D,&oldTexture);
+    glGetVertexAttribiv(0,GL_VERTEX_ATTRIB_ARRAY_ENABLED,&oldAttribEnabled[0]);
+    glGetVertexAttribiv(1,GL_VERTEX_ATTRIB_ARRAY_ENABLED,&oldAttribEnabled[1]);
+    glViewport(0,0,windowW,windowH);
+    glDisable(GL_BLEND);glDisable(GL_SCISSOR_TEST);glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);glDisable(GL_CULL_FACE);
+    glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
+#ifdef __vita__
+    glBindVertexArray(0);
+#endif
+    glUseProgram(vitaCrtTubeProgram);
+    glBindTexture(GL_TEXTURE_2D,texture);
+    /* The warp resamples: bilinear avoids crawling pixel seams. */
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    if(vitaCrtTubeTexLoc>=0)glUniform1i(vitaCrtTubeTexLoc,0);
+    /* One scanline per native DELTARUNE row (the 640x480 surface is the
+     * 320x240 art at 2x): a line per surface row beat against the 544-row
+     * LCD and made moire bands in the PC preview. */
+    if(vitaCrtTubeRowsLoc>=0)glUniform1f(vitaCrtTubeRowsLoc,(float)texH*0.5f);
+    if(vitaCrtTubeCurveLoc>=0)glUniform1f(vitaCrtTubeCurveLoc,0.075f);
+    /* Same rectangle as the blit. GL window y grows upward and the blit maps
+     * the surface's row 0 to `ey`, so the top edge samples v=0. */
+    const float x0=2.0f*(float)sx/(float)windowW-1.0f;
+    const float x1=2.0f*(float)ex/(float)windowW-1.0f;
+    const float yTop=2.0f*(float)ey/(float)windowH-1.0f;
+    const float yBottom=2.0f*(float)sy/(float)windowH-1.0f;
+    const GLfloat quad[]={
+        x0,yBottom,0.0f,1.0f,
+        x1,yBottom,1.0f,1.0f,
+        x0,yTop,   0.0f,0.0f,
+        x1,yTop,   1.0f,0.0f
+    };
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,4*sizeof(GLfloat),quad);
+    glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,4*sizeof(GLfloat),quad+2);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    while(glGetError()!=GL_NO_ERROR){}
+    glDrawArrays(GL_TRIANGLE_STRIP,0,4);
+    GLenum drawError=glGetError();
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    if(!oldAttribEnabled[1])glDisableVertexAttribArray(1);
+    if(!oldAttribEnabled[0])glDisableVertexAttribArray(0);
+    glBindTexture(GL_TEXTURE_2D,(GLuint)oldTexture);
+    glActiveTexture((GLenum)oldActive);
+    glBindBuffer(GL_ARRAY_BUFFER,(GLuint)oldBuffer);
+    glUseProgram((GLuint)oldProgram);
+    if(oldBlend)glEnable(GL_BLEND);
+    if(oldScissor)glEnable(GL_SCISSOR_TEST);
+    if(oldDepth)glEnable(GL_DEPTH_TEST);
+    if(oldStencil)glEnable(GL_STENCIL_TEST);
+    if(oldCull)glEnable(GL_CULL_FACE);
+    if(drawError!=GL_NO_ERROR){
+        vitaCrtTubeDisabled=1;
+        char line[96];
+        snprintf(line,sizeof(line),"VITAGL_CRT_TUBE=draw_error 0x%04X overlay_fallback",
+                 (unsigned)drawError);
+        log_line(line);
+        return false;
+    }
+    vitaCrtTubeDrewThisFrame=1;
+    static int firstLogged=0;
+    if(!firstLogged){
+        firstLogged=1;
+        char line[128];
+        snprintf(line,sizeof(line),"VITAGL_CRT_TUBE=first_draw rect=%d,%d-%d,%d rows=%d",
+                 (int)sx,(int)sy,(int)ex,(int)ey,(int)texH);
+        log_line(line);
+    }
+    return true;
+}

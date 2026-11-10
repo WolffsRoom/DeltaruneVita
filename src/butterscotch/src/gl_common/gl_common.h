@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include <stdint.h>
+#include <stdbool.h>
 
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 #include <GLES3/gl3.h>
@@ -24,6 +25,15 @@ void GLCommon_computeLetterbox(int32_t gameW, int32_t gameH, int32_t windowW, in
 // Blits the given FBO (typically the application_surface) into hostFbo with letterboxing (hostFbo 0 == the window).
 void GLCommon_beginLetterboxBlit(GLuint fbo, GLuint hostFbo);
 void GLCommon_endLetterboxBlit(int32_t fboWidth, int32_t fboHeight, int32_t gameW, int32_t gameH, int32_t windowW, int32_t windowH, GLuint hostFbo);
+/* v0.82: optional replacement for the final application_surface blit (the
+ * port's CRT Agressivo tube shader). The renderer sets the texture of the
+ * surface being composited right before GLCommon_endLetterboxBlit; the hook
+ * returns true when it drew the picture, and the blit is then skipped. */
+typedef bool (*GLCommonCompositeHook)(GLuint texture, int32_t texW, int32_t texH,
+                                      int32_t sx, int32_t sy, int32_t ex, int32_t ey,
+                                      int32_t windowW, int32_t windowH);
+extern GLCommonCompositeHook g_glCommonCompositeHook;
+extern GLuint g_glCommonCompositeTexture;
 
 // ===[ Surface arrays ]===
 

@@ -874,6 +874,9 @@ static void draw_ch5_sakura_host(Runner *runner, Renderer *renderer) {
 }
 
 #include "vita_crt_mod_gl.inc"
+/* gl_common.c: replaces the final application_surface blit (CRT tube). */
+extern bool (*g_glCommonCompositeHook)(GLuint, int32_t, int32_t, int32_t, int32_t,
+                                       int32_t, int32_t, int32_t, int32_t);
 
 // Lightweight final-frame presentation filters. Scanlines draw sparse one-pixel
 // dark lines into the host framebuffer after the game and Vita overlays are
@@ -4469,7 +4472,11 @@ static void boot_stage(const char *stage) {
     return;
   started = true;
   char line[224];
-  int n = snprintf(line, sizeof(line), "%s %s\n", PORT_BUILD_VERSION, stage);
+  /* Process time: also a loading profile that needs no devmode (and so
+   * none of devmode's per-line log file overhead). */
+  int n = snprintf(line, sizeof(line), "%s t=%llums %s\n", PORT_BUILD_VERSION,
+                   (unsigned long long)(sceKernelGetProcessTimeWide() / 1000ULL),
+                   stage);
   if (n > 0)
     sceIoWrite(fd, line, (SceSize)(n < (int)sizeof(line) ? n : (int)sizeof(line) - 1));
   sceIoClose(fd);
@@ -4584,6 +4591,7 @@ int main(void) {
                          SCE_GXM_MULTISAMPLE_NONE);
   log_line("VITAGL=init_complete");
   boot_stage("vitagl_init_complete");
+  g_glCommonCompositeHook = vita_crt_tube_composite;
 
   // vitaShaRK loads this module from the fixed ur0:data path when the first
   // runtime shader is linked. Report the missing dependency here, while the
@@ -4945,6 +4953,7 @@ int main(void) {
   options.progressCallback = progress;
 
   log_line("DATAWIN=parse_begin");
+  boot_stage("datawin_parse_begin");
   uint64_t datawinBeginUs = sceKernelGetProcessTimeWide();
   DataWin *dw = NULL;
   if (startup_preload_started) {
@@ -4978,6 +4987,7 @@ int main(void) {
         game_path);
   }
   log_line("DATAWIN=parse_complete");
+  boot_stage("datawin_parse_complete");
   vita_patch_button_prompt_strings(dw);
   {
     char datawinTiming[96];
@@ -4993,6 +5003,7 @@ int main(void) {
   uint64_t vmBeginUs = sceKernelGetProcessTimeWide();
   VMContext *vm = VM_create(dw);
   log_line("VM=create_complete");
+  boot_stage("vm_create_complete");
   {
     char vmTiming[96];
     snprintf(vmTiming, sizeof(vmTiming), "VM_TIMING create_us=%llu",
@@ -5305,6 +5316,7 @@ int main(void) {
     // loading screen draws. Running this directly after DataWin_parse made
     // the first progress frame touch an uninitialized GL pipeline.
     log_line("TEXTURE_PRELOAD=begin stage=runner_ready");
+    boot_stage("texture_preload_begin");
 
     // Select the artwork from the actual cache state. Previously every
     // mixed/RGBA4444 profile displayed Generating even when complete.vtc
@@ -5377,6 +5389,7 @@ int main(void) {
              "TEXTURE_PRELOAD=complete prepared=%u total=%u", cached,
              dw->txtr.count);
     log_line(cache_line);
+    boot_stage("texture_preload_complete");
     {
       char measured[185];
       uint64_t cacheDurationUs =
@@ -5415,6 +5428,7 @@ int main(void) {
           sceKernelDelayThread(12000);
       }
       log_line("CHAPTER_LOADING=unified_complete percent=100");
+      boot_stage("chapter_loading_complete");
       loading_play_car_exit(LOADING_LABEL_LOADING_TEXTURES);
       loading_boot_unified_enabled = false;
       loading_screen_shutdown();
@@ -6582,6 +6596,13 @@ int main(void) {
      * shrinking once when the first normal frame was presented. */
     g_vitaPortOverlayFullScreen = 0;
     stall_watch_phase = "composite";
+    /* v0.82: CRT Agressivo draws the game surface through the tube shader
+     * in place of the final blit (same menu rules as the other filters). */
+    vitaCrtTubeDrewThisFrame = 0;
+    vitaCrtTubeEnabledThisFrame =
+        settings.screenFilterMode == 6 && !g_vitaModernGlActive &&
+        !settings.open && !settings.adjustMode && !dev_quick_open &&
+        !settings.graphicsMenuOpen;
     renderer->vtable->endFrameInit(renderer);
     if (frame == 0)
       log_line("FRAME0=end_frame_init_complete");
@@ -6609,15 +6630,18 @@ int main(void) {
         !settings.open && !settings.adjustMode && !dev_quick_open &&
         !settings.graphicsMenuOpen) {
       float crtStrength = settings.screenFilterMode == 1 ? 1.0f : 1.15f;
-      bool crtModComposited = g_vitaExperimentalGlActive &&
-                              vita_crt_mod_render(renderer, frame, crtStrength);
+      /* The tube shader already produced the whole CRT Agressivo look. */
+      bool crtTubeDrawn = settings.screenFilterMode == 6 && vitaCrtTubeDrewThisFrame;
+      bool crtModComposited = crtTubeDrawn ||
+                              (g_vitaExperimentalGlActive &&
+                               vita_crt_mod_render(renderer, frame, crtStrength));
       /* Other renderers, or a failed CRT profile, get its lightweight
        * point: the filter never covers the GUI or the port's menus, and
        * never appears over a menu that had just hidden it. */
       if (!crtModComposited) {
         VitaSettings fallbackCrt = settings;
         draw_screen_filter(&fallbackCrt, renderer);
-      } else if (settings.screenFilterMode == 6) {
+      } else if (settings.screenFilterMode == 6 && !crtTubeDrawn) {
         draw_screen_filter(&settings, renderer);
       }
     }

@@ -72,27 +72,44 @@ static void egg_live_cross(NVGcontext*vg,float x,float y,
 }
 /* Draw whole literal Unicode text at runtime; never crop phrase screenshots.
  * Each glyph is an individual quad, assembled into one OpenGL draw batch.
- * The PSVita Cross glyph replaces standalone ASCII X in instructions. */
-static void egg_live_draw(NVGcontext*vg,const char*str,float x,float y,
+ * The PSVita Cross glyph replaces standalone ASCII X in instructions.
+ *
+ * v0.82: the Japanese (kind 1) and Cyrillic (kind 2) glyphs come from a
+ * fallback font whose bearings are relative to a different baseline: a
+ * Cyrillic capital ended 17 px above a Latin capital, so Russian lines rose
+ * into the box border and mixed words ("PS Vita", "Wolff") sat lower than
+ * the rest. Their quads are now shifted onto the Latin baseline. */
+static float egg_live_kind_shift(const EggGlyph*g){
+    if(!g)return 0.0f;
+    return g->kind==2?17.0f:(g->kind==1?13.0f:0.0f);
+}
+static int egg_live_is_cross(int crossIcon,const unsigned char*start,
+                             const unsigned char*begin,const unsigned char*next,
+                             unsigned cp){
+    return crossIcon && cp=='X' &&
+        (start==begin||start[-1]==' '||start[-1]=='/'||start[-1]=='(') &&
+        (*next==0||*next==' '||*next=='.'||*next==',');
+}
+/* Lays out (and, if emit, draws) the text. Returns the bottom of the last
+ * line (pen y plus the 29 px glyph cell, scaled), so callers can fit text. */
+static float egg_live_layout(NVGcontext*vg,const char*str,float x,float y,
  float maxWidth,unsigned frame,int visible,int red,int green,int blue,
- float alpha,int wave,int crossIcon){
-    if(!str||egg_live_atlas<=0||alpha<=0)return;
+ float alpha,int wave,int crossIcon,int emit){
+    if(!str)return y;
     LoadingVertex v[2200];int n=0;
     const unsigned char*p=(const unsigned char*)str;
     const unsigned char*begin=p;
     float penX=x,penY=y;
+    const float glyphScale=egg_live_dialog_scale;
     unsigned letter=0;
     while(*p&&(visible<0||(int)letter<visible)){
         const unsigned char*start=p;
         unsigned cp=egg_live_next(&p);
         letter++;
-        if(cp=='\n'){penX=x;penY+=37.0f*egg_live_dialog_scale;continue;}
-        int cross=crossIcon && cp=='X' &&
-            (start==begin||start[-1]==' '||start[-1]=='/'||start[-1]=='(') &&
-            (*p==0||*p==' '||*p=='.'||*p==',');
+        if(cp=='\n'){penX=x;penY+=37.0f*glyphScale;continue;}
+        int cross=egg_live_is_cross(crossIcon,start,begin,p,cp);
         const EggGlyph*g=egg_live_glyph(cp);
         if(!g)g=egg_live_glyph('?');
-        const float glyphScale=egg_live_dialog_scale;
         float advance=(cross?27:(g?g->adv:14))*glyphScale;
         /* Wrap before the NEXT complete word, never inside it. This also
          * prevents leaving a space at the start of the new line. */
@@ -103,9 +120,7 @@ static void egg_live_draw(NVGcontext*vg,const char*str,float x,float y,
                 const unsigned char*startLook=look;
                 unsigned nextCp=egg_live_next(&look);
                 const EggGlyph*nextGlyph=egg_live_glyph(nextCp);
-                int nextCross=crossIcon && nextCp=='X' &&
-                    (startLook==p || startLook[-1]==' ' || startLook[-1]=='/') &&
-                    (*look==0 || *look==' ' || *look=='.');
+                int nextCross=egg_live_is_cross(crossIcon,startLook,begin,look,nextCp);
                 nextWidth+=(nextCross?27:(nextGlyph?nextGlyph->adv:14))*glyphScale;
             }
             if(penX>x && penX+advance+nextWidth>x+maxWidth){
@@ -113,23 +128,47 @@ static void egg_live_draw(NVGcontext*vg,const char*str,float x,float y,
             }
         }
         if(penX>x && penX+advance>x+maxWidth){penX=x;penY+=37.0f*glyphScale;}
-        float shift=wave?sinf(frame*.13f+letter*.37f)*1.25f:0;
-        if(cross){
-            egg_live_batch(vg,v,n,red,green,blue,alpha);n=0;
-            egg_live_cross(vg,penX,penY+shift+5*glyphScale,red,green,blue,alpha);
-        }else if(g&&g->w&&g->h){
-            if(n+6>2200){egg_live_batch(vg,v,n,red,green,blue,alpha);n=0;}
-            float xx=penX+g->bx*glyphScale,yy=penY+g->by*glyphScale+shift;
-            float x0=xx/480.0f-1,x1=(xx+g->w*glyphScale)/480.0f-1;
-            float y0=1-yy/272.0f,y1=1-(yy+g->h*glyphScale)/272.0f;
-            float u0=g->x/1024.0f,u1=(g->x+g->w)/1024.0f;
-            float t0=g->y/1024.0f,t1=(g->y+g->h)/1024.0f;
-            LoadingVertex quad[6]={
-              {u0,t0,x0,y0},{u1,t0,x1,y0},{u1,t1,x1,y1},
-              {u0,t0,x0,y0},{u1,t1,x1,y1},{u0,t1,x0,y1}};
-            for(int i=0;i<6;i++)v[n++]=quad[i];
+        if(emit){
+            float shift=wave?sinf(frame*.13f+letter*.37f)*1.25f:0;
+            if(cross){
+                egg_live_batch(vg,v,n,red,green,blue,alpha);n=0;
+                egg_live_cross(vg,penX,penY+shift+5*glyphScale,red,green,blue,alpha);
+            }else if(g&&g->w&&g->h){
+                if(n+6>2200){egg_live_batch(vg,v,n,red,green,blue,alpha);n=0;}
+                float xx=penX+g->bx*glyphScale;
+                float yy=penY+(g->by+egg_live_kind_shift(g))*glyphScale+shift;
+                float x0=xx/480.0f-1,x1=(xx+g->w*glyphScale)/480.0f-1;
+                float y0=1-yy/272.0f,y1=1-(yy+g->h*glyphScale)/272.0f;
+                float u0=g->x/1024.0f,u1=(g->x+g->w)/1024.0f;
+                float t0=g->y/1024.0f,t1=(g->y+g->h)/1024.0f;
+                LoadingVertex quad[6]={
+                  {u0,t0,x0,y0},{u1,t0,x1,y0},{u1,t1,x1,y1},
+                  {u0,t0,x0,y0},{u1,t1,x1,y1},{u0,t1,x0,y1}};
+                for(int i=0;i<6;i++)v[n++]=quad[i];
+            }
         }
         penX+=advance;
     }
-    egg_live_batch(vg,v,n,red,green,blue,alpha);
+    if(emit)egg_live_batch(vg,v,n,red,green,blue,alpha);
+    return penY+29.0f*glyphScale;
+}
+static void egg_live_draw(NVGcontext*vg,const char*str,float x,float y,
+ float maxWidth,unsigned frame,int visible,int red,int green,int blue,
+ float alpha,int wave,int crossIcon){
+    if(!str||egg_live_atlas<=0||alpha<=0)return;
+    egg_live_layout(vg,str,x,y,maxWidth,frame,visible,red,green,blue,alpha,
+                    wave,crossIcon,1);
+}
+/* Largest scale (1.0 down to 0.56) at which the COMPLETE string fits between
+ * y and bottom, so the typewriter never grows past the box. */
+static float egg_live_fit_scale(const char*str,float x,float y,float maxWidth,
+                                float bottom,int crossIcon){
+    float prev=egg_live_dialog_scale,scale=1.0f;
+    for(;scale>0.56f;scale-=0.04f){
+        egg_live_dialog_scale=scale;
+        if(egg_live_layout(NULL,str,x,y,maxWidth,0,-1,0,0,0,1,0,crossIcon,0)<=bottom)
+            break;
+    }
+    egg_live_dialog_scale=prev;
+    return scale;
 }

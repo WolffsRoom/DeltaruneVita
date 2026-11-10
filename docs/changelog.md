@@ -3,7 +3,16 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
-## v0.81-15 — Fogos do Cap. 2 mais leves e registro de inicialização sem devmode
+## v0.83-1 — Prólogo em todos os idiomas dentro da caixa, CRT Agressivo com curvatura real, loading mais curto e batalha final sem congelar nas trocas de fase
+
+Detalhes e evidências: [`docs/v0.83-prologo-crt-loading-batalha-final.md`](v0.83-prologo-crt-loading-batalha-final.md). Nada testado no Vita.
+
+- **Prólogo**: glifos japoneses e cirílicos na linha de base latina e tamanho automático por fala (no PC, 18 telas com texto fora da caixa passaram a 0); seleção de idioma com pontos de posição, cartão mais legível e sem "Русский" duplicado. Avisos da árvore centralizados com fade ("Aproxime-se da árvore..." de longe, "Aperte X" de perto) e nome do idioma em amarelo com bounce suave. Prévia: `scripts/render-prologue-preview.py`.
+- **CRT Agressivo**: shader de tubo no lugar do blit final da `application_surface` (curvatura de barril, uma scanline por linha nativa, grade RGB, vinheta, reflexo), uma passada, sem read-back; volta ao overlay antigo se falhar. Prévia: `scripts/preview-crt-tube.py`.
+- **Loading**: pré-carga de batalha com orçamento de 1,5 s (era ~4,9 s no Cap. 5 com cache válido); `boot_stages.txt` com o tempo de cada etapa.
+- **Batalha final**: no máximo ~3 MiB de páginas novas por quadro durante `room_dw_fcastle_flowery` (UI/grupo fixos continuam imediatos), contra quadros de 0,5 a 2,75 s nas trocas de fase do log v0.80-57.
+
+## v0.82 (build v0.81-15) — Fogos do Cap. 2 mais leves e registro de inicialização sem devmode
 
 - **Fogos do Cap. 2** (`vita_fireworks_native.inc`): na `room_dw_cyber_post_music_boss_slide`, onde os fogos custavam ~35 ms por quadro no Vita (16 FPS), o caminho em C desenha uma partícula a cada duas (todas continuam se movendo). O caminho em C passa a valer também em `room_dw_cyber_maze_fireworks` e `room_dw_city_postbaseball_1/2`, que já descartavam parte das explosões na criação e desenham todas as partículas. Perda visual aceita: fogos menos densos. Sem teste no Vita; o log mostra `VITAGL_CH2_FIREWORK_NATIVE=active ... draw_stride=`.
 - **Etapas de inicialização** (`playable_main.c`, `boot_stage`): `ux0:data/deltarune/deltarunevita/boot_stages.txt` recebe uma linha por etapa (pastas, saves, `vglInit`, `libshacccg`, dados, config.ini, vídeo, primeiro quadro), mesmo sem devmode. Antes, um crash antes de `VitaSettings_load` não deixava nem config.ini nem log; a última linha do arquivo agora diz onde a abertura parou.

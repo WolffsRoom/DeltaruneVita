@@ -3,6 +3,10 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.83-3 — libshacccg.suprx aceito também em ur0:data/external/
+
+- O jogo e o launcher aceitam `ur0:data/libshacccg.suprx` ou `ur0:data/external/libshacccg.suprx`, os dois caminhos que o vitaGL usa (`third_party/vitaGL-nosplash/source/gxm.c`, `start_shader_compiler`). Até a v0.83-2 só o primeiro era aceito, e quem tinha o arquivo só em `external/` era barrado logo depois do `vglInit`.
+
 ## v0.83-2 — Aviso claro quando falta o libshacccg.suprx
 
 - **Launcher** (`src/vita-launcher/main.c`): confere `ur0:data/libshacccg.suprx` antes de abrir o VitaGL e, se faltar, mostra uma tela de texto (PT/EN) pedindo o ShaRKF00D, e grava `launcher libshacccg_missing` no `boot_stages.txt`. Um usuário cujo `boot_stages.txt` parava em `vitagl_init_complete` via só tela preta: o diálogo nativo do vitagl.bin não aparecia e o jogo fechava antes de criar o config.ini.

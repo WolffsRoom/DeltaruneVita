@@ -16,10 +16,16 @@
  * did not appear on some consoles, so the game showed black for 1-3 s and
  * closed with no config.ini and no log (boot_stages.txt ended at
  * vitagl_init_complete). Check it here, where the debug screen always works. */
-static int launcher_shader_compiler_present(void){
+/* Same two locations vitaGL tries (start_shader_compiler): the default
+ * shark_init(NULL) path, then the ScePiglet path ur0:data/external/. */
+static int launcher_valid_file(const char*path){
     SceIoStat st;
-    if(sceIoGetstat("ur0:data/libshacccg.suprx",&st)<0)return 0;
+    if(sceIoGetstat(path,&st)<0)return 0;
     return !SCE_S_ISDIR(st.st_mode) && st.st_size>=1024;
+}
+static int launcher_shader_compiler_present(void){
+    return launcher_valid_file("ur0:data/libshacccg.suprx") ||
+           launcher_valid_file("ur0:data/external/libshacccg.suprx");
 }
 
 int main(void) {
@@ -35,7 +41,8 @@ int main(void) {
         psvDebugScreenPrintf(
             "DELTARUNE VITA\n\n"
             "libshacccg.suprx nao encontrado / not found:\n"
-            "  ur0:data/libshacccg.suprx\n\n"
+            "  ur0:data/libshacccg.suprx\n"
+            "  (ou/or ur0:data/external/libshacccg.suprx)\n\n"
             "PT: Instale com o ShaRKF00D (VitaDB) e reinicie o console.\n"
             "EN: Install it with ShaRKF00D (VitaDB) and restart the console.\n\n"
             "Pressione PS para sair. / Press PS to exit.\n");

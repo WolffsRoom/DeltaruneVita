@@ -4597,7 +4597,9 @@ int main(void) {
   // runtime shader is linked. Report the missing dependency here, while the
   // native dialog can still be rendered, instead of crashing later with no
   // actionable information for the player.
-  if (!is_file_valid("ur0:data/libshacccg.suprx")) {
+  /* vitaGL tries ur0:data/ first and then the ScePiglet path. */
+  if (!is_file_valid("ur0:data/libshacccg.suprx") &&
+      !is_file_valid("ur0:data/external/libshacccg.suprx")) {
     log_line("STARTUP_FATAL=libshacccg_missing");
     boot_stage("libshacccg_missing ur0:data/libshacccg.suprx");
     show_shader_dependency_error_and_exit();

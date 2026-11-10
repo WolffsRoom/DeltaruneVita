@@ -3,6 +3,10 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.83-2 — Aviso claro quando falta o libshacccg.suprx
+
+- **Launcher** (`src/vita-launcher/main.c`): confere `ur0:data/libshacccg.suprx` antes de abrir o VitaGL e, se faltar, mostra uma tela de texto (PT/EN) pedindo o ShaRKF00D, e grava `launcher libshacccg_missing` no `boot_stages.txt`. Um usuário cujo `boot_stages.txt` parava em `vitagl_init_complete` via só tela preta: o diálogo nativo do vitagl.bin não aparecia e o jogo fechava antes de criar o config.ini.
+
 ## v0.83-1 — Prólogo em todos os idiomas dentro da caixa, CRT Agressivo com curvatura real, loading mais curto e batalha final sem congelar nas trocas de fase
 
 Detalhes e evidências: [`docs/v0.83-prologo-crt-loading-batalha-final.md`](v0.83-prologo-crt-loading-batalha-final.md). Nada testado no Vita.

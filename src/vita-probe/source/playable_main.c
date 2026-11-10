@@ -4599,6 +4599,7 @@ int main(void) {
   // actionable information for the player.
   if (!is_file_valid("ur0:data/libshacccg.suprx")) {
     log_line("STARTUP_FATAL=libshacccg_missing");
+    boot_stage("libshacccg_missing ur0:data/libshacccg.suprx");
     show_shader_dependency_error_and_exit();
   }
 

@@ -368,10 +368,59 @@ static bool Runner_tryThrottleGrassAnim(Runner* runner, Instance* instance, int3
     return true;
 }
 
+/* v0.83-5: obj_dw_cliffs_tallgrass Step_2 (Chapter 5 cliffs). Every tall
+ * grass instance runs it every frame; PC profile of room_dw_cliff_kawkawdash:
+ * 7744 VM ops per frame, the top script of the room (Vita log: ~20-24 ms of
+ * Step per frame there). Exact C for the common case, grass not touched
+ * (touching == 0 and wastouching == 0):
+ *   image_index = lerp(image_index, sign(touching) * n, 0.25)  -> * 0.75
+ *   wastouching = touching; if (global.interact != 0) exit; touching = false;
+ * Any touched grass (sound, cut_down) runs the original GML. */
+static bool Runner_tryTallGrassStep(Runner* runner, Instance* instance, int32_t codeId) {
+    static DataWin* cachedDw = nullptr;
+    static int32_t stepCode = -1, touchingVar = -1, wasVar = -1, interactVar = -1;
+    if (runner->vmContext == nullptr || runner->dataWin == nullptr) return false;
+    if (cachedDw != runner->dataWin) {
+        cachedDw = runner->dataWin;
+        stepCode = -1;
+        for (uint32_t i = 0; i < runner->dataWin->code.count; ++i) {
+            const char* name = runner->dataWin->code.entries[i].name;
+            if (name != nullptr && strcmp(name, "gml_Object_obj_dw_cliffs_tallgrass_Step_2") == 0) {
+                stepCode = (int32_t)i;
+                break;
+            }
+        }
+        touchingVar = Runner_varId(runner->vmContext, "touching");
+        wasVar = Runner_varId(runner->vmContext, "wastouching");
+        interactVar = Runner_varId(runner->vmContext, "interact");
+    }
+    if (codeId != stepCode || stepCode < 0 || touchingVar < 0 || wasVar < 0 || interactVar < 0 ||
+        runner->vmContext->globalScopeInstance == nullptr)
+        return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_V083_FASTPATHS") != nullptr) return false;
+#endif
+    const RValue touching = Instance_getSelfVar(instance, touchingVar);
+    const RValue was = Instance_getSelfVar(instance, wasVar);
+    if (touching.type == RVALUE_UNDEFINED || was.type == RVALUE_UNDEFINED ||
+        RValue_toReal(touching) != 0.0 || RValue_toReal(was) != 0.0)
+        return false;
+    const RValue interact = Instance_getSelfVar(runner->vmContext->globalScopeInstance, interactVar);
+    const GMLReal index = instance->imageIndex;
+    instance->imageIndex = (float)(index + (0.0 - index) * 0.25);
+    Instance_setSelfVar(instance, wasVar, touching);
+    /* undefined != 0 is true in GML, so an undefined global.interact also exits. */
+    if (interact.type != RVALUE_UNDEFINED && RValue_toReal(interact) == 0.0)
+        Instance_setSelfVar(instance, touchingVar, RValue_makeBool(false));
+    return true;
+}
+
 static void executeCode(Runner* runner, Instance* instance, int32_t codeId) {
     // GameMaker does use codeIds less than 0, we'll just pretend we didn't hear them...
     if (0 > codeId) return;
-    if (instance != nullptr && Runner_tryThrottleGrassAnim(runner, instance, codeId)) return;
+    if (instance != nullptr && (Runner_tryThrottleGrassAnim(runner, instance, codeId) ||
+                                Runner_tryTallGrassStep(runner, instance, codeId)))
+        return;
 
     VMContext* vm = runner->vmContext;
 
@@ -659,8 +708,60 @@ static bool Runner_tryNativeCliffLayersDraw(Runner* runner, Instance* instance,
             (uint32_t)sun->objectIndex >= runner->dataWin->objt.count)
             continue;
         const char* name = runner->dataWin->objt.objects[sun->objectIndex].name;
-        if (name != nullptr && strcmp(name, "obj_parallax_cliffs_sunlayer") == 0)
-            Runner_executeEvent(runner, sun, EVENT_OTHER, OTHER_USER0);
+        if (name != nullptr && strcmp(name, "obj_parallax_cliffs_sunlayer") == 0) {
+            /* v0.83-5: the event redraws the 400x300 sun surface every frame
+             * (a render-target switch on the Vita). Accepted visual cut: the
+             * GML runs on one frame in three; on the others the surface it
+             * drew last is drawn again, moved with the camera exactly as the
+             * GML would place it (x/y follow the view), so only the sun's
+             * glow animation and colour steps update at a third of the rate.
+             * Skipped while the sun is hidden or in the obj_parallax_cliffs_
+             * simple variant, where the GML handles everything. */
+            static uint32_t sunId = UINT32_MAX;
+            static float sunCamX = 0.0f, sunCamY = 0.0f;
+            static bool sunDrew = false;
+            GMLCamera* cam = Runner_getCameraById(runner, runner->views[0].cameraId);
+            const int32_t surfVar = Runner_varId(runner->vmContext, "surf");
+            const int32_t sunSimpleVar = Runner_varId(runner->vmContext, "simple");
+            const bool sunSimple = sunSimpleVar >= 0 &&
+                RValue_toBool(Instance_getSelfVar(sun, sunSimpleVar));
+            const int32_t surfId = surfVar >= 0 ?
+                RValue_toInt32(Instance_getSelfVar(sun, surfVar)) : -1;
+            /* daddy.sun_visible: the GML exits without drawing while false. */
+            bool sunVisible = false;
+            {
+                const int32_t visVar = Runner_varId(runner->vmContext, "sun_visible");
+                for (size_t k = 0; visVar >= 0 && k < count; ++k) {
+                    Instance* cl = runner->instances[k];
+                    if (cl == nullptr || !cl->active || cl->destroyed || cl->objectIndex < 0 ||
+                        (uint32_t)cl->objectIndex >= runner->dataWin->objt.count)
+                        continue;
+                    const char* cn = runner->dataWin->objt.objects[cl->objectIndex].name;
+                    if (cn != nullptr && strcmp(cn, "obj_parallax_cliffs") == 0) {
+                        sunVisible = RValue_toBool(Instance_getSelfVar(cl, visVar));
+                        break;
+                    }
+                }
+            }
+            bool reuse = cam != nullptr && !sunSimple && sunVisible && sunDrew && sunId == sun->instanceId &&
+                         surfId >= 0 && Renderer_surfaceExists(runner->renderer, surfId) &&
+                         (runner->frameCount % 3U) != 0U;
+#ifndef PLATFORM_VITA
+            if (getenv("BS_TEST_DISABLE_SUN_THROTTLE") != nullptr) reuse = false;
+#endif
+            if (reuse) {
+                runner->renderer->vtable->drawSurface(
+                    runner->renderer, surfId, 0, 0, -1, -1,
+                    sun->x + (cam->viewX - sunCamX) - 400.0f,
+                    sun->y + (cam->viewY - sunCamY) - 300.0f,
+                    2.0f, 2.0f, 0.0f, 0xFFFFFF, 1.0f);
+            } else {
+                Runner_executeEvent(runner, sun, EVENT_OTHER, OTHER_USER0);
+                sunDrew = !sunSimple && sunVisible;
+                sunId = sun->instanceId;
+                if (cam != nullptr) { sunCamX = cam->viewX; sunCamY = cam->viewY; }
+            }
+        }
     }
 
     GMLCamera* camera = Runner_getCameraById(runner, runner->views[0].cameraId);

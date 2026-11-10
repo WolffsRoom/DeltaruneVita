@@ -3052,33 +3052,10 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
             gl->textureLoaded[pageId] = false;
             return false;
         }
-        /* v0.82: per-frame upload budget in the final battle. The v0.80-57
-         * Vita log shows its phase changes uploading 5-8 large pages (plus
-         * LRU evictions) inside ONE frame: 0.5-1.0 s render frames and a
-         * 2.75 s stall (frame 8263). Spread them: at most ~3 MiB of new
-         * pages per frame; the rest waits one frame. A sprite may appear a
-         * frame or two late during the transition instead of freezing the
-         * battle. Pinned (UI/party) pages are never delayed. */
-        if (vitaFloweryBattleMemoryMode && !gl->texturePinned[pageId] &&
-            gl->textureRetryAfterFrame != nullptr) {
-            static uint32_t budgetFrame = UINT32_MAX;
-            static uint64_t budgetBytes = 0;
-            if (budgetFrame != gl->textureFrame) {
-                budgetFrame = gl->textureFrame;
-                budgetBytes = 0;
-            }
-            if (budgetBytes > 0 && budgetBytes + preflightBytes > 3ULL * 1024ULL * 1024ULL) {
-                gl->textureRetryAfterFrame[pageId] = gl->textureFrame + 1;
-                gl->textureLoaded[pageId] = false;
-                static uint32_t spreadLogs = 0;
-                if (spreadLogs < 40) {
-                    spreadLogs++;
-                    vitaTextureLog(pageId, sourceW, sourceH, 4096, "flowery_upload_spread_next_frame");
-                }
-                return false;
-            }
-            budgetBytes += preflightBytes;
-        }
+        /* v0.83-5: the v0.82 per-frame upload budget for the final battle was
+         * removed. The v0.83-4 log still had 2.5 s stalls, and pages the tower
+         * needs on its 3.75 Hz redraw frames kept losing the budget, so the
+         * tower disappeared. */
     }
     uint8_t* pvrPayload = nullptr;
     uint32_t pvrPayloadSize = 0;

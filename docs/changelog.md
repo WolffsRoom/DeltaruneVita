@@ -3,6 +3,13 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.83-5 — Correções do teste da v0.83-4 (torre da batalha final, penhascos, intro do Cap. 2)
+
+- **Torre da batalha final de volta**: removido o limite de ~3 MiB de texturas novas por quadro da v0.83-1. No log da v0.83-4 ainda havia travadas de 2,5 s, e as páginas que a torre usa nos quadros em que é redesenhada (3,75 Hz) perdiam a vez sempre, então a torre sumia.
+- **Penhascos (`room_dw_cliff_kawkawdash`)**: log da v0.83-4 com média de 47 ms (~20 ms de Step por quadro). `obj_dw_cliffs_tallgrass` Step_2 ganhou C exato para a grama não tocada: no PC, 20285 → 12541 ops por quadro, imagem idêntica.
+- **Sol do penhasco**: o evento que redesenha a surface do sol roda 1 quadro em 3; nos outros a mesma surface é desenhada acompanhando a câmera (perda visual aceita: o brilho do sol anima a 1/3). No PC, ~60 a 100 pixels de diferença por quadro na `room_dw_cliff_shop`.
+- **Intro duplicada**: removido o desvio forçado para `PLACE_LOGO` (v0.81-9/10). Capítulos zerados tocavam `AUDIO_INTRONOISE` duas vezes (o fluxo original já passa por `PLACE_LOGO`), e capítulos não zerados tocavam uma vez sem dever. Agora vale só o fluxo original do jogo.
+
 ## v0.83-4 — Três atalhos em C encontrados pela pesquisa local dos Caps. 2 a 5
 
 Detalhes: [`docs/pesquisa-salas-caps2-5-v0.83.md`](pesquisa-salas-caps2-5-v0.83.md). Medido no PC; sem teste no Vita.

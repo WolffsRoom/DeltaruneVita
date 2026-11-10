@@ -6964,31 +6964,12 @@ int main(void) {
                 (uint32_t)runner->pendingRoom < dw->room.count
             ? dw->room.rooms[runner->pendingRoom].name
             : NULL;
-    /* Only route through PLACE_LOGO (playing AUDIO_INTRONOISE.ogg) if the
-     * player has completed at least one chapter. For fresh/uncompleted chapters,
-     * retain normal Deltarune behavior and go directly to the initial flow. */
-    static bool s_has_shown_boot_logo = false;
-    if (active_chapter > 0 && runner->pendingRoom >= 0 &&
-        !s_has_shown_boot_logo && pending_room_name != NULL &&
-        strstr(pending_room_name, "PLACE_MENU") != NULL) {
-      s_has_shown_boot_logo = true;
-      if (has_completed_any_chapter()) {
-        int logo_room = -1;
-        for (uint32_t i = 0; i < dw->room.count; ++i) {
-          if (dw->room.rooms[i].name != NULL &&
-              strcmp(dw->room.rooms[i].name, "PLACE_LOGO") == 0) {
-            logo_room = (int)i;
-            break;
-          }
-        }
-        if (logo_room >= 0) {
-          runner->pendingRoom = logo_room;
-          pending_room_name = dw->room.rooms[logo_room].name;
-          log_line(
-              "STARTUP_INTRO=routed_initialize_to_place_logo_for_intro_noise");
-        }
-      }
-    }
+    /* v0.83-5: no forced PLACE_LOGO route. v0.81-9/10 sent the first
+     * PLACE_MENU of every boot to PLACE_LOGO when ANY chapter had been
+     * completed. A completed chapter already plays AUDIO_INTRONOISE through its
+     * own room_legend -> PLACE_LOGO -> PLACE_MENU flow, so it played twice, and
+     * chapters not yet completed played it although the original skips it.
+     * The original GameMaker flow now decides alone. */
     bool entering_place_menu = active_chapter > 0 &&
                                pending_room_name != NULL &&
                                strstr(pending_room_name, "PLACE_MENU") != NULL;

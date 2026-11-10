@@ -594,34 +594,23 @@ static bool Runner_tryNativeCliffLayersDraw(Runner* runner, Instance* instance,
         GMLArray_set(alphas.array, 3, RValue_makeReal(0.0));
     }
 
-    /* Preserve `with (obj_parallax_cliffs_sunlayer) event_user(0)`.
-     * The sunlayer bakes its glow markers into a 400x300 surface once.
-     * Rebuilding in GML every frame costs 6.5 ms CPU. Once built, draw its surface directly. */
+    /* Preserve `with (obj_parallax_cliffs_sunlayer) event_user(0)` exactly.
+     * v0.81-10 cached the sun surface after its first build and drew it at
+     * camera+(320,45)-(400,300). The GML redraws it every frame: `index++`
+     * animates the base/rim sprites, the sun colour follows the phase, the
+     * position adds horizon_offset_default (266), sunx/suny and the platswap
+     * offset, and it exits while sun_visible is false. The cache froze all
+     * of that and drew the sun about 266 px too high, so it was removed. The
+     * event itself is a handful of draws (it did not rank on the PC profile). */
     const size_t count = arrlen(runner->instances);
-    const int32_t surfVarId = Runner_varId(runner->vmContext, "surf");
     for (size_t i = 0; i < count; ++i) {
         Instance* sun = runner->instances[i];
         if (sun == nullptr || !sun->active || sun->destroyed || sun->objectIndex < 0 ||
             (uint32_t)sun->objectIndex >= runner->dataWin->objt.count)
             continue;
         const char* name = runner->dataWin->objt.objects[sun->objectIndex].name;
-        if (name != nullptr && strcmp(name, "obj_parallax_cliffs_sunlayer") == 0) {
-            int32_t surfId = surfVarId >= 0 ? RValue_toInt32(Instance_getSelfVar(sun, surfVarId)) : -1;
-            bool surfExists = surfId >= 0 && Renderer_surfaceExists(runner->renderer, surfId);
-            if (!surfExists) {
-                Runner_executeEvent(runner, sun, EVENT_OTHER, OTHER_USER0);
-            } else {
-                GMLCamera* cam = Runner_getCameraById(runner, runner->views[0].cameraId);
-                float camX = cam ? cam->viewX : 0.0f;
-                float camY = cam ? cam->viewY : 0.0f;
-                runner->renderer->vtable->drawSurface(
-                    runner->renderer, surfId,
-                    0, 0, -1, -1,
-                    camX + 320.0f - 400.0f,
-                    camY + 45.0f - 300.0f,
-                    2.0f, 2.0f, 0.0f, 0xFFFFFF, 1.0f);
-            }
-        }
+        if (name != nullptr && strcmp(name, "obj_parallax_cliffs_sunlayer") == 0)
+            Runner_executeEvent(runner, sun, EVENT_OTHER, OTHER_USER0);
     }
 
     GMLCamera* camera = Runner_getCameraById(runner, runner->views[0].cameraId);

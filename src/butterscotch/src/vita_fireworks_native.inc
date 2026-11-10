@@ -52,10 +52,20 @@ static bool vitaTryNativeCh2Fireworks(Runner*runner,Instance*inst,
                                        int32_t codeId){
  if(!runner || !inst || !runner->currentRoom ||
     !runner->currentRoom->name || g_vitaActiveChapter!=2 ||
-    strcmp(runner->currentRoom->name,
-           "room_dw_cyber_post_music_boss_slide")!=0 ||
     codeId<0 || (uint32_t)codeId>=runner->dataWin->code.count)
     return false;
+ const char*fwRoom=runner->currentRoom->name;
+ /* v0.81-15: the boss slide had no creation thinning and ran at ~16 FPS
+  * (Draw 18 ms + Step 16 ms in GML on the Vita). There every second particle
+  * is drawn (all of them still move). The other firework rooms already keep
+  * only 1/2 or 1/3 of the explosions, so they draw every particle. */
+ const bool fwBossSlide=strcmp(fwRoom,"room_dw_cyber_post_music_boss_slide")==0;
+ if(!fwBossSlide &&
+    strcmp(fwRoom,"room_dw_cyber_maze_fireworks")!=0 &&
+    strcmp(fwRoom,"room_dw_city_postbaseball_1")!=0 &&
+    strcmp(fwRoom,"room_dw_city_postbaseball_2")!=0)
+    return false;
+ const int fwDrawStride=fwBossSlide?2:1;
  const char*codeName=runner->dataWin->code.entries[codeId].name;
  if(!codeName)return false;
  bool step=strcmp(codeName,
@@ -136,11 +146,12 @@ static bool vitaTryNativeCh2Fireworks(Runner*runner,Instance*inst,
   Renderer*renderer=runner->renderer;
   renderer->vtable->gpuSetBlendMode(renderer,1); /* bm_add */
   double factor=fmin(time/30.0,1.0);
-  double lastScaleBonus=0.0;
-  for(int i=0;i<count;i++){
+  /* GML leaves scalebonus at the value of the last particle. */
+  double lastScaleBonus=fwArrayGet(a[FW_ALARM],count-1)==0.0?1.0:0.0;
+  for(int i=0;i<count;i+=fwDrawStride){
    bool shine=fwArrayGet(a[FW_ALARM],i)==0.0;
-   lastScaleBonus=shine?1.0:0.0;
-   double scale=fwArrayGet(a[FW_SCALE],i)+lastScaleBonus;
+   double bonus=shine?1.0:0.0;
+   double scale=fwArrayGet(a[FW_SCALE],i)+bonus;
    double alpha=fwArrayGet(a[FW_ALPHA],i);
    if(scale==0.0 || alpha<=0.0)continue;
    float x=(float)(inst->x+fwArrayGet(a[FW_X],i)*fwArrayGet(a[FW_H],i));
@@ -157,7 +168,11 @@ static bool vitaTryNativeCh2Fireworks(Runner*runner,Instance*inst,
  }
  if(!fwLogged){
   fwLogged=true;
-  VitaProbe_logLine("VITAGL_CH2_FIREWORK_NATIVE=active step_draw=1 cow_fallback=1 original_gml_preserved=1");
+  char fwLine[160];
+  snprintf(fwLine,sizeof(fwLine),
+   "VITAGL_CH2_FIREWORK_NATIVE=active step_draw=1 cow_fallback=1 room=%s draw_stride=%d",
+   fwRoom,fwDrawStride);
+  VitaProbe_logLine(fwLine);
  }
  return true;
 }

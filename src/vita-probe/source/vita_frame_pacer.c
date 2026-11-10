@@ -52,11 +52,21 @@ VitaFramePacerPlan VitaFramePacer_plan(VitaFramePacer* pacer,
     plan.enabled = true;
     plan.deadlineUs = pacer->deadlineUs;
     if (nowUs >= pacer->deadlineUs) {
+        /* A late frame must start the next one immediately. Until v0.81-13
+         * this branch returned the NEXT grid deadline and the caller spun on
+         * it, so a 34 ms frame at 30 FPS was held to 66.7 ms (15 FPS).
+         * Slightly late (under a quarter period): keep the grid phase so the
+         * cadence stays at 33.3 ms on average. Later than that: re-anchor the
+         * grid to now instead of making the next frame pay for this one. */
         ++pacer->lateFrames;
-        while (pacer->deadlineUs <= nowUs) {
+        uint64_t lateBy = nowUs - pacer->deadlineUs;
+        if (lateBy < period / 4ULL) {
             pacerAdvanceDeadline(pacer);
+        } else {
+            pacer->deadlineUs = nowUs + period;
+            pacer->remainderCarry = 0;
         }
-        plan.deadlineUs = pacer->deadlineUs;
+        plan.deadlineUs = nowUs;
         plan.coarseSleepUs = 0;
         return plan;
     }

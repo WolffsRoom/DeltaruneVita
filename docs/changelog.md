@@ -3,6 +3,19 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.81-15 — Fogos do Cap. 2 mais leves e registro de inicialização sem devmode
+
+- **Fogos do Cap. 2** (`vita_fireworks_native.inc`): na `room_dw_cyber_post_music_boss_slide`, onde os fogos custavam ~35 ms por quadro no Vita (16 FPS), o caminho em C desenha uma partícula a cada duas (todas continuam se movendo). O caminho em C passa a valer também em `room_dw_cyber_maze_fireworks` e `room_dw_city_postbaseball_1/2`, que já descartavam parte das explosões na criação e desenham todas as partículas. Perda visual aceita: fogos menos densos. Sem teste no Vita; o log mostra `VITAGL_CH2_FIREWORK_NATIVE=active ... draw_stride=`.
+- **Etapas de inicialização** (`playable_main.c`, `boot_stage`): `ux0:data/deltarune/deltarunevita/boot_stages.txt` recebe uma linha por etapa (pastas, saves, `vglInit`, `libshacccg`, dados, config.ini, vídeo, primeiro quadro), mesmo sem devmode. Antes, um crash antes de `VitaSettings_load` não deixava nem config.ini nem log; a última linha do arquivo agora diz onde a abertura parou.
+
+## v0.81-14 — Limitador de FPS sem queda para 15/30 FPS e correção de dois atalhos em C da v0.81-10
+
+Detalhes, medições e plano dos Caps. 2 e 3: [`docs/revisao-desempenho-v0.81-14.md`](revisao-desempenho-v0.81-14.md).
+
+- **Limitador de FPS** (`src/vita-probe/source/vita_frame_pacer.c`): um quadro atrasado não espera mais o próximo ponto da grade. Antes, um quadro de 34 ms no modo 30 virava 66,7 ms (15 FPS) e um de 20 ms no modo 60 virava 33,3 ms (30 FPS). Atraso menor que 1/4 do período mantém a grade; maior reancora no instante atual. Simulação no PC: 34 ms passa de 15 para 29,4 FPS; 20 ms no modo 60 passa de 30 para 50 FPS. Sem teste no Vita.
+- **Sol do penhasco** (`runner.c`, `Runner_tryNativeCliffLayersDraw`): removido o cache da surface de `obj_parallax_cliffs_sunlayer` da v0.81-10, que congelava animação, cor e `sun_visible` e desenhava o sol cerca de 266 px acima do horizonte (no PC, o sol sumia da `room_dw_cliff_shop`). O evento original volta a rodar a cada quadro; custa 0,03 ms no PC.
+- **Chão das plataformas** (`vm_builtins.c`, `VMBuiltins_tryFloortexDraw`): reescrito para seguir o GML (posição, escala vertical, ordem, cor e `darken_blend` por quadro) e atuar só no estado estável com `draw_all_surfaces`. Imagens idênticas ao GML no PC em `orange_gauntlet` e `garden_hopschef`.
+
 ## v0.81-11 — Resolução Definitiva da Dupla Barra de TP no Floradinn, Eliminação do Thrashing de Memória em Castle Town/Hometown (Trim de 56 MiB) e VSync Incondicional a 30 FPS
 
 - **Eliminação Definitiva da Dupla Barra de TP no Floradinn (`room_dw_garden_floradinnencounter`)**:

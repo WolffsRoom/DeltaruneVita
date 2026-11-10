@@ -4450,6 +4450,31 @@ static bool has_completed_any_chapter(void) {
   return false;
 }
 
+/* v0.81-15: startup breadcrumbs, written even without devmode. The normal log
+ * needs devmode=1 from config.ini, and config.ini is only created inside
+ * VitaSettings_load, so a crash before that left the player with no file at
+ * all. Each stage is appended to a tiny file that the next boot overwrites;
+ * the last line says where a boot stopped. Stops after the first frame. */
+#define BOOT_STAGE_PATH "ux0:data/deltarune/deltarunevita/boot_stages.txt"
+static bool g_bootStagesDone = false;
+static void boot_stage(const char *stage) {
+  static bool started = false;
+  if (g_bootStagesDone || stage == NULL)
+    return;
+  SceUID fd = sceIoOpen(BOOT_STAGE_PATH,
+                        SCE_O_WRONLY | SCE_O_CREAT |
+                            (started ? SCE_O_APPEND : SCE_O_TRUNC),
+                        0666);
+  if (fd < 0)
+    return;
+  started = true;
+  char line[224];
+  int n = snprintf(line, sizeof(line), "%s %s\n", PORT_BUILD_VERSION, stage);
+  if (n > 0)
+    sceIoWrite(fd, line, (SceSize)(n < (int)sizeof(line) ? n : (int)sizeof(line) - 1));
+  sceIoClose(fd);
+}
+
 int main(void) {
   setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
@@ -4464,7 +4489,9 @@ int main(void) {
   sceIoMkdir("ux0:data/deltarune", 0777);
   sceIoMkdir(DATA_ROOT, 0777);
   sceIoMkdir(SAVE_PATH, 0777);
+  boot_stage("main_enter dirs_created");
   migrate_old_saves();
+  boot_stage("saves_migrated");
   g_vitaProbeLoggingEnabled = config_devmode_enabled();
   sceIoRemove(LOG_PATH);
   int active_chapter = consume_next_chapter();
@@ -4547,9 +4574,16 @@ int main(void) {
            (unsigned int)preInitMemory.size_cdram,
            (unsigned int)preInitMemory.size_phycont);
   log_line(vitaglInitLog);
+  {
+    char stage[200];
+    snprintf(stage, sizeof(stage), "vitagl_init_begin chapter=%d %s",
+             active_chapter, vitaglInitLog + 18);
+    boot_stage(stage);
+  }
   vglInitWithCustomSizes(0, 960, 544, ramPool, cdramPool, phyPool, 0,
                          SCE_GXM_MULTISAMPLE_NONE);
   log_line("VITAGL=init_complete");
+  boot_stage("vitagl_init_complete");
 
   // vitaShaRK loads this module from the fixed ur0:data path when the first
   // runtime shader is linked. Report the missing dependency here, while the
@@ -4562,10 +4596,13 @@ int main(void) {
 
   // Feature 2: fail fast with a readable report if the game data is not
   // installed, instead of proceeding and crashing later in the boot path.
+  boot_stage("libshacccg_ok");
   verify_essential_data_or_report(active_chapter);
+  boot_stage("game_data_ok");
 
   VitaSettings settings;
   VitaSettings_load(&settings);
+  boot_stage("settings_loaded config_ini_written");
   float firstLoadGain = settings.audioDisabled
                             ? 0.0f
                             : ((float)settings.masterVolume / 10.0f) *
@@ -4643,6 +4680,7 @@ int main(void) {
                "VITAGL=first_load_phycont size=%u free_slow=%u",
                4U * 1024U * 1024U, (unsigned int)vglMemFree(VGL_MEM_SLOW));
       log_line(firstPhyLog);
+      boot_stage("first_load_video_begin");
       if (!first_load_video_play(firstLoadGain)) {
         log_line("FIRST_LOAD_VIDEO=fallback_png_begin");
         first_load_animation_begin();
@@ -4717,6 +4755,7 @@ int main(void) {
              "parse_weight=12 percent=0");
   }
 
+  boot_stage("startup_video_done");
   bool nativeTrophies = VitaTrophies_init();
   VitaSettings_setNativeTrophiesActive(&settings, nativeTrophies);
   char trophyLog[192];
@@ -7245,8 +7284,11 @@ int main(void) {
     }
 
     frame++;
-    if (frame == 1)
+    if (frame == 1) {
       log_line("FRAME=first_complete");
+      boot_stage("first_frame_complete");
+      g_bootStagesDone = true;
+    }
     if (frame == 60) {
       char room_line[128];
       snprintf(room_line, sizeof(room_line),

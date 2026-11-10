@@ -15929,10 +15929,50 @@ bool VMBuiltins_tryBluePlatformDraw(VMContext* ctx, Instance* target, int32_t co
     return true;
 }
 
-/* v0.81-10: obj_plat_floortex_FLOOR (and child obj_plat_floortex_FLOOR_AlignBottom1TILE).
- * In complex platform rooms like room_dw_cliff_twirlflowerwind, dozens of platforms each
- * run 9.1 KB of GML bytecode. When culled or when surfaces are already baked,
- * native C handles drawing in microseconds without GML VM dispatch, avoiding VRAM eviction. */
+/* v0.81-10, rewritten in v0.81-14: obj_plat_floortex_FLOOR (and its child
+ * obj_plat_floortex_FLOOR_AlignBottom1TILE, which inherits this Draw).
+ * Only the steady state of the surface branch is translated: gen, not culled,
+ * init2 done, surface_method and draw_all_surfaces on, not sloped, no refresh
+ * pending, no debug mode, and every surface the GML would (re)create already
+ * exists. Anything else runs the original GML. The order and arguments follow
+ * the GML: back_surf, the floor surface (bbox_left/bbox_top, yscale from
+ * sprite_height, image_angle/alpha, image_blend reset to white), then
+ * front_surf; darken_blend is recomputed from the platswap scale every frame.
+ * The v0.81-10 version drew the floor surface at x/y with scale 1, after the
+ * front surface, with the darken colour, and froze darken_blend. */
+static double floortexPlatswapYscale(Runner* runner, int32_t transitionVar) {
+    if (transitionVar < 0) return 0.0;
+    for (size_t i = 0; i < arrlen(runner->instances); ++i) {
+        Instance* inst = runner->instances[i];
+        if (inst == nullptr || !inst->active || inst->destroyed || inst->objectIndex < 0 ||
+            (uint32_t)inst->objectIndex >= runner->dataWin->objt.count)
+            continue;
+        const char* name = runner->dataWin->objt.objects[inst->objectIndex].name;
+        if (name == nullptr || strcmp(name, "obj_platswap") != 0) continue;
+        RValue scale = Instance_getSelfVar(inst, transitionVar);
+        if (scale.type == RVALUE_ARRAY && scale.array != nullptr &&
+            GMLArray_length1D(scale.array) > 0)
+            return RValue_toReal(GMLArray_get(scale.array, 0));
+        return 0.0;
+    }
+    return 0.0; // scr_platswap_yscale() returns [0, 1] without obj_platswap
+}
+
+static bool floortexSurfaceExists(VMContext* ctx, int32_t id) {
+    if (id < 0) return false;
+    RValue arg = RValue_makeReal(id);
+    return RValue_toBool(builtin_surface_exists(ctx, &arg, 1));
+}
+
+static bool floortexLayerExists(VMContext* ctx, RValue layer) {
+    return RValue_toBool(builtin_layer_exists(ctx, &layer, 1));
+}
+
+static void floortexHideLayer(VMContext* ctx, RValue layer) {
+    RValue args[2] = { layer, RValue_makeBool(false) };
+    builtin_layer_set_visible(ctx, args, 2);
+}
+
 bool VMBuiltins_tryFloortexDraw(VMContext* ctx, Instance* target, int32_t codeId) {
     if (ctx == nullptr || target == nullptr || ctx->runner == nullptr ||
         ctx->runner->renderer == nullptr || codeId < 0 ||
@@ -15943,112 +15983,146 @@ bool VMBuiltins_tryFloortexDraw(VMContext* ctx, Instance* target, int32_t codeId
         strcmp(code->name, "gml_Object_obj_plat_floortex_FLOOR_Draw_0") != 0)
         return false;
 #ifndef PLATFORM_VITA
-    if (getenv("BS_TEST_DISABLE_CH5_C_FASTPATHS") != nullptr) return false;
+    if (getenv("BS_TEST_DISABLE_CH5_C_FASTPATHS") != nullptr ||
+        getenv("BS_TEST_DISABLE_FLOORTEX_FAST") != nullptr) return false;
 #endif
 
     static VMContext* cachedCtx = nullptr;
-    static int32_t vGen, vCulled, vMethod, vNeedRefresh, vSurf, vFrontSurf, vBackSurf,
-                   vDrawAll, vSloped, vFrontCol, vDarkenBlend, vFrontX, vBackX,
-                   vBackHeight;
+    static int32_t vGen, vCulled, vInit2, vMethod, vDrawAll, vNeedRefresh, vSloped,
+                   vDebug, vDarkenMode, vDarkenBlend, vFrontCol, vSurf, vFrontSurf,
+                   vBackSurf, vFrontX, vBackX, vBackW, vBackH, vFrontW, vFrontH,
+                   vSurfH, vLayerWall, vLayerFloor, vTransition;
     if (cachedCtx != ctx) {
         cachedCtx = ctx;
-        vGen = grassVar(ctx, "gen");
-        vCulled = grassVar(ctx, "is_culled");
-        vMethod = grassVar(ctx, "surface_method");
-        vNeedRefresh = grassVar(ctx, "surfaces_need_refresh");
-        vSurf = grassVar(ctx, "surf");
-        vFrontSurf = grassVar(ctx, "front_surf");
-        vBackSurf = grassVar(ctx, "back_surf");
+        vGen = grassVar(ctx, "gen"); vCulled = grassVar(ctx, "is_culled");
+        vInit2 = grassVar(ctx, "init2"); vMethod = grassVar(ctx, "surface_method");
         vDrawAll = grassVar(ctx, "draw_all_surfaces");
-        vSloped = grassVar(ctx, "sloped");
-        vFrontCol = grassVar(ctx, "front_col");
-        vDarkenBlend = grassVar(ctx, "darken_blend");
-        vFrontX = grassVar(ctx, "front_x");
-        vBackX = grassVar(ctx, "back_x");
-        vBackHeight = grassVar(ctx, "back_height");
+        vNeedRefresh = grassVar(ctx, "surfaces_need_refresh");
+        vSloped = grassVar(ctx, "sloped"); vDebug = grassVar(ctx, "debugmode");
+        vDarkenMode = grassVar(ctx, "darken_mode"); vDarkenBlend = grassVar(ctx, "darken_blend");
+        vFrontCol = grassVar(ctx, "front_col"); vSurf = grassVar(ctx, "surf");
+        vFrontSurf = grassVar(ctx, "front_surf"); vBackSurf = grassVar(ctx, "back_surf");
+        vFrontX = grassVar(ctx, "front_x"); vBackX = grassVar(ctx, "back_x");
+        vBackW = grassVar(ctx, "back_width"); vBackH = grassVar(ctx, "back_height");
+        vFrontW = grassVar(ctx, "front_width"); vFrontH = grassVar(ctx, "front_height");
+        vSurfH = grassVar(ctx, "surface_height");
+        vLayerWall = grassVar(ctx, "layer_wall"); vLayerFloor = grassVar(ctx, "layer_floor");
+        vTransition = grassVar(ctx, "__transition_yscale");
     }
     if (vGen < 0 || vCulled < 0) return false;
 
-    // GML lines 0-40: if (!gen || is_culled) exit;
+    // GML: if (!gen) exit; if (is_culled) exit;
     if (!RValue_toBool(Instance_getSelfVar(target, vGen)) ||
-        RValue_toBool(Instance_getSelfVar(target, vCulled))) {
-        return true; // Culled or ungenerated: completely skip GML execution.
-    }
+        RValue_toBool(Instance_getSelfVar(target, vCulled)))
+        return true;
 
-    if (vMethod < 0 || !RValue_toBool(Instance_getSelfVar(target, vMethod))) {
-        // Sprite-based path or surface_method disabled: let GML handle
+    if (vInit2 < 0 || vMethod < 0 || vDrawAll < 0 || vNeedRefresh < 0 || vSloped < 0 ||
+        vDebug < 0 || vDarkenMode < 0 || vDarkenBlend < 0 || vFrontCol < 0 || vSurf < 0 ||
+        vFrontSurf < 0 || vBackSurf < 0 || vFrontX < 0 || vBackX < 0 || vBackW < 0 ||
+        vBackH < 0 || vFrontW < 0 || vFrontH < 0 || vSurfH < 0 || vLayerWall < 0 ||
+        vLayerFloor < 0)
         return false;
-    }
-
-    // If surfaces need refresh, let GML build them once
-    if (vNeedRefresh >= 0 && RValue_toBool(Instance_getSelfVar(target, vNeedRefresh))) {
+    if (!RValue_toBool(Instance_getSelfVar(target, vInit2)) ||
+        !RValue_toBool(Instance_getSelfVar(target, vMethod)) ||
+        !RValue_toBool(Instance_getSelfVar(target, vDrawAll)) ||
+        RValue_toBool(Instance_getSelfVar(target, vNeedRefresh)) ||
+        RValue_toBool(Instance_getSelfVar(target, vSloped)) ||
+        RValue_toBool(Instance_getSelfVar(target, vDebug)))
         return false;
-    }
 
-    // Sloped platforms have complex quad projections: let GML handle
-    if (vSloped >= 0 && RValue_toBool(Instance_getSelfVar(target, vSloped))) {
+    // Every surface the GML would create this frame must already exist,
+    // otherwise the GML runs (before anything is drawn here).
+    const int32_t backSurf = RValue_toInt32(Instance_getSelfVar(target, vBackSurf));
+    const int32_t frontSurf = RValue_toInt32(Instance_getSelfVar(target, vFrontSurf));
+    const int32_t surf = RValue_toInt32(Instance_getSelfVar(target, vSurf));
+    const bool backExists = floortexSurfaceExists(ctx, backSurf);
+    const bool frontExists = floortexSurfaceExists(ctx, frontSurf);
+    if (!backExists && RValue_toReal(Instance_getSelfVar(target, vBackW)) > 0 &&
+        RValue_toReal(Instance_getSelfVar(target, vBackH)) > 0)
         return false;
-    }
-
-    int32_t frontSurf = vFrontSurf >= 0 ? RValue_toInt32(Instance_getSelfVar(target, vFrontSurf)) : -1;
-    int32_t surf = vSurf >= 0 ? RValue_toInt32(Instance_getSelfVar(target, vSurf)) : -1;
-    int32_t backSurf = vBackSurf >= 0 ? RValue_toInt32(Instance_getSelfVar(target, vBackSurf)) : -1;
-
-    // Verify existing surfaces exist; if destroyed, GML must rebuild
-    RValue frontArg = RValue_makeReal(frontSurf);
-    if (frontSurf < 0 || !RValue_toBool(builtin_surface_exists(ctx, &frontArg, 1)))
+    if (!frontExists && RValue_toReal(Instance_getSelfVar(target, vFrontW)) > 0 &&
+        RValue_toReal(Instance_getSelfVar(target, vFrontH)) > 0)
+        return false;
+    RValue layerFloor = Instance_getSelfVar(target, vLayerFloor);
+    RValue layerWall = Instance_getSelfVar(target, vLayerWall);
+    if (layerFloor.type != RVALUE_ARRAY || layerFloor.array == nullptr ||
+        layerWall.type != RVALUE_ARRAY || layerWall.array == nullptr)
+        return false;
+    const bool hasFloorLayer = GMLArray_length1D(layerFloor.array) > 0;
+    RValue layFloor = hasFloorLayer ? GMLArray_get(layerFloor.array, 0) : RValue_makeReal(-4);
+    const bool floorLayerExists = hasFloorLayer && floortexLayerExists(ctx, layFloor);
+    if (floorLayerExists && !floortexSurfaceExists(ctx, surf))
         return false;
 
     Runner* runner = ctx->runner;
-    int32_t col = 16777215;
-    if (vFrontCol >= 0 && vDarkenBlend >= 0) {
-        int32_t frontColVal = RValue_toInt32(Instance_getSelfVar(target, vFrontCol));
-        double darkenVal = RValue_toReal(Instance_getSelfVar(target, vDarkenBlend));
-        col = Color_lerp(16777215, frontColVal, (float)darkenVal);
-    }
+    // darken_blend, as the GML recomputes it every frame
+    const double ys = floortexPlatswapYscale(runner, vTransition);
+    const int32_t darkenMode = RValue_toInt32(Instance_getSelfVar(target, vDarkenMode));
+    if (darkenMode == 0)
+        Instance_setSelfVar(target, vDarkenBlend, RValue_makeReal(1.0));
+    else if (darkenMode == 2)
+        Instance_setSelfVar(target, vDarkenBlend, RValue_makeReal(1.0 - ys));
+    else if (darkenMode == 1)
+        Instance_setSelfVar(target, vDarkenBlend, RValue_makeReal(ys));
+    const double darkenBlend = RValue_toReal(Instance_getSelfVar(target, vDarkenBlend));
+    const int32_t wallCol = Color_lerp(16777215,
+        RValue_toInt32(Instance_getSelfVar(target, vFrontCol)), (float)darkenBlend);
 
+    RValue layWall = GMLArray_length1D(layerWall.array) > 0 ?
+                     GMLArray_get(layerWall.array, 0) : RValue_makeReal(-4);
+    const bool wallLayerExists = floortexLayerExists(ctx, layWall);
     InstanceBBox box = Collision_computeBBox(runner, target);
-    double bottom = box.valid ? (runner->collisionCompatibilityMode ? box.bottom - 1 : box.bottom) : target->y;
-    double top = box.valid ? box.top : target->y;
+    const double bboxLeft = box.valid ? box.left : target->x;
+    const double bboxTop = box.valid ? box.top : target->y;
+    const double bboxBottom = box.valid ?
+        (runner->collisionCompatibilityMode ? box.bottom - 1 : box.bottom) : target->y;
 
-    // 1. Draw back_surf if draw_all_surfaces is true
-    if (vDrawAll >= 0 && RValue_toBool(Instance_getSelfVar(target, vDrawAll)) && backSurf >= 0) {
-        RValue backArg = RValue_makeReal(backSurf);
-        if (RValue_toBool(builtin_surface_exists(ctx, &backArg, 1))) {
-            double backX = vBackX >= 0 ? RValue_toReal(Instance_getSelfVar(target, vBackX)) : target->x;
-            double backH = vBackHeight >= 0 ? RValue_toReal(Instance_getSelfVar(target, vBackHeight)) : 0.0;
-            RValue args[8] = {
-                backArg, RValue_makeReal(backX), RValue_makeReal(top - backH),
-                RValue_makeReal(1), RValue_makeReal(1), RValue_makeReal(0),
-                RValue_makeReal(col), RValue_makeReal(1)
-            };
-            builtin_draw_surface_ext(ctx, args, 8);
-        }
+    // back_surf
+    if (backExists && wallLayerExists) {
+        floortexHideLayer(ctx, layWall);
+        target->imageBlend = 0xFFFFFF;
+        RValue args[8] = {
+            RValue_makeReal(backSurf), Instance_getSelfVar(target, vBackX),
+            RValue_makeReal(bboxTop - RValue_toReal(Instance_getSelfVar(target, vBackH))),
+            RValue_makeReal(1), RValue_makeReal(1), RValue_makeReal(0),
+            RValue_makeReal(wallCol), RValue_makeReal(1)
+        };
+        builtin_draw_surface_ext(ctx, args, 8);
     }
 
-    // 2. Draw front_surf
-    double frontX = vFrontX >= 0 ? RValue_toReal(Instance_getSelfVar(target, vFrontX)) : target->x;
-    RValue frontArgs[8] = {
-        frontArg, RValue_makeReal(frontX), RValue_makeReal(bottom + 1.0),
-        RValue_makeReal(1), RValue_makeReal(1), RValue_makeReal(0),
-        RValue_makeReal(col), RValue_makeReal(1)
-    };
-    builtin_draw_surface_ext(ctx, frontArgs, 8);
+    // floor layer: hidden, or the GML exits here
+    if (!floorLayerExists) return true;
+    floortexHideLayer(ctx, layFloor);
 
-    // 3. Draw main top surf if present
-    if (surf >= 0) {
-        RValue topArg = RValue_makeReal(surf);
-        if (RValue_toBool(builtin_surface_exists(ctx, &topArg, 1))) {
-            RValue topArgs[8] = {
-                topArg, RValue_makeReal(target->x), RValue_makeReal(target->y),
-                RValue_makeReal(1), RValue_makeReal(1), RValue_makeReal(0),
-                RValue_makeReal(col), RValue_makeReal(1)
-            };
-            builtin_draw_surface_ext(ctx, topArgs, 8);
-        }
+    // floor surface
+    {
+        target->imageBlend = 0xFFFFFF;
+        double spriteHeight = 0.0;
+        if (target->spriteIndex >= 0 && (uint32_t)target->spriteIndex < runner->dataWin->sprt.count)
+            spriteHeight = (double)runner->dataWin->sprt.sprites[target->spriteIndex].height *
+                           target->imageYscale;
+        const double surfaceHeight = RValue_toReal(Instance_getSelfVar(target, vSurfH));
+        RValue args[8] = {
+            RValue_makeReal(surf), RValue_makeReal(bboxLeft), RValue_makeReal(bboxTop),
+            RValue_makeReal(1), RValue_makeReal(spriteHeight / (surfaceHeight * 40.0)),
+            RValue_makeReal(target->imageAngle), RValue_makeReal(0xFFFFFF),
+            RValue_makeReal(target->imageAlpha)
+        };
+        builtin_draw_surface_ext(ctx, args, 8);
     }
 
-    return true;
+    // front_surf
+    if (frontExists && wallLayerExists) {
+        target->imageBlend = 0xFFFFFF;
+        RValue args[8] = {
+            RValue_makeReal(frontSurf), Instance_getSelfVar(target, vFrontX),
+            RValue_makeReal(bboxBottom + 1.0),
+            RValue_makeReal(1), RValue_makeReal(1), RValue_makeReal(0),
+            RValue_makeReal(wallCol), RValue_makeReal(1)
+        };
+        builtin_draw_surface_ext(ctx, args, 8);
+    }
+    return true; // surfaces_need_refresh is already false
 }
 
 static RValue builtin_tile_get_index(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {

@@ -319,9 +319,59 @@ static void restoreVMInstanceContext(VMContext* vm, Instance* savedInstance) {
 #include "vita_fireworks_native.inc"
 #endif
 
+/* v0.83: obj_grassanim_new (Chapter 5 garden/cliffs/castle and Chapter 3
+ * board rooms). Its Step walks every visible tile cell (~220) and calls
+ * scr_plat_set_floortex_dirty(), so with anim_speed 0.2 every frame it also
+ * forces every obj_plat_floortex_FLOOR to rebuild its surfaces. PC survey:
+ * 5871 VM ops per frame in room_dw_garden_floradinnencounter, the top script
+ * of the room. Accepted visual cut: the grass tiles (and the floor surfaces)
+ * update on one frame in three. On the other two only `anim` advances, exactly
+ * as the GML would, so the animation keeps its speed and phase; the third
+ * frame runs the original GML unchanged. */
+static int32_t Runner_varId(VMContext* vm, const char* name);
+static bool Runner_tryThrottleGrassAnim(Runner* runner, Instance* instance, int32_t codeId) {
+    static DataWin* cachedDw = nullptr;
+    static int32_t stepCode = -1, animVar = -1, speedVar = -1, lengthVar = -1;
+    if (runner->vmContext == nullptr || runner->dataWin == nullptr) return false;
+    if (cachedDw != runner->dataWin) {
+        cachedDw = runner->dataWin;
+        stepCode = -1;
+        for (uint32_t i = 0; i < runner->dataWin->code.count; ++i) {
+            const char* name = runner->dataWin->code.entries[i].name;
+            if (name != nullptr && strcmp(name, "gml_Object_obj_grassanim_new_Step_0") == 0) {
+                stepCode = (int32_t)i;
+                break;
+            }
+        }
+        animVar = Runner_varId(runner->vmContext, "anim");
+        speedVar = Runner_varId(runner->vmContext, "anim_speed");
+        lengthVar = Runner_varId(runner->vmContext, "anim_length");
+    }
+    if (codeId != stepCode || stepCode < 0 || animVar < 0 || speedVar < 0 || lengthVar < 0)
+        return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_GRASSANIM_THROTTLE") != nullptr) return false;
+#endif
+    if (((runner->frameCount + (uint32_t)instance->instanceId) % 3U) == 0U)
+        return false; // this frame runs the original Step
+    const RValue animValue = Instance_getSelfVar(instance, animVar);
+    const RValue speedValue = Instance_getSelfVar(instance, speedVar);
+    const RValue lengthValue = Instance_getSelfVar(instance, lengthVar);
+    if (animValue.type == RVALUE_UNDEFINED || speedValue.type == RVALUE_UNDEFINED ||
+        lengthValue.type == RVALUE_UNDEFINED)
+        return false;
+    // GML: anim += anim_speed * mult (mult = 1); if (anim > anim_length) anim -= anim_length;
+    GMLReal anim = RValue_toReal(animValue) + RValue_toReal(speedValue);
+    const GMLReal length = RValue_toReal(lengthValue);
+    if (anim > length) anim -= length;
+    Instance_setSelfVar(instance, animVar, RValue_makeReal(anim));
+    return true;
+}
+
 static void executeCode(Runner* runner, Instance* instance, int32_t codeId) {
     // GameMaker does use codeIds less than 0, we'll just pretend we didn't hear them...
     if (0 > codeId) return;
+    if (instance != nullptr && Runner_tryThrottleGrassAnim(runner, instance, codeId)) return;
 
     VMContext* vm = runner->vmContext;
 
@@ -1063,7 +1113,9 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
                        VMBuiltins_tryGardenLightDraw(vm, instance, codeId) ||
                        VMBuiltins_tryGrassStripDraw(vm, instance, codeId) ||
                        VMBuiltins_tryBluePlatformDraw(vm, instance, codeId) ||
-                       VMBuiltins_tryFloortexDraw(vm, instance, codeId));
+                       VMBuiltins_tryFloortexDraw(vm, instance, codeId) ||
+                       VMBuiltins_tryVerletRopeDraw(vm, instance, codeId) ||
+                       VMBuiltins_tryConveyorBeltDraw(vm, instance, codeId));
 #ifdef PLATFORM_VITA
     if (!nativeDraw && g_vitaActiveChapter == 5 && eventType == EVENT_DRAW &&
         eventSubtype == DRAW_NORMAL)

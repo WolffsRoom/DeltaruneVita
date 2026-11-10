@@ -16125,6 +16125,110 @@ bool VMBuiltins_tryFloortexDraw(VMContext* ctx, Instance* target, int32_t codeId
     return true; // surfaces_need_refresh is already false
 }
 
+/* v0.83: exact C translations of two Draw events found by the PC survey of the
+ * heavy rooms (ops per frame, desktop runner): obj_verlet_rope (3711 ops in
+ * room_dw_fcastle_foyer) and obj_conveyorbelt (3113 in Chapter 2's
+ * room_dw_cyber_maze_queenscreen). They call the same builtins as the GML, in
+ * the same order and with the same arguments; only VM dispatch disappears. */
+static int32_t fastSpriteByName(VMContext* ctx, const char* name) {
+    for (uint32_t i = 0; i < ctx->dataWin->sprt.count; ++i)
+        if (ctx->dataWin->sprt.sprites[i].name != nullptr &&
+            strcmp(ctx->dataWin->sprt.sprites[i].name, name) == 0)
+            return (int32_t)i;
+    return -1;
+}
+
+bool VMBuiltins_tryVerletRopeDraw(VMContext* ctx, Instance* target, int32_t codeId) {
+    if (ctx == nullptr || target == nullptr || ctx->runner == nullptr ||
+        ctx->runner->renderer == nullptr || codeId < 0 ||
+        (uint32_t)codeId >= ctx->dataWin->code.count)
+        return false;
+    CodeEntry* code = &ctx->dataWin->code.entries[codeId];
+    if (code->name == nullptr || strcmp(code->name, "gml_Object_obj_verlet_rope_Draw_0") != 0)
+        return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_V083_FASTPATHS") != nullptr) return false;
+#endif
+    static VMContext* cachedCtx = nullptr;
+    static int32_t vCulled, vLimit, vCount, vNodes, vFade, vColor, ropeSprite;
+    if (cachedCtx != ctx) {
+        cachedCtx = ctx;
+        vCulled = grassVar(ctx, "is_culled"); vLimit = grassVar(ctx, "render_limit");
+        vCount = grassVar(ctx, "nodecount"); vNodes = grassVar(ctx, "nodes");
+        vFade = grassVar(ctx, "ropefade"); vColor = grassVar(ctx, "ropecolor");
+        ropeSprite = fastSpriteByName(ctx, "spr_2pxwhite_origin_leftcenter");
+    }
+    if (vCulled < 0 || vLimit < 0 || vCount < 0 || vNodes < 0 || vFade < 0 || vColor < 0 ||
+        ropeSprite < 0)
+        return false;
+    if (RValue_toBool(Instance_getSelfVar(target, vCulled))) return true; // GML: exit
+    RValue nodes = Instance_getSelfVar(target, vNodes);
+    if (nodes.type != RVALUE_ARRAY || nodes.array == nullptr) return false;
+    const GMLReal limit = RValue_toReal(Instance_getSelfVar(target, vLimit));
+    const GMLReal count = RValue_toReal(Instance_getSelfVar(target, vCount)) - 1.0;
+    const GMLReal maxval = limit < count ? limit : count;
+    const int32_t nodeLen = GMLArray_length1D(nodes.array);
+    const bool fade = RValue_toBool(Instance_getSelfVar(target, vFade));
+    const RValue color = Instance_getSelfVar(target, vColor);
+    // Out-of-range node reads would raise a GML error; let the GML handle those.
+    if (maxval > 0 && (int64_t)ceil(maxval - 1) * 4 + 5 >= nodeLen) return false;
+    for (int32_t i = 0; (GMLReal)i < maxval; ++i) {
+        GMLReal alpha = target->imageAlpha;
+        const int32_t ii = i * 4;
+        if (fade) alpha = ((GMLReal)(i + 1) / maxval) * target->imageAlpha;
+        RValue p4[4] = { GMLArray_get(nodes.array, ii), GMLArray_get(nodes.array, ii + 1),
+                         GMLArray_get(nodes.array, ii + 4), GMLArray_get(nodes.array, ii + 5) };
+        RValue dist = builtin_point_distance(ctx, p4, 4);
+        RValue dir = builtin_point_direction(ctx, p4, 4);
+        RValue args[9] = {
+            RValue_makeReal(ropeSprite), RValue_makeReal(0), p4[0], p4[1],
+            RValue_makeReal(RValue_toReal(dist) * 0.5), RValue_makeReal(1), dir, color,
+            RValue_makeReal(alpha)
+        };
+        builtin_draw_sprite_ext(ctx, args, 9);
+    }
+    return true;
+}
+
+bool VMBuiltins_tryConveyorBeltDraw(VMContext* ctx, Instance* target, int32_t codeId) {
+    if (ctx == nullptr || target == nullptr || ctx->runner == nullptr ||
+        ctx->runner->renderer == nullptr || codeId < 0 ||
+        (uint32_t)codeId >= ctx->dataWin->code.count)
+        return false;
+    CodeEntry* code = &ctx->dataWin->code.entries[codeId];
+    if (code->name == nullptr || strcmp(code->name, "gml_Object_obj_conveyorbelt_Draw_0") != 0)
+        return false;
+#ifndef PLATFORM_VITA
+    if (getenv("BS_TEST_DISABLE_V083_FASTPATHS") != nullptr) return false;
+#endif
+    static VMContext* cachedCtx = nullptr;
+    static int32_t vXspeed, vYspeed, vHt, vWd;
+    if (cachedCtx != ctx) {
+        cachedCtx = ctx;
+        vXspeed = grassVar(ctx, "xspeed"); vYspeed = grassVar(ctx, "yspeed");
+        vHt = grassVar(ctx, "ht"); vWd = grassVar(ctx, "wd");
+    }
+    if (vXspeed < 0 || vYspeed < 0 || vHt < 0 || vWd < 0) return false;
+    const GMLReal xs = RValue_toReal(Instance_getSelfVar(target, vXspeed));
+    const GMLReal ys = RValue_toReal(Instance_getSelfVar(target, vYspeed));
+    if (xs != 0) target->imageSpeed = (float)(xs < -1 ? -1 : (xs > 1 ? 1 : xs));
+    if (ys != 0) target->imageSpeed = (float)(ys < -1 ? -1 : (ys > 1 ? 1 : ys));
+    const GMLReal ht = (GMLReal)target->imageYscale / 2;
+    const GMLReal wd = (GMLReal)target->imageXscale / 2;
+    Instance_setSelfVar(target, vHt, RValue_makeReal(ht));
+    Instance_setSelfVar(target, vWd, RValue_makeReal(wd));
+    for (int32_t i = 0; (GMLReal)i < ht; ++i)
+        for (int32_t j = 0; (GMLReal)j < wd; ++j) {
+            RValue args[9] = {
+                RValue_makeReal(target->spriteIndex), RValue_makeReal(target->imageIndex),
+                RValue_makeReal(target->x + j * 40.0), RValue_makeReal(target->y + i * 40.0),
+                RValue_makeReal(2), RValue_makeReal(2), RValue_makeReal(0),
+                RValue_makeReal(16777215), RValue_makeReal(target->imageAlpha)
+            };
+            builtin_draw_sprite_ext(ctx, args, 9);
+        }
+    return true;
+}
 static RValue builtin_tile_get_index(MAYBE_UNUSED VMContext* ctx, RValue* args, MAYBE_UNUSED int32_t argCount) {
     if (1 > argCount) return RValue_makeReal(-1.0);
     return RValue_makeReal((GMLReal) (RValue_toInt32(args[0]) & TILEINDEX_SHIFTEDMASK));

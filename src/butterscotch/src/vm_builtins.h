@@ -12,6 +12,8 @@ bool VMBuiltins_tryGardenLightDraw(VMContext* ctx, Instance* target, int32_t cod
 bool VMBuiltins_tryCullTVPanel(VMContext* ctx, Instance* target, int32_t codeId);
 bool VMBuiltins_tryManeDraw(VMContext* ctx, Instance* target, int32_t codeId);
 bool VMBuiltins_tryFloortexDraw(VMContext* ctx, Instance* target, int32_t codeId);
+bool VMBuiltins_tryVerletRopeDraw(VMContext* ctx, Instance* target, int32_t codeId);
+bool VMBuiltins_tryConveyorBeltDraw(VMContext* ctx, Instance* target, int32_t codeId);
 
 // ===[ Built-in Variable ID Enum ]===
 typedef enum {

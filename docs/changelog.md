@@ -3,6 +3,14 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.83-4 — Três atalhos em C encontrados pela pesquisa local dos Caps. 2 a 5
+
+Detalhes: [`docs/pesquisa-salas-caps2-5-v0.83.md`](pesquisa-salas-caps2-5-v0.83.md). Medido no PC; sem teste no Vita.
+
+- `obj_verlet_rope` (Draw, C exato): foyer do castelo 12278 → 8567 ops por quadro, imagem idêntica.
+- `obj_conveyorbelt` (Draw, C exato): `room_dw_cyber_maze_queenscreen` 8685 → 5572, imagem idêntica.
+- `obj_grassanim_new` (Step em 1 de cada 3 quadros, perda visual aceita): `room_dw_garden_floradinnencounter` 13765 → 9822, e o chão das plataformas é refeito com a mesma frequência.
+
 ## v0.83-3 — libshacccg.suprx aceito também em ur0:data/external/
 
 - O jogo e o launcher aceitam `ur0:data/libshacccg.suprx` ou `ur0:data/external/libshacccg.suprx`, os dois caminhos que o vitaGL usa (`third_party/vitaGL-nosplash/source/gxm.c`, `start_shader_compiler`). Até a v0.83-2 só o primeiro era aceito, e quem tinha o arquivo só em `external/` era barrado logo depois do `vglInit`.

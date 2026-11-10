@@ -1361,6 +1361,16 @@ static stb_vorbis* openStreamingVorbis(const char* path, SoundInstance* inst, in
     if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return nullptr; }
     long length = ftell(file);
     if (length <= 0 || fseek(file, 0, SEEK_SET) != 0) { fclose(file); return nullptr; }
+    /* v0.83-6: long tracks are streamed from the card through a 256 KiB stdio
+     * buffer instead of being read whole. The final battle switches to the
+     * 4.4 MiB Flowerman_Arrangement.ogg inside a phase change; reading it all
+     * on the main thread was part of the 1.8-2.5 s stalls in the logs. 256 KiB
+     * holds ~15 s of a 128 kbps OGG, so the card is read rarely and in one go. */
+    if (inst->music && length > 2L * 1024L * 1024L) {
+        if (setvbuf(file, nullptr, _IOFBF, 256 * 1024) != 0) { /* keep default buffering */ }
+        // stb owns and closes the FILE, also when the open fails.
+        return stb_vorbis_open_file(file, 1, error, nullptr);
+    }
     uint8_t* data = (uint8_t*)safeMalloc((size_t)length);
     if (data == nullptr) { fclose(file); return nullptr; }
     size_t read = fread(data, 1, (size_t)length, file);

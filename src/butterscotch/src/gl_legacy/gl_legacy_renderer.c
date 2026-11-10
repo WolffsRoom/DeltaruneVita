@@ -442,6 +442,7 @@ static void vitaMarkBc3PageBroken(const DataWin* dw, uint32_t pageId) {
     if (vitaBrokenBc3Pages != nullptr) vitaBrokenBc3Pages[pageId] = 1U;
 }
 
+static bool vitaBattleTextureMode = false;
 static bool vitaPvrTextureAllowed(const DataWin* dw, uint32_t pageId) {
     if (!g_vitaPvrEnabled || dw == nullptr || pageId >= dw->txtr.count)
         return false;
@@ -464,6 +465,14 @@ static bool vitaPvrTextureAllowed(const DataWin* dw, uint32_t pageId) {
     // pages even in Optimized mode to remove that eviction loop without making
     // the whole Chapter use the Aggressive profile.
     if (g_vitaTextureFormatProfile == 0 && vitaFloweryBattleMemoryMode)
+        return true;
+
+    /* v0.83-6: pages first needed while a battle runs (obj_battlecontroller
+     * exists) use BC3 in Optimized mode too: half the size of RGBA4444, so the
+     * battle start (enemy, attacks, UI) uploads about half the bytes and keeps
+     * more of the battle resident. Fonts/UI/dialogue stay lossless above.
+     * Accepted visual cost: BC3 on battle sprites. */
+    if (g_vitaTextureFormatProfile == 0 && vitaBattleTextureMode)
         return true;
 
     // Profile 0: Otimizado -> BC3 ONLY for exactly-2048x2048 Texture Pages
@@ -2969,6 +2978,34 @@ bool GLLegacyRenderer_ensureTextureLoaded(GLLegacyRenderer* gl, uint32_t pageId)
         return (gl->textureWidths[pageId] != 0);
     }
 #ifdef PLATFORM_VITA
+    {
+        /* Recomputed at most once per frame, only on frames that upload. */
+        static uint32_t battleFrame = UINT32_MAX;
+        static const DataWin* battleDw = nullptr;
+        static int32_t battleObject = -1;
+        Runner* runner = gl->base.runner;
+        if (runner != nullptr && battleFrame != gl->textureFrame) {
+            battleFrame = gl->textureFrame;
+            if (battleDw != runner->dataWin) {
+                battleDw = runner->dataWin;
+                battleObject = -1;
+                for (uint32_t i = 0; i < runner->dataWin->objt.count; ++i)
+                    if (runner->dataWin->objt.objects[i].name != nullptr &&
+                        strcmp(runner->dataWin->objt.objects[i].name, "obj_battlecontroller") == 0) {
+                        battleObject = (int32_t)i;
+                        break;
+                    }
+            }
+            bool active = false;
+            if (battleObject >= 0) {
+                int32_t base = Runner_pushInstancesOfObject(runner, battleObject);
+                for (int32_t i = base; i < (int32_t)arrlen(runner->instanceSnapshots); ++i)
+                    if (runner->instanceSnapshots[i]->active) { active = true; break; }
+                Runner_popInstanceSnapshot(runner, base);
+            }
+            vitaBattleTextureMode = active;
+        }
+    }
     // Check the progressive retry deadline before claiming this page. The old
     // ordering set textureLoaded=true first; a call during the backoff window
     // could then leave a zero-sized page permanently marked as loaded.

@@ -2,6 +2,10 @@
  * No framebuffer capture, no extra render target/texture, no UV warp/zoom.
  * Runs before GML/native GUI; the scene beneath is never read back. */
 static GLuint vitaCrtModProgram=0;
+/* v0.83-6: optional clip for the overlay (CRT Agressivo uses it on the
+ * console borders, outside the tube picture). x,y,w,h in GL window pixels. */
+static int vitaCrtModClipOn=0;
+static int vitaCrtModClip[4]={0,0,0,0};
 static int vitaCrtModDisabled=0;
 static int vitaCrtModGuardState=0;
 #define VITA_CRT_MOD_PENDING "ux0:data/deltarune/deltarunevita/crt_mod_boot_pending"
@@ -128,7 +132,10 @@ static bool vita_crt_mod_render(Renderer* renderer,uint32_t frame,float strength
     glGetVertexAttribiv(1,GL_VERTEX_ATTRIB_ARRAY_ENABLED,&oldAttribEnabled[1]);
     glBindFramebuffer(GL_FRAMEBUFFER,0);
     glViewport(0,0,960,544);
-    glDisable(GL_SCISSOR_TEST);
+    if(vitaCrtModClipOn){
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(vitaCrtModClip[0],vitaCrtModClip[1],vitaCrtModClip[2],vitaCrtModClip[3]);
+    }else glDisable(GL_SCISSOR_TEST);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_STENCIL_TEST);
     glDisable(GL_CULL_FACE);
@@ -224,13 +231,13 @@ static bool vita_crt_tube_init(void){
         " vec2 inside=smoothstep(vec2(0.0),vec2(0.004),uv)*smoothstep(vec2(1.0),vec2(0.996),uv);\n"
         " vec3 col=texture2D(u_tex,clamp(uv,0.0,1.0)).rgb;\n"
         " float s=sin(uv.y*u_rows*3.14159265);\n"
-        " float scan=mix(0.74,1.0,s*s);\n"
+        " float scan=mix(0.55,1.0,s*s);\n"
         " float m=mod(floor(gl_FragCoord.x),3.0);\n"
         " vec3 mask=vec3(0.88)+0.12*vec3(step(m,0.5),step(0.5,m)*step(m,1.5),step(1.5,m));\n"
         " vec2 e=uv*(1.0-uv);\n"
         " float vig=clamp(pow(max(e.x*e.y*16.0,0.0),0.22),0.0,1.0);\n"
         " float glare=0.035*(1.0-smoothstep(0.0,0.22,uv.y))*(1.0-abs(c.x));\n"
-        " vec3 outc=col*1.14*scan*mask*vig+vec3(glare);\n"
+        " vec3 outc=col*1.24*scan*mask*vig+vec3(glare);\n"
         " gl_FragColor=vec4(outc*inside.x*inside.y,1.0);\n"
         "}\n";
     GLuint vs=vitaCrtModCompile(GL_VERTEX_SHADER,vertex);
@@ -265,6 +272,7 @@ static bool vita_crt_tube_init(void){
     return true;
 }
 static int vitaCrtTubeEnabledThisFrame=0;
+static int vitaCrtTubeRect[4]={0,0,960,544}; /* sx,sy,ex,ey of the last tube draw */
 static int vitaCrtTubeDrewThisFrame=0;
 static bool vita_crt_tube_composite(GLuint texture,int32_t texW,int32_t texH,
                                     int32_t sx,int32_t sy,int32_t ex,int32_t ey,
@@ -347,6 +355,7 @@ static bool vita_crt_tube_composite(GLuint texture,int32_t texW,int32_t texH,
         return false;
     }
     vitaCrtTubeDrewThisFrame=1;
+    vitaCrtTubeRect[0]=sx;vitaCrtTubeRect[1]=sy;vitaCrtTubeRect[2]=ex;vitaCrtTubeRect[3]=ey;
     static int firstLogged=0;
     if(!firstLogged){
         firstLogged=1;

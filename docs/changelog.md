@@ -3,6 +3,15 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.83-6 — Batalhas mais leves, CRT Agressivo nas bordas e Save Anywhere
+
+Sem teste no Vita. Análise dos logs da v0.83-4 (`room_dw_fcastle_flowery`): 257 envios BC3, 245 despejos LRU e 104 adiamentos durante a batalha, com ~6 MiB de VRAM livre (atlas ~40 MiB + 35 superfícies ~21 MiB). O pico de 2,5 s (quadro 18260, 1,85 s de Step) coincide com a troca de música para `Flowerman_Arrangement.ogg` (4,4 MiB).
+
+- **Música longa**: faixas acima de 2 MiB são lidas do cartão aos poucos (buffer stdio de 256 KiB, ~15 s de áudio) em vez de inteiras na thread principal na hora da troca.
+- **BC3 durante batalhas (modo Otimizado)**: páginas carregadas enquanto existe `obj_battlecontroller` usam BC3 (metade do tamanho de RGBA4444): menos bytes no início da batalha e menos despejos. Fontes, UI e diálogo continuam sem perda.
+- **CRT Agressivo**: scanlines mais fortes no tubo (0,55 a 1,0) e o mesmo filtro de scanlines/grade do CRT Suave/Médio nas bordas do console, recortado fora da imagem do jogo.
+- **Save Anywhere**: segurar L + R e apertar SELECT abre o menu de save do próprio capítulo (`obj_savemenu`, o mesmo objeto do ponto de save) quando o jogador está livre (`global.interact == 0`, sem batalha, diálogo ou menu). O log mostra `SAVE_ANYWHERE=opened` ou o motivo da recusa. No PC o menu abre nos Caps. 2 a 5, mas sem texto, porque a sala foi aberta direto sem a inicialização do jogo.
+
 ## v0.83-5 — Correções do teste da v0.83-4 (torre da batalha final, penhascos, intro do Cap. 2)
 
 - **Torre da batalha final de volta**: removido o limite de ~3 MiB de texturas novas por quadro da v0.83-1. No log da v0.83-4 ainda havia travadas de 2,5 s, e as páginas que a torre usa nos quadros em que é redesenhada (3,75 Hz) perdiam a vez sempre, então a torre sumia.

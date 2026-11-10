@@ -30,13 +30,13 @@ def tube(src, curve, W=960, H=544):
     x1 = np.clip(x0 + 1, 0, tw - 1); y1 = np.clip(y0 + 1, 0, th - 1)
     ax = np.clip(fx - x0, 0, 1)[..., None]; ay = np.clip(fy - y0, 0, 1)[..., None]
     col = (tex[y0, x0] * (1 - ax) + tex[y0, x1] * ax) * (1 - ay) + (tex[y1, x0] * (1 - ax) + tex[y1, x1] * ax) * ay
-    s = np.sin(vv * (th * 0.5) * np.pi); scan = (0.74 + 0.26 * s * s)[..., None]
+    s = np.sin(vv * (th * 0.5) * np.pi); scan = (0.55 + 0.45 * s * s)[..., None]
     m = np.mod(np.floor(xs + sx), 3)
     mask = 0.88 + 0.12 * np.stack([(m <= 0.5), (m >= 0.5) & (m <= 1.5), (m >= 1.5)], -1).astype(np.float32)
     e = (uu * (1 - uu)) * (vv * (1 - vv))
     vig = np.clip(np.power(np.maximum(e * 16, 0), 0.22), 0, 1)[..., None]
     glare = (0.035 * (1 - ss(0, 0.22, vv)) * (1 - np.abs(cx)))[..., None]
-    res = (col * 1.14 * scan * mask * vig + glare) * inside[..., None]
+    res = (col * 1.24 * scan * mask * vig + glare) * inside[..., None]
     out[:, sx:sx + effW] = np.clip(res, 0, 1)
     return Image.fromarray((out * 255 + 0.5).astype(np.uint8))
 

@@ -4482,8 +4482,89 @@ static void boot_stage(const char *stage) {
   sceIoClose(fd);
 }
 
-int main(void) {
-  setvbuf(stdout, NULL, _IONBF, 0);
+/* v0.83-6: Save Anywhere. Holding L + R and pressing SELECT opens the
+ * chapter's own save menu (obj_savemenu, the same object a save point
+ * creates) wherever the player has control: Kris in the overworld, no
+ * dialogue, battle, cutscene or menu (global.interact == 0). obj_savemenu's
+ * Create records global.currentroom and takes global.interact itself, and its
+ * Step gives control back when it closes, exactly as after a save point. */
+static int32_t save_anywhere_object(Runner *runner, const char *name) {
+  for (uint32_t i = 0; i < runner->dataWin->objt.count; ++i)
+    if (runner->dataWin->objt.objects[i].name != NULL &&
+        strcmp(runner->dataWin->objt.objects[i].name, name) == 0)
+      return (int32_t)i;
+  return -1;
+}
+static bool save_anywhere_exists(Runner *runner, int32_t object) {
+  if (object < 0)
+    return false;
+  bool found = false;
+  int32_t base = Runner_pushInstancesOfObject(runner, object);
+  for (int32_t i = base; i < (int32_t)arrlen(runner->instanceSnapshots); ++i)
+    if (runner->instanceSnapshots[i]->active) {
+      found = true;
+      break;
+    }
+  Runner_popInstanceSnapshot(runner, base);
+  return found;
+}
+static void vita_save_anywhere(Runner *runner, uint32_t buttons,
+                               uint32_t pressed) {
+  static const DataWin *cached = NULL;
+  static int32_t objMenu = -1, objKris = -1, objBattle = -1, objDialoguer = -1,
+                 objDarkMenu = -1, interactVar = -1;
+  if (runner == NULL || runner->vmContext == NULL || runner->dataWin == NULL ||
+      runner->currentRoom == NULL || runner->pendingRoom >= 0)
+    return;
+  if (!((pressed & SCE_CTRL_SELECT) && (buttons & SCE_CTRL_LTRIGGER) &&
+        (buttons & SCE_CTRL_RTRIGGER)))
+    return;
+  if (cached != runner->dataWin) {
+    cached = runner->dataWin;
+    objMenu = save_anywhere_object(runner, "obj_savemenu");
+    objKris = save_anywhere_object(runner, "obj_mainchara");
+    objBattle = save_anywhere_object(runner, "obj_battlecontroller");
+    objDialoguer = save_anywhere_object(runner, "obj_dialoguer");
+    objDarkMenu = save_anywhere_object(runner, "obj_darkcontroller");
+    (void)objDarkMenu;
+    ptrdiff_t slot = shgeti(runner->vmContext->varNameMap, "interact");
+    interactVar = slot >= 0 ? runner->vmContext->varNameMap[slot].value : -1;
+  }
+  const char *roomName = runner->currentRoom->name;
+  const char *reason = NULL;
+  if (objMenu < 0 || objKris < 0 || interactVar < 0)
+    reason = "unsupported";
+  else if (roomName == NULL || strncmp(roomName, "PLACE_", 6) == 0 ||
+           strcmp(roomName, "room_legend") == 0)
+    reason = "menu_room";
+  else if (!save_anywhere_exists(runner, objKris))
+    reason = "no_player";
+  else if (save_anywhere_exists(runner, objMenu))
+    reason = "already_open";
+  else if (save_anywhere_exists(runner, objBattle))
+    reason = "battle";
+  else if (save_anywhere_exists(runner, objDialoguer))
+    reason = "dialogue";
+  else {
+    RValue interact = Instance_getSelfVar(
+        runner->vmContext->globalScopeInstance, interactVar);
+    if (interact.type == RVALUE_UNDEFINED || RValue_toReal(interact) != 0.0)
+      reason = "player_busy";
+  }
+  char line[160];
+  if (reason != NULL) {
+    snprintf(line, sizeof(line), "SAVE_ANYWHERE=refused reason=%s room=%s",
+             reason, roomName ? roomName : "?");
+    log_line(line);
+    return;
+  }
+  Runner_createInstance(runner, 0, 0, objMenu);
+  snprintf(line, sizeof(line), "SAVE_ANYWHERE=opened room=%s",
+           roomName ? roomName : "?");
+  log_line(line);
+}
+
+int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
 
   // Record whether the deltarunevita root folder exists before we create it
@@ -6371,6 +6452,11 @@ int main(void) {
       if (frame == 0)
         log_line("FRAME0=step_begin");
       stall_watch_phase = "step";
+      {
+        static uint32_t saveAnywherePrev = 0;
+        vita_save_anywhere(runner, pad.buttons, pad.buttons & ~saveAnywherePrev);
+        saveAnywherePrev = pad.buttons;
+      }
       Runner_step(runner);
       vitaEnsureGamepadActive(runner);
       if (fcastleTrace)
@@ -6635,6 +6721,25 @@ int main(void) {
       float crtStrength = settings.screenFilterMode == 1 ? 1.0f : 1.15f;
       /* The tube shader already produced the whole CRT Agressivo look. */
       bool crtTubeDrawn = settings.screenFilterMode == 6 && vitaCrtTubeDrewThisFrame;
+      /* v0.83-6: the tube only covers the game picture; the console borders
+       * get the same scanline/grille overlay as CRT Suave/Medio, clipped to
+       * the strips left and right of the picture. */
+      if (crtTubeDrawn) {
+        const int left = vitaCrtTubeRect[0], right = vitaCrtTubeRect[2];
+        if (left > 0) {
+          vitaCrtModClip[0] = 0; vitaCrtModClip[1] = 0;
+          vitaCrtModClip[2] = left; vitaCrtModClip[3] = 544;
+          vitaCrtModClipOn = 1;
+          vita_crt_mod_render(renderer, frame, 1.15f);
+        }
+        if (right < 960) {
+          vitaCrtModClip[0] = right; vitaCrtModClip[1] = 0;
+          vitaCrtModClip[2] = 960 - right; vitaCrtModClip[3] = 544;
+          vitaCrtModClipOn = 1;
+          vita_crt_mod_render(renderer, frame, 1.15f);
+        }
+        vitaCrtModClipOn = 0;
+      }
       bool crtModComposited = crtTubeDrawn ||
                               (g_vitaExperimentalGlActive &&
                                vita_crt_mod_render(renderer, frame, crtStrength));

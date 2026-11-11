@@ -5,7 +5,7 @@
 1. **Vita:** Configurações do port > Sistema > **Sincronizar saves (PC)** = Ligado
    (`save_sync=1` no `config.ini`). Vem desligado. O servidor só roda com o jogo aberto e o
    Wi-Fi ligado.
-2. **PC:** `python tools\save-sync\deltarune_vita_sync.py`, com PC e Vita na mesma rede Wi-Fi.
+2. **PC:** `python scripts\save-sync\deltarune_vita_sync.py`, com PC e Vita na mesma rede Wi-Fi.
    Com `pystray` e `Pillow` instalados (`pip install pystray pillow`), o app fica na bandeja;
    sem eles, roda no console. Use `--once` para uma passada só e `--vita <IP>` para pular a
    descoberta.

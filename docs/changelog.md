@@ -8,7 +8,7 @@
 Detalhes e protocolo: [`docs/save-sync-protocol.md`](save-sync-protocol.md). Sem teste no Vita.
 
 - **Vita** (`vita_save_sync.c`): com a opção **Sistema > Sincronizar saves (PC)** ligada (`save_sync=1`, desligada por padrão), o jogo anuncia o Vita por broadcast UDP (26540) e atende o app do PC por TCP (26541): lista, envia e recebe só `dr.ini`, `vacationmemories.png` e `filech*`, com gravação atômica e backup em `deltarune_saves/sync_backup/`. Thread de baixa prioridade, só com o jogo aberto.
-- **PC** (`tools/save-sync/deltarune_vita_sync.py`): encontra o Vita, sincroniza a cada 3 s, guarda backups, espera o DELTARUNE fechar antes de gravar no PC e compara o `dr.ini` normalizado. Bandeja com `pystray`, ou console.
+- **PC** (`scripts/save-sync/deltarune_vita_sync.py`): encontra o Vita, sincroniza a cada 3 s, guarda backups, espera o DELTARUNE fechar antes de gravar no PC e compara o `dr.ini` normalizado. Bandeja com `pystray`, ou console.
 - **Teste local**: o mesmo C compilado como servidor no Windows + o cliente, com saves reais do Cap. 5: todos os casos passaram (descoberta, as duas direções, backups, idempotência, nome inválido recusado).
 
 ## v0.83-6 — Batalhas mais leves, CRT Agressivo nas bordas e Save Anywhere

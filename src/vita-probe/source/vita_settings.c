@@ -1,4 +1,5 @@
 #include "vita_settings.h"
+#include "vita_save_sync.h"
 #include "../../../experiments/native-gxm/native_mic.h"
 
 #include <psp2/io/fcntl.h>
@@ -341,12 +342,12 @@ static int settingsItemCount(int category) {
         if (category == 1) return g_activeChapter == 4 ? 4 : 3; // Controls + Mike
         if (category == 2) return getVideoItemCount(); // TELA
         if (category == 3) return 6; // AUDIO + MIC
-        if (category == 4) return 5; // SISTEMA
+        if (category == 4) return 6; // SISTEMA + save sync
     } else {
         if (category == 0) return g_activeChapter == 4 ? 4 : 3; // Controls + Mike
         if (category == 1) return getVideoItemCount(); // TELA
         if (category == 2) return 6; // AUDIO + MIC
-        if (category == 3) return 5; // SISTEMA
+        if (category == 3) return 6; // SISTEMA + save sync
     }
     return 0;
 }
@@ -605,7 +606,8 @@ static void saveSettings(const VitaSettings* s) {
     }
     if(length>0&&(size_t)length<sizeof(text)){
         int extra=snprintf(text+length,sizeof(text)-(size_t)length,
-            "gxm_async_room_prefetch=%d\n",s->asyncRoomPrefetchEnabled?1:0);
+            "gxm_async_room_prefetch=%d\nsave_sync=%d\n",s->asyncRoomPrefetchEnabled?1:0,
+            s->saveSyncEnabled?1:0);
         if(extra>0&&(size_t)extra<sizeof(text)-(size_t)length)length+=extra;
     }
     SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
@@ -737,6 +739,7 @@ void VitaSettings_load(VitaSettings* s) {
         s->showSettings = strstr(text, "showsettings=0") == NULL;
         char* shortcutSetting = strstr(text, "shortcut_skip=");
         if (shortcutSetting != NULL) s->shortcutSkipDialogs = strstr(shortcutSetting, "shortcut_skip=1") == shortcutSetting;
+        s->saveSyncEnabled = strstr(text, "save_sync=1") != NULL;
         char* trophyNotifySetting = strstr(text, "trophy_notifications=");
         if (trophyNotifySetting != NULL)
             s->internalTrophyNotifications =
@@ -1561,6 +1564,11 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
             s->promptSelection = 1;
             s->pendingResetDefaults = true;
             playSettingSound(s, 1);
+        } else if (logicalCategory == 4 && s->selected == 5) {
+            /* v0.84: PC <-> Vita save sync over Wi-Fi (opt-in). */
+            s->saveSyncEnabled = !s->saveSyncEnabled;
+            SaveSync_setEnabled(s->saveSyncEnabled, "ux0:data/deltarune_saves/");
+            saveSettings(s);
         }
     }
     if (pressed & SCE_CTRL_CIRCLE) {
@@ -2143,49 +2151,49 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         {"Pular falas", "Controles touch", "Editar controles", ""}, 
         {"Bordas de console", "Bordas melhores", "Ajustar tela", "Gráficos", "Brilho"},
         {"Volume mestre", "Efeitos sonoros", "Música", "Desabilitar áudio"}, 
-        {"Idioma", "Voltar aos capítulos", "Troféus", "Notificações de troféu", "", ""}
+        {"Idioma", "Voltar aos capítulos", "Troféus", "Notificações de troféu", "", "Sincronizar saves (PC)"}
     };
     const char* labelsEn[SETTINGS_CATEGORIES][6] = {
         {"Room navigator", "Debug DEV", "Collision masks", "New diagnostic log", "Send current log", ""},
         {"Skip dialogs", "Touch controls", "Edit controls", ""}, 
         {"Console borders", "Better borders", "Adjust screen", "Graphics settings", "Brightness"},
         {"Master volume", "Sound effects", "Music", "Disable audio"}, 
-        {"Language", "Chapter Select", "Trophies", "Trophy notifications", "", ""}
+        {"Language", "Chapter Select", "Trophies", "Trophy notifications", "", "Sync saves with PC"}
     };
     const char* labelsEs[SETTINGS_CATEGORIES][6] = {
         {"Navegador de salas", "Depuración DEV", "Máscaras de colisión", "Nuevo registro de diagnóstico", "Enviar registro actual", ""},
         {"Omitir diálogos", "Controles táctiles", "Editar controles", ""},
         {"Bordes de consola", "Bordes mejorados", "Ajustar pantalla", "Ajustes gráficos", "Brillo"},
         {"Volumen general", "Efectos de sonido", "Música", "Desactivar audio"},
-        {"Idioma", "Selección de capítulos", "Trofeos", "Notificaciones de trofeos", "", ""}
+        {"Idioma", "Selección de capítulos", "Trofeos", "Notificaciones de trofeos", "", "Sincronizar partidas (PC)"}
     };
     const char* labelsIt[SETTINGS_CATEGORIES][6] = {
         {"Navigatore stanze", "Debug DEV", "Maschere di collisione", "Nuovo registro diagnostico", "Invia log corrente", ""},
         {"Salta dialoghi", "Controlli touch", "Modifica controlli", ""}, 
         {"Bordi console", "Bordi HD", "Regola schermo", "Impostazioni grafiche", "Luminosità"},
         {"Volume principale", "Effetti sonori", "Musica", "Disattiva audio"}, 
-        {"Lingua", "Selezione capitolo", "Trofei", "Notifiche trofei", "", ""}
+        {"Lingua", "Selezione capitolo", "Trofei", "Notifiche trofei", "", "Sincronizza salvataggi (PC)"}
     };
     const char* labelsTr[SETTINGS_CATEGORIES][6] = {
         {"Oda gezgini", "Hata ayıklama DEV", "Çarpışma maskeleri", "Yeni tanılama günlüğü", "Guncel logu gonder", ""},
         {"Diyalogları geç", "Dokunmatik kontroller", "Kontrolleri düzenle", ""}, 
         {"Konsol kenarlıkları", "HD Kenarlıklar", "Ekranı ayarla", "Grafik ayarları", "Parlaklık"},
         {"Ana ses", "Ses efektleri", "Müzik", "Sesi kapat"}, 
-        {"Dil", "Bölüm Seçimi", "Başarımlar", "Başarım bildirimleri", "", ""}
+        {"Dil", "Bölüm Seçimi", "Başarımlar", "Başarım bildirimleri", "", "Kayitlari esitle (PC)"}
     };
     const char* labelsDe[SETTINGS_CATEGORIES][6] = {
         {"Room-Navigator", "DEV-Debug", "Kollisionsmasken", "Neues Diagnoseprotokoll", "Aktuelles Log senden", ""},
         {"Dialoge überspringen", "Touch-Steuerung", "Steuerung bearbeiten", ""},
         {"Konsolenrahmen", "Bessere Rahmen", "Bild anpassen", "Grafikeinstellungen", "Helligkeit"},
         {"Gesamtlautstärke", "Soundeffekte", "Musik", "Audio deaktivieren"},
-        {"Sprache", "Kapitelauswahl", "Trophäen", "Trophäenmeldungen", "", ""}
+        {"Sprache", "Kapitelauswahl", "Trophäen", "Trophäenmeldungen", "", "Spielstande sync (PC)"}
     };
     const char* labelsRu[SETTINGS_CATEGORIES][6] = {
         {"Navigator komnat", "Otladka DEV", "Maski stolknoveniy", "Novyy zhurnal diagnostiki", "Otpravit tekushchiy log", ""},
         {"Propusk dialogov", "Sensornoe upravlenie", "Izmenit' upravlenie", ""},
         {"Ramki konsoli", "Uluchshennye ramki", "Nastroit' ekran", "Nastroyki grafiki", "Yarkost'"},
         {"Obshchaya gromkost'", "Zvukovye effekty", "Muzyka", "Otkluchit' zvuk"},
-        {"Yazyk", "Vybor glavy", "Trofei", "Uvedomleniya trofeev", "", ""}
+        {"Yazyk", "Vybor glavy", "Trofei", "Uvedomleniya trofeev", "", "Sinkhronizatsiya (PC)"}
     };
     const char* betterBordersValue = s->animatedBordersEnabled && s->betterBordersEnabled ?
         settingsText(s, "Both", "Ambos", "Ambos") :
@@ -2198,7 +2206,7 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         {screen, betterBordersValue, adjustment, ">", brightness, ""},
         {masterVolume, sfxVolume, musicVolume, s->audioDisabled ? valueOn : valueOff,
          s->microphoneEnabled ? valueOn : valueOff, micSense},
-        {modDisplay, "", ">", s->internalTrophyNotifications ? valueOn : valueOff, "", ""}
+        {modDisplay, "", ">", s->internalTrophyNotifications ? valueOn : valueOff, "", s->saveSyncEnabled ? valueOn : valueOff}
     };
     int visibleItems = settingsItemCount(s->category);
     for (int i = 0; i < visibleItems; ++i) {

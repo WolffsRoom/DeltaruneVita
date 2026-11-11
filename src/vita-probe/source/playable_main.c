@@ -49,6 +49,7 @@ int _newlib_heap_size_user = 256 * 1024 * 1024;
 #include "vita_network.h"
 #include "vita_room_prefetch.h"
 #include "vita_settings.h"
+#include "vita_save_sync.h"
 #include "vita_startup_preload.h"
 #include "vita_thread_policy.h"
 #include "vita_trophies.h"
@@ -4695,6 +4696,11 @@ int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
   VitaSettings settings;
   VitaSettings_load(&settings);
   boot_stage("settings_loaded config_ini_written");
+  if (settings.saveSyncEnabled) {
+    /* v0.84: opt-in PC <-> Vita save sync server (vita_save_sync.c). */
+    SaveSync_setEnabled(true, SAVE_PATH);
+    log_line("SAVE_SYNC=enabled tcp=26541 discovery=26540");
+  }
   float firstLoadGain = settings.audioDisabled
                             ? 0.0f
                             : ((float)settings.masterVolume / 10.0f) *

@@ -49,6 +49,7 @@ if(PLAYABLE_RUNNER)
     add_executable(${PROJECT_NAME}
     source/playable_main.c
     source/vita_settings.c
+  source/vita_save_sync.c
     ../../experiments/native-gxm/native_mic.c
     ../../experiments/native-gxm/native_asset_pack.c
     source/vita_borders.c

@@ -23,6 +23,7 @@ usage:
   options: --pc-dir DIR  --vita IP  --state-dir DIR  --conflict newest|ask
 """
 import argparse, hashlib, json, os, re, socket, subprocess, sys, threading, time
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pathlib import Path
 
 DISCOVERY_PORT = 26540
@@ -173,6 +174,7 @@ class Syncer:
         except (OSError, ValueError):
             self.state = {"files": {}}
         self.vita_seen = self.state.setdefault("vita_seen", {})   # name -> (crc, first time seen changed)
+        self.events = []
 
     def save_state(self):
         tmp = self.state_file.with_suffix(".tmp")
@@ -229,6 +231,7 @@ class Syncer:
             if winner == "vita":
                 if busy:
                     log(self.state_dir, "WAIT", name, "DELTARUNE is open on the PC")
+                    self.events.append("wait")
                     continue
                 if pc is not None:
                     self.backup("pc", name, pc[0])
@@ -238,6 +241,7 @@ class Syncer:
                 os.replace(tmp, self.pc_dir / name)
                 known[name] = {"pc": digest(name, vdata), "vita_crc": vita_crc}
                 log(self.state_dir, "VITA -> PC", name, len(vdata), "bytes")
+                self.events.append("to_pc")
             else:
                 if vita_crc is not None:
                     self.backup("vita", name, vdata if vdata is not None else vita.get(name))
@@ -245,6 +249,7 @@ class Syncer:
                 new_crc = "%08x" % (__import__("zlib").crc32(pc[0]) & 0xFFFFFFFF)
                 known[name] = {"pc": pc_digest, "vita_crc": new_crc}
                 log(self.state_dir, "PC -> VITA", name, len(pc[0]), "bytes")
+                self.events.append("to_vita")
             changes += 1
         self.save_state()
         return changes
@@ -260,46 +265,54 @@ def connect(args, state_dir):
         log(state_dir, "connect failed:", e)
         return None
 
-def loop(args, stop):
+def loop(args, stop, status=None, wake=None):
+    """status: dict shown by the window/tray (text without digits: the
+    DELTARUNE pixel font atlas has none). wake: Event for "sync now"."""
+    status = status if status is not None else {}
     syncer = Syncer(args.pc_dir, args.state_dir, args.conflict)
     vita = None
     while not stop.is_set():
         if vita is None:
+            status.update(connected=False, line="Procurando o PS Vita na rede...",
+                          sub="Ligue Sincronizar saves no jogo")
             vita = connect(args, syncer.state_dir)
             if vita is None:
-                stop.wait(3)
+                (wake or stop).wait(3)
+                if wake is not None: wake.clear()
                 continue
             log(syncer.state_dir, "connected to Vita", vita.ip)
+            status.update(connected=True, line="Conectado ao PS Vita", sub="")
         try:
-            syncer.run(vita)
+            before = len(syncer.events)
+            changes = syncer.run(vita)
+            new = syncer.events[before:]
+            if any(e == "wait" for e in new):
+                status["sub"] = "Aguardando o DELTARUNE fechar no PC"
+            elif any(e == "to_pc" for e in new):
+                status["sub"] = "Save recebido do PS Vita"
+            elif any(e == "to_vita" for e in new):
+                status["sub"] = "Save enviado para o PS Vita"
+            elif changes == 0 and not status.get("sub"):
+                status["sub"] = "Saves iguais nos dois lados"
         except OSError as e:
             log(syncer.state_dir, "Vita disconnected:", e)
             vita = None
-        stop.wait(3)
+            continue
+        (wake or stop).wait(3)
+        if wake is not None: wake.clear()
     if vita is not None:
         vita.close()
 
 def tray(args):
     try:
-        import pystray
-        from PIL import Image, ImageDraw
-    except ImportError:
-        print("pystray/Pillow not installed: running in the console (Ctrl+C to stop)")
+        import drsync_ui
+    except Exception as e:   # Pillow/tkinter missing
+        print("window unavailable (%s): running in the console" % e)
         return console(args)
-    stop = threading.Event()
-    worker = threading.Thread(target=loop, args=(args, stop), daemon=True)
-    worker.start()
-    img = Image.new("RGB", (64, 64), (16, 16, 32))
-    d = ImageDraw.Draw(img); d.rectangle((14, 14, 50, 50), outline=(255, 225, 63), width=6)
-    def quit_app(icon, _):
-        stop.set(); icon.stop()
-    def open_folder(_icon, _):
-        os.startfile(str(args.state_dir))
-    icon = pystray.Icon("DeltaruneVitaSync", img, "DELTARUNE Vita sync",
-                        menu=pystray.Menu(pystray.MenuItem("Backups and log", open_folder),
-                                          pystray.MenuItem("Quit", quit_app)))
-    icon.run()
-
+    stop, wake = threading.Event(), threading.Event()
+    status = {}
+    threading.Thread(target=loop, args=(args, stop, status, wake), daemon=True).start()
+    drsync_ui.run(status, wake.set, stop, lambda: os.startfile(str(args.state_dir)))
 def console(args):
     stop = threading.Event()
     try:

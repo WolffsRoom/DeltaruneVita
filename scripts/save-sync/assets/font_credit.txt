@@ -1,0 +1,8 @@
+Prologue UI Font Attribution
+Font: undertale deltarune extended (Fixed)
+Designer: Viika
+Source: https://fontstruct.com/fontstructions/show/2008226
+License: FontStruct Non-Commercial Software End User License Agreement 1.0
+Used for noncommercial rasterized glyph rendering, in a noneditable application UI.
+Only a glyph atlas is included. The original OTF font file is NOT redistributed.
+Fallback glyphs for Japanese and Cyrillic are rasterized from system fonts on the developer PC.

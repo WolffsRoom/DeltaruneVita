@@ -60,16 +60,83 @@ def heart_frames(size=64):
     idle.putalpha(idle.getchannel("A").point(lambda a: a * 55 // 100))
     return frames, idle
 
+def _dpi_aware():
+    """Crisp pixel art: tell Windows the window draws its own pixels, so it is
+    not bitmap-stretched (blurry) at 125-150 % display scaling."""
+    try:
+        import ctypes
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except Exception:
+        pass
+    try:
+        import ctypes; ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            import ctypes; ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+class Sounds:
+    """Game sound effects (assets/sfx), played asynchronously with winsound.
+    winsound plays one sound at a time, like the game's text voice cutting
+    itself off on every letter."""
+    def __init__(self):
+        self.ok = False
+        try:
+            import winsound
+            self.winsound = winsound
+            self.ok = True
+        except ImportError:
+            pass
+
+    def play(self, name):
+        if not self.ok:
+            return
+        path = ASSETS / "sfx" / (name + ".wav")
+        if path.exists():
+            w = self.winsound
+            w.PlaySound(str(path), w.SND_FILENAME | w.SND_ASYNC | w.SND_NODEFAULT)
+
+class Typewriter:
+    """Reveals one character per frame (30 per second, as the game's text) and
+    plays the text voice on each letter."""
+    def __init__(self, sounds):
+        self.sounds = sounds
+        self.target = ""
+        self.shown = 0
+        self.delay = 0
+
+    def set(self, text, delay=0):
+        if text != self.target:
+            self.target, self.shown, self.delay = text, 0, delay
+
+    def step(self):
+        if self.delay > 0:
+            self.delay -= 1
+            return False
+        if self.shown < len(self.target):
+            self.shown += 1
+            if self.target[self.shown - 1] not in " .*":
+                self.sounds.play("text")
+            return False
+        return True
+
+    def text(self):
+        return self.target[:self.shown]
+
 class SyncWindow:
-    W, H = 900, 300
+    W, H = 900, 340
+    TICK_MS = 33
 
     def __init__(self, status, sync_now, quit_app, open_backups):
         self.status, self.sync_now, self.quit_app, self.open_backups = status, sync_now, quit_app, open_backups
+        _dpi_aware()
         self.font = PixelFont()
-        try:  # crisp pixel art: no Windows bitmap scaling of the window
-            import ctypes; ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except Exception:
-            pass
+        self.sounds = Sounds()
+        self.line_tw = Typewriter(self.sounds)
+        self.sub_tw = Typewriter(self.sounds)
+        self.was_connected = None
         self.root = tk.Tk()
         self.root.title("DELTARUNE Sync")
         self.root.configure(bg="black")
@@ -86,7 +153,12 @@ class SyncWindow:
                                 highlightthickness=0)
         self.canvas.pack()
         box = Image.open(ASSETS / "dialogbox.png").convert("RGBA")
+        # Integer-ish scale of the game's box: 598x172 -> 861x248, centred.
         self.box = ImageTk.PhotoImage(box.resize((int(box.width * 1.44), int(box.height * 1.44)), Image.NEAREST))
+        self.box_top = (self.H - self.box.height()) // 2
+        # Title rendered once at exact 2x (pixel-doubled, like the game's 640x480 art).
+        self.title_img = ImageTk.PhotoImage(self.font.render("DELTARUNE SYNC", YELLOW, 2))
+        self.heart_img = ImageTk.PhotoImage(Image.open(ASSETS / "heart.png").convert("RGBA").resize((18, 18), Image.NEAREST))
         self.options = ["Sincronizar", "Backups", "Ocultar"]
         self.selected = 0
         self.frame = 0
@@ -101,45 +173,67 @@ class SyncWindow:
         self.tick()
 
     def text(self, s, cx, y, color=WHITE, scale=1, anchor_center=True):
+        if not s:
+            return cx, y, 0, 0
         img = ImageTk.PhotoImage(self.font.render(s, color, scale))
         self._images.append(img)
         x = cx - img.width() // 2 if anchor_center else cx
-        self.canvas.create_image(x, y, image=img, anchor="nw")
+        self.canvas.create_image(int(x), int(y), image=img, anchor="nw")
         return x, y, img.width(), img.height()
+
+    def update_status(self):
+        st = self.status
+        connected = bool(st.get("connected"))
+        if self.was_connected is not None and connected != self.was_connected:
+            self.sounds.play("connect" if connected else "disconnect")
+            delay = 22   # let the sound be heard before the voice starts
+        else:
+            delay = 0
+        self.was_connected = connected
+        self.line_tw.set("* " + st.get("line", "Procurando o PS Vita na rede..."), delay)
+        if self.line_tw.step():
+            self.sub_tw.set(st.get("sub", ""))
+            self.sub_tw.step()
+        else:
+            self.sub_tw.set("")
 
     def draw(self):
         c = self.canvas; c.delete("all"); self._images = []; self.option_boxes = []
         c.create_image(self.W // 2, self.H // 2, image=self.box)
-        bounce = abs(math.sin(self.frame * 0.06)) * 3
-        self.text("DELTARUNE SYNC", self.W // 2, 44 - bounce, YELLOW, scale=2)
-        st = self.status
-        line = st.get("line", "Procurando o PS Vita na rede...")
-        self.text("* " + line, self.W // 2, 122, WHITE)
-        sub = st.get("sub", "")
-        if sub:
-            self.text(sub, self.W // 2, 154, GREY)
-        # menu row, heart cursor on the selected option
+        top = self.box_top
+        bounce = int(round(abs(math.sin(self.frame * 0.04)) * 3))
+        c.create_image(self.W // 2 - self.title_img.width() // 2, top + 30 - bounce,
+                       image=self.title_img, anchor="nw")
+        # Typed lines are left-aligned on the centred full line, so letters do
+        # not slide sideways while they appear.
+        full = self.line_tw.target
+        lx = (self.W - self.font.width(full)) // 2
+        self.text(self.line_tw.text(), lx, top + 104, WHITE, anchor_center=False)
+        sfull = self.sub_tw.target
+        sx = (self.W - self.font.width(sfull)) // 2
+        self.text(self.sub_tw.text(), sx, top + 138, GREY, anchor_center=False)
         total = sum(self.font.width(o) for o in self.options) + 80 * (len(self.options) - 1)
         x = (self.W - total) // 2
         for i, o in enumerate(self.options):
             sel = i == self.selected
-            bx, by, bw, bh = self.text(o, x, 204, YELLOW if sel else WHITE, anchor_center=False)
+            bx, by, bw, bh = self.text(o, x, top + 188, YELLOW if sel else WHITE, anchor_center=False)
             self.option_boxes.append((bx - 30, by - 6, bx + bw + 6, by + bh))
             if sel:
-                heart = ImageTk.PhotoImage(Image.open(ASSETS / "heart.png").convert("RGBA").resize((18, 18), Image.NEAREST))
-                self._images.append(heart)
-                c.create_image(bx - 26, by + 8, image=heart, anchor="nw")
+                c.create_image(int(bx) - 26, int(by) + 8, image=self.heart_img, anchor="nw")
             x += bw + 80
 
     def tick(self):
         self.frame += 1
+        self.update_status()
         self.draw()
-        self.root.after(60, self.tick)
+        self.root.after(self.TICK_MS, self.tick)
 
     def move(self, d):
         self.selected = (self.selected + d) % len(self.options)
+        self.sounds.play("move")
 
     def activate(self):
+        self.sounds.play("select")
         [self.sync_now, self.open_backups, self.hide][self.selected]()
 
     def click(self, e):
@@ -149,15 +243,15 @@ class SyncWindow:
 
     def hover(self, e):
         for i, (x0, y0, x1, y1) in enumerate(self.option_boxes):
-            if x0 <= e.x <= x1 and y0 <= e.y <= y1:
+            if x0 <= e.x <= x1 and y0 <= e.y <= y1 and self.selected != i:
                 self.selected = i
+                self.sounds.play("move")
 
     def hide(self):
         self.root.withdraw()
 
     def show(self):
         self.root.after(0, lambda: (self.root.deiconify(), self.root.lift(), self.root.focus_force()))
-
 def run(status, sync_now, quit_flag, open_backups):
     """Window on the main thread; tray icon (pystray) on its own thread."""
     win = SyncWindow(status, sync_now, lambda: None, open_backups)

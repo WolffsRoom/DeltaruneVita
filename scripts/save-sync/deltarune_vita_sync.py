@@ -281,7 +281,7 @@ def loop(args, stop, status=None, wake=None):
                 if wake is not None: wake.clear()
                 continue
             log(syncer.state_dir, "connected to Vita", vita.ip)
-            status.update(connected=True, line="Conectado ao PS Vita", sub="")
+            status.update(connected=True, line="Conectado ao PS Vita", sub="", ip=vita.ip)
         try:
             before = len(syncer.events)
             changes = syncer.run(vita)

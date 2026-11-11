@@ -177,9 +177,10 @@ def run(status, sync_now, quit_flag, open_backups):
             while not quit_flag.is_set():
                 if status.get("connected"):
                     tray_icon.icon = frames[k % len(frames)]; k += 1
-                    tray_icon.title = "DELTARUNE Sync - " + status.get("line", "")
+                    tray_icon.title = "DELTARUNE Sync - PS Vita " + status.get("ip", "")
                 else:
                     tray_icon.icon = idle
+                    tray_icon.title = "DELTARUNE Sync - procurando o PS Vita"
                 quit_flag.wait(0.12)
         threading.Thread(target=tray_icon.run, daemon=True).start()
         threading.Thread(target=animate, daemon=True).start()

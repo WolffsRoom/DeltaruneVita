@@ -148,6 +148,7 @@ class Typewriter:
         self.target = ""
         self.shown = 0
         self.delay = 0
+        self.voice = True     # only the opening text speaks; later lines type silently
 
     def set(self, text, delay=0):
         if text != self.target:
@@ -159,7 +160,7 @@ class Typewriter:
             return False
         if self.shown < len(self.target):
             self.shown += 1
-            if self.target[self.shown - 1] not in " .*":
+            if self.voice and self.target[self.shown - 1] not in " .*":
                 self.sounds.play("text")
             return False
         return True
@@ -187,6 +188,7 @@ class SyncWindow:
         self.line_tw = Typewriter(self.sounds)
         self.sub_tw = Typewriter(self.sounds)
         self.was_connected = None
+        self.copied_seen = None
         self.root = tk.Tk()
         self.root.title("DELTARUNE Sync")
         self.root.configure(bg="black")
@@ -246,18 +248,24 @@ class SyncWindow:
 
     def update_status(self):
         st = self.status
+        # Sounds only when something happens: one sound when the Vita connects or
+        # drops, one save sound when a new save is copied either way. The text
+        # voice is heard only while the opening text types after the app starts.
         connected = bool(st.get("connected"))
         if self.was_connected is not None and connected != self.was_connected:
             self.sounds.play("connect" if connected else "disconnect")
-            delay = 22   # let the sound be heard before the voice starts
-        else:
-            delay = 0
         self.was_connected = connected
-        self.line_tw.set("* " + i18n.tr(st.get("line", "searching"), self.lang), delay)
+        sub = st.get("sub", "")
+        count = st.get("copied", 0)
+        if count != self.copied_seen:
+            if self.copied_seen is not None and sub in ("received", "sent"):
+                self.sounds.play("save")
+            self.copied_seen = count
+        self.line_tw.set("* " + i18n.tr(st.get("line", "searching"), self.lang))
         if self.line_tw.step():
-            sub = st.get("sub", "")
             self.sub_tw.set(i18n.tr(sub, self.lang) if sub else "")
-            self.sub_tw.step()
+            if self.sub_tw.step() and self.line_tw.voice:
+                self.line_tw.voice = self.sub_tw.voice = False   # opening done
         else:
             self.sub_tw.set("")
 

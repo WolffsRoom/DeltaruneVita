@@ -285,6 +285,9 @@ def loop(args, stop, status=None, wake=None):
             before = len(syncer.events)
             changes = syncer.run(vita)
             new = syncer.events[before:]
+            copied = sum(1 for e in new if e in ("to_pc", "to_vita"))
+            if copied:
+                status["copied"] = status.get("copied", 0) + copied   # UI plays the save sound
             if any(e == "wait" for e in new):
                 status["sub"] = "waiting"
             elif any(e == "to_pc" for e in new):

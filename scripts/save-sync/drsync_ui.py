@@ -222,10 +222,19 @@ class SyncWindow:
         self.option_boxes = []
         self.tick()
 
-    def text(self, s, cx, y, color=WHITE, scale=1, anchor_center=True):
+    def inner_width(self):
+        """Usable width inside the dialog box's white border."""
+        return self.box.width() - 2 * 52
+
+    def text(self, s, cx, y, color=WHITE, scale=1, anchor_center=True, fit=1.0):
         if not s:
             return cx, y, 0, 0
-        img = ImageTk.PhotoImage(self.font.render(s, color, scale))
+        im = self.font.render(s, color, scale)
+        if fit < 1.0:
+            im = im.resize((max(1, int(im.width * fit)), max(1, int(im.height * fit))), Image.LANCZOS)
+            # Re-harden alpha so the shrunk text keeps crisp pixel edges.
+            im.putalpha(im.getchannel("A").point(lambda a: 255 if a > 100 else 0))
+        img = ImageTk.PhotoImage(im)
         self._images.append(img)
         x = cx - img.width() // 2 if anchor_center else cx
         self.canvas.create_image(int(x), int(y), image=img, anchor="nw")
@@ -257,20 +266,25 @@ class SyncWindow:
                        image=self.title_img, anchor="nw")
         # Typed lines are left-aligned on the centred full line, so letters do
         # not slide sideways while they appear.
-        full = self.line_tw.target
-        lx = (self.W - self.font.width(full)) // 2
-        self.text(self.line_tw.text(), lx, top + 104, WHITE, anchor_center=False)
-        sfull = self.sub_tw.target
-        sx = (self.W - self.font.width(sfull)) // 2
-        self.text(self.sub_tw.text(), sx, top + 138, GREY, anchor_center=False)
+        for tw, y, color in ((self.line_tw, top + 104, WHITE), (self.sub_tw, top + 138, GREY)):
+            fw = self.font.width(tw.target)
+            f = min(1.0, (self.inner_width() - 20) / max(1, fw))
+            self.text(tw.text(), (self.W - int(fw * f)) // 2, y, color, anchor_center=False, fit=f)
         options = [i18n.NAMES[self.lang] if k == "lang" else i18n.tr(k, self.lang)
                    for k in self.option_keys]
-        gap = 56
-        total = sum(self.font.width(o) for o in options) + gap * (len(options) - 1)
-        x = (self.W - total) // 2
+        # Keep the whole row (heart cursor included) inside the box's inner
+        # border in every language: shrink the gaps first, then the text.
+        avail = self.inner_width() - 40        # room for the heart left of item 1
+        widths = [self.font.width(o) for o in options]
+        n = len(options)
+        fit = min(1.0, (avail - 24 * (n - 1)) / max(1, sum(widths)))
+        widths = [int(w * fit) for w in widths]
+        gap = max(24, min(56, (avail - sum(widths)) // (n - 1)))
+        total = sum(widths) + gap * (n - 1)
+        x = (self.W - total) // 2 + 15
         for i, o in enumerate(options):
             sel = i == self.selected
-            bx, by, bw, bh = self.text(o, x, top + 188, YELLOW if sel else WHITE, anchor_center=False)
+            bx, by, bw, bh = self.text(o, x, top + 188, YELLOW if sel else WHITE, anchor_center=False, fit=fit)
             self.option_boxes.append((bx - 30, by - 6, bx + bw + 6, by + bh))
             if sel:
                 c.create_image(int(bx) - 26, int(by) + 8, image=self.heart_img, anchor="nw")

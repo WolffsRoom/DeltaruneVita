@@ -12,6 +12,12 @@
 3. O app procura o Vita, conecta e repete a sincronização a cada 3 s enquanto os dois estão
    ligados. Os backups e o log ficam em `%LOCALAPPDATA%\DeltaruneVitaSync`; os backups do Vita
    ficam em `ux0:data/deltarune_saves/sync_backup/`.
+4. **Idioma do app:** a terceira opção do menu mostra o idioma atual; cada X/Enter passa para o
+   próximo dos 9 idiomas do port (English, Português, 日本語, Español, Français, Deutsch, Italiano,
+   Türkçe, Русский). A escolha fica em `%LOCALAPPDATA%\DeltaruneVitaSync\settings.json`; sem ela,
+   o app usa o idioma do Windows (inglês se não for um dos 9). `--lang <nome>` força um idioma.
+   Os textos ficam em `scripts/save-sync/drsync_i18n.py`. Japonês e cirílico usam fonte do
+   Windows (MS Gothic / Tahoma Bold), porque a fonte pixel só tem as letras do prólogo.
 
 ## Regras
 

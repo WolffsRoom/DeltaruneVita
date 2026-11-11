@@ -7,6 +7,7 @@ gently while the Vita is connected. Closing the window keeps the app in the
 tray. Assets live in assets/ next to this file.
 """
 import json, math, os, sys, threading
+import drsync_i18n as i18n
 from pathlib import Path
 import tkinter as tk
 from PIL import Image, ImageTk
@@ -23,16 +24,57 @@ class PixelFont:
     def __init__(self):
         self.atlas = Image.open(ASSETS / "font_glyphs.png").convert("RGBA")
         self.glyphs = {int(k): v for k, v in json.load(open(ASSETS / "font_glyphs.json")).items()}
+        # The atlas only has the Cyrillic/Japanese letters the prologue uses, so
+        # those scripts always come from the system font instead of mixing styles.
+        self.glyphs = {k: v for k, v in self.glyphs.items() if k < 0x400 and v[7] == 0}
+
+        # Japanese: MS Gothic (pixel-like CJK). Cyrillic and the rest: a bold
+        # proportional Windows font, since MS Gothic draws Cyrillic full-width.
+        self.fallback = self._font(("msgothic.ttc", "YuGothM.ttc", "meiryo.ttc", "arial.ttf"), 24)
+        self.fallback_west = self._font(("tahomabd.ttf", "arialbd.ttf", "arial.ttf"), 25) or self.fallback
+
+    @staticmethod
+    def _font(names, size):
+        from PIL import ImageFont
+        for name in names:
+            try:
+                return ImageFont.truetype(os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts", name), size)
+            except Exception:
+                continue
+        return None
+
+    def _fb(self, c):
+        return self.fallback if ord(c) >= 0x3000 else self.fallback_west
+
+    def _adv(self, c):
+        g = self.glyphs.get(ord(c))
+        if g is not None or self.fallback is None or c == " ":
+            return (g or self.glyphs[ord(" ")])[6]
+        return int(round(self._fb(c).getlength(c))) + (3 if ord(c) >= 0x3000 else 2)
 
     def width(self, text):
-        return sum(self.glyphs.get(ord(c), self.glyphs[ord("?")])[6] for c in text)
+        return sum(self._adv(c) for c in text)
 
     def render(self, text, color=WHITE, scale=1):
         w = max(1, self.width(text)); h = 34
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         x = 0
         for c in text:
-            g = self.glyphs.get(ord(c), self.glyphs[ord("?")])
+            g = self.glyphs.get(ord(c))
+            if g is None and self.fallback is not None and c != " ":
+                from PIL import ImageDraw
+                adv = self._adv(c)
+                cell = Image.new("L", (adv + 2, h), 0)
+                # Cyrillic gets a 1 px stroke to match the bold pixel font; dense
+                # Japanese glyphs would fill in, so they keep the plain weight.
+                cjk = ord(c) >= 0x3000
+                ImageDraw.Draw(cell).text((1, 1 if cjk else 1), c, font=self._fb(c), fill=255)
+                tint = Image.new("RGBA", cell.size, color + (255,))
+                tint.putalpha(cell.point(lambda a: 255 if a > 110 else 0))  # hard edges like the pixel font
+                img.alpha_composite(tint, (x, 0))
+                x += adv
+                continue
+            g = g or self.glyphs[ord("?")]
             gx, gy, gw, gh, bx, by, adv, kind = g
             if gw and gh:
                 crop = self.atlas.crop((gx, gy, gx + gw, gy + gh))
@@ -129,8 +171,16 @@ class SyncWindow:
     W, H = 900, 340
     TICK_MS = 33
 
-    def __init__(self, status, sync_now, quit_app, open_backups):
+    def __init__(self, status, sync_now, quit_app, open_backups, settings_path=None, lang=None):
         self.status, self.sync_now, self.quit_app, self.open_backups = status, sync_now, quit_app, open_backups
+        self.settings_path = settings_path
+        saved = {}
+        try:
+            saved = json.load(open(settings_path, encoding="utf-8")) if settings_path else {}
+        except Exception:
+            pass
+        self.lang = lang if lang in i18n.LANGS else saved.get("lang") if saved.get("lang") in i18n.LANGS \
+            else i18n.system_language()
         _dpi_aware()
         self.font = PixelFont()
         self.sounds = Sounds()
@@ -159,7 +209,7 @@ class SyncWindow:
         # Title rendered once at exact 2x (pixel-doubled, like the game's 640x480 art).
         self.title_img = ImageTk.PhotoImage(self.font.render("DELTARUNE SYNC", YELLOW, 2))
         self.heart_img = ImageTk.PhotoImage(Image.open(ASSETS / "heart.png").convert("RGBA").resize((18, 18), Image.NEAREST))
-        self.options = ["Sincronizar", "Backups", "Ocultar"]
+        self.option_keys = ["sync", "backups", "lang", "hide"]
         self.selected = 0
         self.frame = 0
         self._images = []
@@ -190,9 +240,10 @@ class SyncWindow:
         else:
             delay = 0
         self.was_connected = connected
-        self.line_tw.set("* " + st.get("line", "Procurando o PS Vita na rede..."), delay)
+        self.line_tw.set("* " + i18n.tr(st.get("line", "searching"), self.lang), delay)
         if self.line_tw.step():
-            self.sub_tw.set(st.get("sub", ""))
+            sub = st.get("sub", "")
+            self.sub_tw.set(i18n.tr(sub, self.lang) if sub else "")
             self.sub_tw.step()
         else:
             self.sub_tw.set("")
@@ -212,15 +263,18 @@ class SyncWindow:
         sfull = self.sub_tw.target
         sx = (self.W - self.font.width(sfull)) // 2
         self.text(self.sub_tw.text(), sx, top + 138, GREY, anchor_center=False)
-        total = sum(self.font.width(o) for o in self.options) + 80 * (len(self.options) - 1)
+        options = [i18n.NAMES[self.lang] if k == "lang" else i18n.tr(k, self.lang)
+                   for k in self.option_keys]
+        gap = 56
+        total = sum(self.font.width(o) for o in options) + gap * (len(options) - 1)
         x = (self.W - total) // 2
-        for i, o in enumerate(self.options):
+        for i, o in enumerate(options):
             sel = i == self.selected
             bx, by, bw, bh = self.text(o, x, top + 188, YELLOW if sel else WHITE, anchor_center=False)
             self.option_boxes.append((bx - 30, by - 6, bx + bw + 6, by + bh))
             if sel:
                 c.create_image(int(bx) - 26, int(by) + 8, image=self.heart_img, anchor="nw")
-            x += bw + 80
+            x += bw + gap
 
     def tick(self):
         self.frame += 1
@@ -229,12 +283,23 @@ class SyncWindow:
         self.root.after(self.TICK_MS, self.tick)
 
     def move(self, d):
-        self.selected = (self.selected + d) % len(self.options)
+        self.selected = (self.selected + d) % len(self.option_keys)
         self.sounds.play("move")
+
+    def next_language(self):
+        self.lang = i18n.LANGS[(i18n.LANGS.index(self.lang) + 1) % len(i18n.LANGS)]
+        self.line_tw.set(""); self.sub_tw.set("")       # retype in the new language
+        if self.settings_path:
+            try:
+                with open(self.settings_path, "w", encoding="utf-8") as f:
+                    json.dump({"lang": self.lang}, f)
+            except OSError:
+                pass
 
     def activate(self):
         self.sounds.play("select")
-        [self.sync_now, self.open_backups, self.hide][self.selected]()
+        {"sync": self.sync_now, "backups": self.open_backups, "lang": self.next_language,
+         "hide": self.hide}[self.option_keys[self.selected]]()
 
     def click(self, e):
         for i, (x0, y0, x1, y1) in enumerate(self.option_boxes):
@@ -252,9 +317,9 @@ class SyncWindow:
 
     def show(self):
         self.root.after(0, lambda: (self.root.deiconify(), self.root.lift(), self.root.focus_force()))
-def run(status, sync_now, quit_flag, open_backups):
+def run(status, sync_now, quit_flag, open_backups, settings_path=None, lang=None):
     """Window on the main thread; tray icon (pystray) on its own thread."""
-    win = SyncWindow(status, sync_now, lambda: None, open_backups)
+    win = SyncWindow(status, sync_now, lambda: None, open_backups, settings_path, lang)
     tray_icon = None
     try:
         import pystray
@@ -263,9 +328,9 @@ def run(status, sync_now, quit_flag, open_backups):
             quit_flag.set(); icon.stop(); win.root.after(0, win.root.destroy)
         tray_icon = pystray.Icon("DeltaruneSync", idle, "DELTARUNE Sync",
                                  menu=pystray.Menu(
-                                     pystray.MenuItem("Abrir", lambda i, _: win.show(), default=True),
-                                     pystray.MenuItem("Sincronizar agora", lambda i, _: sync_now()),
-                                     pystray.MenuItem("Sair", on_quit)))
+                                     pystray.MenuItem(lambda _: i18n.tr("open", win.lang), lambda i, _: win.show(), default=True),
+                                     pystray.MenuItem(lambda _: i18n.tr("sync_now", win.lang), lambda i, _: sync_now()),
+                                     pystray.MenuItem(lambda _: i18n.tr("quit", win.lang), on_quit)))
         def animate():
             k = 0
             while not quit_flag.is_set():
@@ -274,7 +339,7 @@ def run(status, sync_now, quit_flag, open_backups):
                     tray_icon.title = "DELTARUNE Sync - PS Vita " + status.get("ip", "")
                 else:
                     tray_icon.icon = idle
-                    tray_icon.title = "DELTARUNE Sync - procurando o PS Vita"
+                    tray_icon.title = "DELTARUNE Sync - " + i18n.tr("searching", win.lang)
                 quit_flag.wait(0.12)
         threading.Thread(target=tray_icon.run, daemon=True).start()
         threading.Thread(target=animate, daemon=True).start()

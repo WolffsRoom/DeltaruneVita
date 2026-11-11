@@ -266,34 +266,33 @@ def connect(args, state_dir):
         return None
 
 def loop(args, stop, status=None, wake=None):
-    """status: dict shown by the window/tray (text without digits: the
-    DELTARUNE pixel font atlas has none). wake: Event for "sync now"."""
+    """status: dict shown by the window/tray; line/sub hold text keys of
+    drsync_i18n. wake: Event for "sync now"."""
     status = status if status is not None else {}
     syncer = Syncer(args.pc_dir, args.state_dir, args.conflict)
     vita = None
     while not stop.is_set():
         if vita is None:
-            status.update(connected=False, line="Procurando o PS Vita na rede...",
-                          sub="Ligue Sincronizar saves no jogo")
+            status.update(connected=False, line="searching", sub="searching_sub")
             vita = connect(args, syncer.state_dir)
             if vita is None:
                 (wake or stop).wait(3)
                 if wake is not None: wake.clear()
                 continue
             log(syncer.state_dir, "connected to Vita", vita.ip)
-            status.update(connected=True, line="Conectado ao PS Vita", sub="", ip=vita.ip)
+            status.update(connected=True, line="connected", sub="", ip=vita.ip)
         try:
             before = len(syncer.events)
             changes = syncer.run(vita)
             new = syncer.events[before:]
             if any(e == "wait" for e in new):
-                status["sub"] = "Aguardando o DELTARUNE fechar no PC"
+                status["sub"] = "waiting"
             elif any(e == "to_pc" for e in new):
-                status["sub"] = "Save recebido do PS Vita"
+                status["sub"] = "received"
             elif any(e == "to_vita" for e in new):
-                status["sub"] = "Save enviado para o PS Vita"
+                status["sub"] = "sent"
             elif changes == 0 and not status.get("sub"):
-                status["sub"] = "Saves iguais nos dois lados"
+                status["sub"] = "equal"
         except OSError as e:
             log(syncer.state_dir, "Vita disconnected:", e)
             vita = None
@@ -312,7 +311,8 @@ def tray(args):
     stop, wake = threading.Event(), threading.Event()
     status = {}
     threading.Thread(target=loop, args=(args, stop, status, wake), daemon=True).start()
-    drsync_ui.run(status, wake.set, stop, lambda: os.startfile(str(args.state_dir)))
+    drsync_ui.run(status, wake.set, stop, lambda: os.startfile(str(args.state_dir)),
+                  args.state_dir / "settings.json", args.lang)
 def console(args):
     stop = threading.Event()
     try:
@@ -326,6 +326,7 @@ def main():
     ap.add_argument("--state-dir", type=Path, default=DEFAULT_STATE)
     ap.add_argument("--vita", help="Vita IP (skips discovery)")
     ap.add_argument("--conflict", choices=["newest", "ask"], default="newest")
+    ap.add_argument("--lang", help="UI language (English, Portuguese-BR, Japanese, Spanish, French, German, Italian, Turkish, Russian)")
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--console", action="store_true")
     args = ap.parse_args()

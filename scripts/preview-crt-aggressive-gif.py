@@ -16,6 +16,8 @@ spec = importlib.util.spec_from_file_location("tube", HERE / "preview-crt-tube.p
 tube = importlib.util.module_from_spec(spec); spec.loader.exec_module(tube)
 
 W, H = 960, 544
+NATIVE = "--native" in sys.argv
+if NATIVE: sys.argv.remove("--native")
 
 def overlay(img, t, strength=1.15):
     """vita_crt_mod_gl.inc fragment: multiply by scanline, grille, vignette, grain."""
@@ -37,11 +39,18 @@ def overlay(img, t, strength=1.15):
 
 def frame(border, game, t):
     out = border.convert("RGB").resize((W, H), Image.NEAREST)
+    base = overlay(out, t)                                # borders: overlay
+    if NATIVE:
+        # In-game "native_centered": the 640x480 picture at 1:1 in the middle
+        # of the 960x544 screen, border visible above and below (rect 160,32).
+        pic = tube.tube(game.resize((640, 480), Image.NEAREST), 0.075, 640, 480)
+        sx, sy = (W - 640) // 2, (H - 480) // 2
+        base[sy:sy + 480, sx:sx + 640] = np.asarray(pic, dtype=np.float32)[:480, :640] / 255.0
+        return Image.fromarray((base * 255 + 0.5).astype(np.uint8))
     pic = tube.tube(game, 0.075)                                # 960x544, black outside the 4:3 picture
     pic_a = np.asarray(pic, dtype=np.float32) / 255.0
     th, tw = game.size[1], game.size[0]
     effW = int(round(tw * H / th)); sx = (W - effW) // 2
-    base = overlay(out, t)                                # borders: overlay
     base[:, sx:sx + effW] = pic_a[:, sx:sx + effW]        # picture: tube
     return Image.fromarray((base * 255 + 0.5).astype(np.uint8))
 

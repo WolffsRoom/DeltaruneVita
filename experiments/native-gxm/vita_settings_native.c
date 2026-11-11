@@ -595,7 +595,8 @@ static void saveSettings(const VitaSettings* s) {
     }
     if(length>0&&(size_t)length<sizeof(text)){
         int extra=snprintf(text+length,sizeof(text)-(size_t)length,
-            "gxm_async_room_prefetch=%d\n",s->asyncRoomPrefetchEnabled?1:0);
+            "gxm_async_room_prefetch=%d\nsave_sync=%d\ndebug_report_sync=%d\n",s->asyncRoomPrefetchEnabled?1:0,
+            s->saveSyncEnabled?1:0,s->debugReportSync?1:0); /* keep the VitaGL-only toggles */
         if(extra>0&&(size_t)extra<sizeof(text)-(size_t)length)length+=extra;
     }
     SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
@@ -887,6 +888,8 @@ void VitaSettings_load(VitaSettings* s) {
         if(key)s->asyncRoomPrefetchEnabled=
             atoi(key+strlen("gxm_async_room_prefetch="))!=0;
         s->pendingAsyncRoomPrefetchEnabled=s->asyncRoomPrefetchEnabled;
+        s->saveSyncEnabled=strstr(text,"save_sync=1")!=NULL;
+        s->debugReportSync=strstr(text,"debug_report_sync=1")!=NULL;
     }
     s->pendingPvrEnabled = s->pvrEnabled;
     s->pendingBc3Enabled = s->bc3Enabled;

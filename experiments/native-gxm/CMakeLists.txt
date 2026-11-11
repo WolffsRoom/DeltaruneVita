@@ -45,6 +45,7 @@ add_executable(${PROJECT_NAME}
   ../../src/vita-probe/source/vita_background_work.c
   ../../src/vita-probe/source/vita_room_prefetch.c
   ../../src/vita-probe/source/vita_io_profile.c
+  ../../src/vita-probe/source/vita_debug_sync.c
   ../../src/butterscotch/src/data_win.c
   ../../src/butterscotch/src/binary_reader.c
   ../../src/butterscotch/src/image/image_decoder.c
@@ -112,6 +113,8 @@ target_link_libraries(${PROJECT_NAME}
   taihen_stub
   SceAvPlayer_stub
   SceSysmodule_stub
+  SceNet_stub
+  SceNetCtl_stub
   SceCommonDialog_stub
   SceAppMgr_stub
   SceKernelThreadMgr_stub

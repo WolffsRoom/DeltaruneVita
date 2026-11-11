@@ -69,6 +69,7 @@ typedef struct {
     float collisionPreviewX, collisionPreviewY;
     bool shortcutSkipDialogs;
     bool saveSyncEnabled;      // config.ini: save_sync=1 (v0.84, PC <-> Vita over Wi-Fi), default off
+    bool debugReportSync;      // config.ini: debug_report_sync=1 (v0.84-3, DELTARUNE Debug PC app), default off
     int brightness;
     bool pendingPvrEnabled;
     bool pendingBc3Enabled;

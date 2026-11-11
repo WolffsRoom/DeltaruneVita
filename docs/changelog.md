@@ -3,6 +3,12 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.84-3
+
+- DEBUG: "Enviar log atual" (upload HTTP, nunca configurado) virou **Enviar reports local** (Ligado/Desligado, `debug_report_sync=1`).
+- Novo app de PC **DELTARUNE Debug** (coração amarelo): com o Vita na mesma rede, recebe os devlogs e as capturas novas (`ux0:picture/SCREENSHOT/Deltarune/`) feitos enquanto ele está aberto e mostra o log do probe ao vivo (`native-gxm-probe.log` no GXM, `butterscotch-probe.log` no VitaGL). Detalhes em `docs/debug-sync-protocol.md`.
+- Native GXM: as configurações não apagam mais `save_sync` e `debug_report_sync` do `config.ini` ao salvar.
+
 ## v0.84-2
 
 - CRT Agressivo: o filtro de scanlines agora também cobre as faixas acima e abaixo da imagem quando ela não ocupa a altura toda (borda dinâmica). Antes só as faixas laterais recebiam o filtro.

@@ -50,6 +50,7 @@ if(PLAYABLE_RUNNER)
     source/playable_main.c
     source/vita_settings.c
   source/vita_save_sync.c
+  source/vita_debug_sync.c
     ../../experiments/native-gxm/native_mic.c
     ../../experiments/native-gxm/native_asset_pack.c
     source/vita_borders.c

@@ -1,5 +1,6 @@
 #include "vita_settings.h"
 #include "vita_save_sync.h"
+#include "vita_debug_sync.h"
 #include "../../../experiments/native-gxm/native_mic.h"
 
 #include <psp2/io/fcntl.h>
@@ -606,8 +607,8 @@ static void saveSettings(const VitaSettings* s) {
     }
     if(length>0&&(size_t)length<sizeof(text)){
         int extra=snprintf(text+length,sizeof(text)-(size_t)length,
-            "gxm_async_room_prefetch=%d\nsave_sync=%d\n",s->asyncRoomPrefetchEnabled?1:0,
-            s->saveSyncEnabled?1:0);
+            "gxm_async_room_prefetch=%d\nsave_sync=%d\ndebug_report_sync=%d\n",s->asyncRoomPrefetchEnabled?1:0,
+            s->saveSyncEnabled?1:0,s->debugReportSync?1:0);
         if(extra>0&&(size_t)extra<sizeof(text)-(size_t)length)length+=extra;
     }
     SceUID fd = sceIoOpen(SETTINGS_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
@@ -740,6 +741,7 @@ void VitaSettings_load(VitaSettings* s) {
         char* shortcutSetting = strstr(text, "shortcut_skip=");
         if (shortcutSetting != NULL) s->shortcutSkipDialogs = strstr(shortcutSetting, "shortcut_skip=1") == shortcutSetting;
         s->saveSyncEnabled = strstr(text, "save_sync=1") != NULL;
+        s->debugReportSync = strstr(text, "debug_report_sync=1") != NULL;
         char* trophyNotifySetting = strstr(text, "trophy_notifications=");
         if (trophyNotifySetting != NULL)
             s->internalTrophyNotifications =
@@ -1440,8 +1442,12 @@ bool VitaSettings_handleInput(VitaSettings* s, const SceCtrlData* pad, AudioSyst
         } else if (logicalCategory == 0 && s->selected == 3) {
             s->confirmRotateLog = true;
         } else if (logicalCategory == 0 && s->selected == 4) {
-            snprintf(g_probeUploadStatus, sizeof(g_probeUploadStatus), "Sending current log over Wi-Fi...");
-            VitaProbe_sendCurrentLog(g_probeUploadStatus, sizeof(g_probeUploadStatus));
+            /* v0.84-3: was "Send reports locally" (HTTP upload, never configured).
+             * Now On/Off: the DELTARUNE Debug PC app receives devlogs,
+             * new screenshots and the live probe log over the local network. */
+            s->debugReportSync = !s->debugReportSync;
+            DebugSync_setEnabled(s->debugReportSync);
+            saveSettings(s);
         } else if (logicalCategory == 1 && s->selected == 0) {
             s->shortcutSkipDialogs = !s->shortcutSkipDialogs;
             saveSettings(s);
@@ -2147,7 +2153,7 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
     char adjustment[64];
     snprintf(adjustment, sizeof(adjustment), "%d,%d  %d%%", s->displayOffsetX, s->displayOffsetY, s->displayZoom);
     const char* labelsPt[SETTINGS_CATEGORIES][6] = {
-        {"Navegador de salas", "Debug DEV", "Máscaras de colisão", "Novo log de diagnóstico", "Enviar log atual", ""},
+        {"Navegador de salas", "Debug DEV", "Máscaras de colisão", "Novo log de diagnóstico", "Enviar reports local", ""},
         {"Pular falas", "Controles touch", "Editar controles", ""}, 
         {"Bordas de console", "Bordas melhores", "Ajustar tela", "Gráficos", "Brilho"},
         {"Volume mestre", "Efeitos sonoros", "Música", "Desabilitar áudio"}, 
@@ -2161,35 +2167,35 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         {"Language", "Chapter Select", "Trophies", "Trophy notifications", "", "Sync saves with PC"}
     };
     const char* labelsEs[SETTINGS_CATEGORIES][6] = {
-        {"Navegador de salas", "Depuración DEV", "Máscaras de colisión", "Nuevo registro de diagnóstico", "Enviar registro actual", ""},
+        {"Navegador de salas", "Depuración DEV", "Máscaras de colisión", "Nuevo registro de diagnóstico", "Enviar reportes local", ""},
         {"Omitir diálogos", "Controles táctiles", "Editar controles", ""},
         {"Bordes de consola", "Bordes mejorados", "Ajustar pantalla", "Ajustes gráficos", "Brillo"},
         {"Volumen general", "Efectos de sonido", "Música", "Desactivar audio"},
         {"Idioma", "Selección de capítulos", "Trofeos", "Notificaciones de trofeos", "", "Sincronizar partidas (PC)"}
     };
     const char* labelsIt[SETTINGS_CATEGORIES][6] = {
-        {"Navigatore stanze", "Debug DEV", "Maschere di collisione", "Nuovo registro diagnostico", "Invia log corrente", ""},
+        {"Navigatore stanze", "Debug DEV", "Maschere di collisione", "Nuovo registro diagnostico", "Invia report in locale", ""},
         {"Salta dialoghi", "Controlli touch", "Modifica controlli", ""}, 
         {"Bordi console", "Bordi HD", "Regola schermo", "Impostazioni grafiche", "Luminosità"},
         {"Volume principale", "Effetti sonori", "Musica", "Disattiva audio"}, 
         {"Lingua", "Selezione capitolo", "Trofei", "Notifiche trofei", "", "Sincronizza salvataggi (PC)"}
     };
     const char* labelsTr[SETTINGS_CATEGORIES][6] = {
-        {"Oda gezgini", "Hata ayıklama DEV", "Çarpışma maskeleri", "Yeni tanılama günlüğü", "Guncel logu gonder", ""},
+        {"Oda gezgini", "Hata ayıklama DEV", "Çarpışma maskeleri", "Yeni tanılama günlüğü", "Raporlari yerel gonder", ""},
         {"Diyalogları geç", "Dokunmatik kontroller", "Kontrolleri düzenle", ""}, 
         {"Konsol kenarlıkları", "HD Kenarlıklar", "Ekranı ayarla", "Grafik ayarları", "Parlaklık"},
         {"Ana ses", "Ses efektleri", "Müzik", "Sesi kapat"}, 
         {"Dil", "Bölüm Seçimi", "Başarımlar", "Başarım bildirimleri", "", "Kayitlari esitle (PC)"}
     };
     const char* labelsDe[SETTINGS_CATEGORIES][6] = {
-        {"Room-Navigator", "DEV-Debug", "Kollisionsmasken", "Neues Diagnoseprotokoll", "Aktuelles Log senden", ""},
+        {"Room-Navigator", "DEV-Debug", "Kollisionsmasken", "Neues Diagnoseprotokoll", "Berichte lokal senden", ""},
         {"Dialoge überspringen", "Touch-Steuerung", "Steuerung bearbeiten", ""},
         {"Konsolenrahmen", "Bessere Rahmen", "Bild anpassen", "Grafikeinstellungen", "Helligkeit"},
         {"Gesamtlautstärke", "Soundeffekte", "Musik", "Audio deaktivieren"},
         {"Sprache", "Kapitelauswahl", "Trophäen", "Trophäenmeldungen", "", "Spielstande sync (PC)"}
     };
     const char* labelsRu[SETTINGS_CATEGORIES][6] = {
-        {"Navigator komnat", "Otladka DEV", "Maski stolknoveniy", "Novyy zhurnal diagnostiki", "Otpravit tekushchiy log", ""},
+        {"Navigator komnat", "Otladka DEV", "Maski stolknoveniy", "Novyy zhurnal diagnostiki", "Lokalnye otchety (PC)", ""},
         {"Propusk dialogov", "Sensornoe upravlenie", "Izmenit' upravlenie", ""},
         {"Ramki konsoli", "Uluchshennye ramki", "Nastroit' ekran", "Nastroyki grafiki", "Yarkost'"},
         {"Obshchaya gromkost'", "Zvukovye effekty", "Muzyka", "Otkluchit' zvuk"},
@@ -2201,7 +2207,7 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         (s->betterBordersEnabled ? settingsText(s, "Default", "Padrão", "Estándar") :
          settingsText(s, "Off", "Desligada", "Desactivada")));
     const char* values[SETTINGS_CATEGORIES][6] = {
-        {s->devRoomNavEnabled ? valueOn : valueOff, s->debugDevEnabled ? valueOn : valueOff, s->debugCollisionMasks ? valueOn : valueOff, ">", ">", ""},
+        {s->devRoomNavEnabled ? valueOn : valueOff, s->debugDevEnabled ? valueOn : valueOff, s->debugCollisionMasks ? valueOn : valueOff, ">", s->debugReportSync ? valueOn : valueOff, ""},
         {s->shortcutSkipDialogs ? valueOn : valueOff, touch, s->controlEditMode ? settingsText(s, "Open", "Aberto", "Abierto") : ">", mikeSense, ""},
         {screen, betterBordersValue, adjustment, ">", brightness, ""},
         {masterVolume, sfxVolume, musicVolume, s->audioDisabled ? valueOn : valueOff,
@@ -2269,7 +2275,7 @@ void VitaSettings_draw(VitaSettings* s, Renderer* r) {
         else if (selectedDataIndex == 1) selectedHelp = settingsText(s, "Shows performance diagnostics and writes a Dev Log.", "Exibe diagnósticos e grava um Dev Log.", "Muestra diagnósticos y guarda un Dev Log.");
         else if (selectedDataIndex == 2) selectedHelp = settingsText(s, "Shows collision masks for debugging.", "Exibe máscaras de colisão para depuração.", "Muestra máscaras de colisión para depuración.");
         else if (selectedDataIndex == 3) selectedHelp = settingsText(s, "Archives the current probe and starts a new log immediately.", "Arquiva o probe atual e inicia um novo log imediatamente.", "Archiva el probe actual e inicia un registro nuevo inmediatamente.");
-        else selectedHelp = g_probeUploadStatus;
+        else selectedHelp = settingsText(s, "Sends devlogs, new screenshots and the live log to the DELTARUNE Debug PC app (same Wi-Fi).", "Envia devlogs, capturas novas e o log ao vivo para o app DELTARUNE Debug no PC (mesmo Wi-Fi).", "Envía devlogs, capturas nuevas y el log en vivo a la app DELTARUNE Debug del PC (mismo Wi-Fi).");
     } else if (logicalSelectedCategory == 1) {
         if (selectedDataIndex == 0) selectedHelp = settingsText(s, "Allows Triangle to advance dialogue quickly.", "Permite usar Triângulo para avançar falas rapidamente.", "Permite usar Triángulo para avanzar diálogos rápidamente.");
         else if (selectedDataIndex == 1) selectedHelp = settingsText(s, "Enables the optional touch controls.", "Ativa os controles opcionais por toque.", "Activa los controles táctiles opcionales.");

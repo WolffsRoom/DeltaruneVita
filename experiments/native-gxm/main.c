@@ -6,6 +6,7 @@
  * Butterscotch Renderer backend is implemented incrementally.  Its embedded
  * GXP programs also make this probe independent from libshacccg.
  */
+#include "vita_debug_sync.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -1261,7 +1262,7 @@ int main(void) {
     gxm_boot_marker_create();
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
     sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT,SCE_TOUCH_SAMPLING_STATE_START);
-    VitaSettings settings;VitaSettings_load(&settings);
+    VitaSettings settings;VitaSettings_load(&settings);DebugSync_startFromConfig(); /* v0.84-3: DELTARUNE Debug */
     g_nativeStretchFill=settings.displayStretchToFill?1:0;
     g_nativeBorderMode=settings.consoleBorderMode;
     g_nativeBetterBorders=settings.betterBordersEnabled?1:0;

@@ -18,6 +18,23 @@ YELLOW = (255, 225, 63)
 WHITE = (255, 255, 255)
 GREY = (150, 150, 160)
 
+# The same window serves two apps: DELTARUNE Sync (red SOUL) and the developer
+# tool DELTARUNE Debug (yellow SOUL). configure() switches the profile.
+PROFILE = {"name": "DELTARUNE Sync", "tray_id": "DeltaruneSync", "title": "title.png",
+           "heart": None}
+
+def configure(**kw):
+    PROFILE.update(kw)
+
+def load_heart():
+    """assets/heart.png, recoloured when the profile asks for another SOUL colour."""
+    heart = Image.open(ASSETS / "heart.png").convert("RGBA")
+    tint = PROFILE.get("heart")
+    if tint:
+        r, g, b, a = heart.split()
+        heart = Image.merge("RGBA", tuple(r.point(lambda v, c=c: v * c // 255) for c in tint) + (a,))
+    return heart
+
 class PixelFont:
     """Glyph atlas generated from the DELTARUNE font (same as the Vita prologue).
     Fallback glyphs (kind 1/2) sit on the Latin baseline, as in v0.82."""
@@ -89,7 +106,7 @@ class PixelFont:
 
 def heart_frames(size=64):
     """Tray icons: the SOUL heart at rest and a gentle beat (8 frames)."""
-    heart = Image.open(ASSETS / "heart.png").convert("RGBA")
+    heart = load_heart()
     frames = []
     for k in range(8):
         beat = 1.0 + 0.10 * max(0.0, math.sin(k / 8.0 * 2 * math.pi))
@@ -172,7 +189,8 @@ class SyncWindow:
     W, H = 900, 340
     TICK_MS = 33
 
-    def __init__(self, status, sync_now, quit_app, open_backups, settings_path=None, lang=None):
+    def __init__(self, status, sync_now, quit_app, open_backups, settings_path=None, lang=None,
+                 actions=None):
         self.status, self.sync_now, self.quit_app, self.open_backups = status, sync_now, quit_app, open_backups
         self.settings_path = settings_path
         saved = {}
@@ -190,7 +208,7 @@ class SyncWindow:
         self.was_connected = None
         self.copied_seen = None
         self.root = tk.Tk()
-        self.root.title("DELTARUNE Sync")
+        self.root.title(PROFILE["name"])
         self.root.configure(bg="black")
         self.root.resizable(False, False)
         x = (self.root.winfo_screenwidth() - self.W) // 2
@@ -210,12 +228,14 @@ class SyncWindow:
         self.box_top = (self.H - self.box.height()) // 2
         # Title from the font's native 1 px grid (assets/title.png), scaled 5x with
         # nearest neighbour: every font "brick" is an exact 5x5 block, no blur.
-        t = Image.open(ASSETS / "title.png").convert("RGBA")
+        t = Image.open(ASSETS / PROFILE["title"]).convert("RGBA")
         t = t.resize((t.width * 5, t.height * 5), Image.NEAREST)
         tinted = Image.new("RGBA", t.size, YELLOW + (255,)); tinted.putalpha(t.getchannel("A"))
         self.title_img = ImageTk.PhotoImage(tinted)
-        self.heart_img = ImageTk.PhotoImage(Image.open(ASSETS / "heart.png").convert("RGBA").resize((18, 18), Image.NEAREST))
-        self.option_keys = ["sync", "backups", "lang", "hide"]
+        self.heart_img = ImageTk.PhotoImage(load_heart().resize((18, 18), Image.NEAREST))
+        # Menu: ordered (i18n key, callback); "lang" and "hide" are handled here.
+        self.actions = actions or [("sync", sync_now), ("backups", open_backups), ("lang", None), ("hide", None)]
+        self.option_keys = [k for k, _ in self.actions]
         self.selected = 0
         self.frame = 0
         self._images = []
@@ -258,7 +278,7 @@ class SyncWindow:
         sub = st.get("sub", "")
         count = st.get("copied", 0)
         if count != self.copied_seen:
-            if self.copied_seen is not None and sub in ("received", "sent"):
+            if self.copied_seen is not None and count:
                 self.sounds.play("save")
             self.copied_seen = count
         self.line_tw.set("* " + i18n.tr(st.get("line", "searching"), self.lang))
@@ -324,8 +344,8 @@ class SyncWindow:
 
     def activate(self):
         self.sounds.play("select")
-        {"sync": self.sync_now, "backups": self.open_backups, "lang": self.next_language,
-         "hide": self.hide}[self.option_keys[self.selected]]()
+        key, fn = self.actions[self.selected]
+        {"lang": self.next_language, "hide": self.hide}.get(key, fn)()
 
     def click(self, e):
         for i, (x0, y0, x1, y1) in enumerate(self.option_boxes):
@@ -343,29 +363,36 @@ class SyncWindow:
 
     def show(self):
         self.root.after(0, lambda: (self.root.deiconify(), self.root.lift(), self.root.focus_force()))
-def run(status, sync_now, quit_flag, open_backups, settings_path=None, lang=None):
-    """Window on the main thread; tray icon (pystray) on its own thread."""
-    win = SyncWindow(status, sync_now, lambda: None, open_backups, settings_path, lang)
+def run(status, sync_now, quit_flag, open_backups, settings_path=None, lang=None,
+        actions=None, tray_extra=None, setup=None):
+    """Window on the main thread; tray icon (pystray) on its own thread.
+    tray_extra: (i18n key, callback) for the second tray item (default: sync now).
+    setup(win) runs once before the main loop (extra windows, timers)."""
+    win = SyncWindow(status, sync_now, lambda: None, open_backups, settings_path, lang, actions)
+    if setup is not None:
+        setup(win)
+    extra_key, extra_fn = tray_extra or ("sync_now", sync_now)
     tray_icon = None
     try:
         import pystray
         frames, idle = heart_frames(64)
         def on_quit(icon, _):
             quit_flag.set(); icon.stop(); win.root.after(0, win.root.destroy)
-        tray_icon = pystray.Icon("DeltaruneSync", idle, "DELTARUNE Sync",
+        name = PROFILE["name"]
+        tray_icon = pystray.Icon(PROFILE["tray_id"], idle, name,
                                  menu=pystray.Menu(
                                      pystray.MenuItem(lambda _: i18n.tr("open", win.lang), lambda i, _: win.show(), default=True),
-                                     pystray.MenuItem(lambda _: i18n.tr("sync_now", win.lang), lambda i, _: sync_now()),
+                                     pystray.MenuItem(lambda _: i18n.tr(extra_key, win.lang), lambda i, _: extra_fn()),
                                      pystray.MenuItem(lambda _: i18n.tr("quit", win.lang), on_quit)))
         def animate():
             k = 0
             while not quit_flag.is_set():
                 if status.get("connected"):
                     tray_icon.icon = frames[k % len(frames)]; k += 1
-                    tray_icon.title = "DELTARUNE Sync - PS Vita " + status.get("ip", "")
+                    tray_icon.title = name + " - PS Vita " + status.get("ip", "")
                 else:
                     tray_icon.icon = idle
-                    tray_icon.title = "DELTARUNE Sync - " + i18n.tr("searching", win.lang)
+                    tray_icon.title = name + " - " + i18n.tr("searching", win.lang)
                 quit_flag.wait(0.12)
         threading.Thread(target=tray_icon.run, daemon=True).start()
         threading.Thread(target=animate, daemon=True).start()

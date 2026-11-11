@@ -50,6 +50,7 @@ int _newlib_heap_size_user = 256 * 1024 * 1024;
 #include "vita_room_prefetch.h"
 #include "vita_settings.h"
 #include "vita_save_sync.h"
+#include "vita_debug_sync.h"
 #include "vita_startup_preload.h"
 #include "vita_thread_policy.h"
 #include "vita_trophies.h"
@@ -4700,6 +4701,11 @@ int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
     /* v0.84: opt-in PC <-> Vita save sync server (vita_save_sync.c). */
     SaveSync_setEnabled(true, SAVE_PATH);
     log_line("SAVE_SYNC=enabled tcp=26541 discovery=26540");
+  }
+  if (settings.debugReportSync) {
+    /* v0.84-3: DELTARUNE Debug PC app (devlogs, screenshots, live log). */
+    DebugSync_setEnabled(true);
+    log_line("DEBUG_SYNC=enabled tcp=26551 discovery=26550");
   }
   float firstLoadGain = settings.audioDisabled
                             ? 0.0f

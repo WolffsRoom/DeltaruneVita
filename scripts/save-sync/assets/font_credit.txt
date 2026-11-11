@@ -6,3 +6,4 @@ License: FontStruct Non-Commercial Software End User License Agreement 1.0
 Used for noncommercial rasterized glyph rendering, in a noneditable application UI.
 Only a glyph atlas is included. The original OTF font file is NOT redistributed.
 Fallback glyphs for Japanese and Cyrillic are rasterized from system fonts on the developer PC.
+title.png is the text DELTARUNE SYNC rasterized once from that font at its native 1 px grid (12 px size), drawn 5x with nearest-neighbour scaling.

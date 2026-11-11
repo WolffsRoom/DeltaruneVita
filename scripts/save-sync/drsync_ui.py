@@ -206,8 +206,12 @@ class SyncWindow:
         # Integer-ish scale of the game's box: 598x172 -> 861x248, centred.
         self.box = ImageTk.PhotoImage(box.resize((int(box.width * 1.44), int(box.height * 1.44)), Image.NEAREST))
         self.box_top = (self.H - self.box.height()) // 2
-        # Title rendered once at exact 2x (pixel-doubled, like the game's 640x480 art).
-        self.title_img = ImageTk.PhotoImage(self.font.render("DELTARUNE SYNC", YELLOW, 2))
+        # Title from the font's native 1 px grid (assets/title.png), scaled 5x with
+        # nearest neighbour: every font "brick" is an exact 5x5 block, no blur.
+        t = Image.open(ASSETS / "title.png").convert("RGBA")
+        t = t.resize((t.width * 5, t.height * 5), Image.NEAREST)
+        tinted = Image.new("RGBA", t.size, YELLOW + (255,)); tinted.putalpha(t.getchannel("A"))
+        self.title_img = ImageTk.PhotoImage(tinted)
         self.heart_img = ImageTk.PhotoImage(Image.open(ASSETS / "heart.png").convert("RGBA").resize((18, 18), Image.NEAREST))
         self.option_keys = ["sync", "backups", "lang", "hide"]
         self.selected = 0
@@ -262,7 +266,7 @@ class SyncWindow:
         c.create_image(self.W // 2, self.H // 2, image=self.box)
         top = self.box_top
         bounce = int(round(abs(math.sin(self.frame * 0.04)) * 3))
-        c.create_image(self.W // 2 - self.title_img.width() // 2, top + 30 - bounce,
+        c.create_image(self.W // 2 - self.title_img.width() // 2, top + 32 - bounce,
                        image=self.title_img, anchor="nw")
         # Typed lines are left-aligned on the centred full line, so letters do
         # not slide sideways while they appear.

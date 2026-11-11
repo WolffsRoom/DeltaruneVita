@@ -6744,6 +6744,26 @@ int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
           vitaCrtModClipOn = 1;
           vita_crt_mod_render(renderer, frame, 1.15f);
         }
+        /* v0.84-2: when the picture is shorter than the screen (dynamic
+         * borders, non-stretched scale) the margins above and below it are
+         * border too. Rect y is GL window space: [1] bottom, [3] top. */
+        {
+          const int bottom = vitaCrtTubeRect[1], top = vitaCrtTubeRect[3];
+          const int stripX = left > 0 ? left : 0;
+          const int stripW = (right < 960 ? right : 960) - stripX;
+          if (stripW > 0 && bottom > 0) {
+            vitaCrtModClip[0] = stripX; vitaCrtModClip[1] = 0;
+            vitaCrtModClip[2] = stripW; vitaCrtModClip[3] = bottom;
+            vitaCrtModClipOn = 1;
+            vita_crt_mod_render(renderer, frame, 1.15f);
+          }
+          if (stripW > 0 && top < 544) {
+            vitaCrtModClip[0] = stripX; vitaCrtModClip[1] = top;
+            vitaCrtModClip[2] = stripW; vitaCrtModClip[3] = 544 - top;
+            vitaCrtModClipOn = 1;
+            vita_crt_mod_render(renderer, frame, 1.15f);
+          }
+        }
         vitaCrtModClipOn = 0;
       }
       bool crtModComposited = crtTubeDrawn ||

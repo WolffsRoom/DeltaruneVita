@@ -3,6 +3,11 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.84-2
+
+- CRT Agressivo: o filtro de scanlines agora também cobre as faixas acima e abaixo da imagem quando ela não ocupa a altura toda (borda dinâmica). Antes só as faixas laterais recebiam o filtro.
+- App do PC (DELTARUNE Sync): idioma configurável (os 9 do port), texto dentro da borda, título nítido, voz de escrita só na abertura, som de conexão/desconexão e som de save a cada cópia.
+
 ## v0.84-1 — Sincronização de saves PC ↔ Vita pela rede local (opcional)
 
 Detalhes e protocolo: [`docs/save-sync-protocol.md`](save-sync-protocol.md). Sem teste no Vita.

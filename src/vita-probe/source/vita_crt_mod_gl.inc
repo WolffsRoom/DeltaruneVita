@@ -366,3 +366,240 @@ static bool vita_crt_tube_composite(GLuint texture,int32_t texW,int32_t texH,
     }
     return true;
 }
+
+/* v0.84-4 CRT Agressivo, full screen. The v0.82 tube warped only the game
+ * picture in a heavy per-pixel shader (barrel maths, sin, pow, smoothstep for
+ * every pixel): Chapter 5 logs measured ~15 ms per frame (cliff_verticalwind
+ * 17 -> 32 ms, sethaqua_battle 14 -> 26 ms), and the console border stayed
+ * flat. Now the border and the game are drawn into one 960x544 target
+ * (GLCommon_endLetterboxBlit redirects both there) and a single pass curves
+ * the whole screen:
+ *  - the barrel warp lives in a 48x28 vertex grid (per vertex, not per pixel);
+ *  - vignette, rounded tube edge and aperture grille are one precomputed
+ *    960x544 mask texture;
+ *  - scanlines follow the game's own rows through a 1x4 repeating texture.
+ * The fragment shader is three texture reads and a multiply. */
+#define VITA_CRT_W 960
+#define VITA_CRT_H 544
+#define VITA_CRT_GX 48
+#define VITA_CRT_GY 28
+#define VITA_CRT_CURVE 0.075f
+#define VITA_CRT_GAIN 1.5f
+static GLuint vitaCrtFullFbo=0,vitaCrtFullTex=0,vitaCrtMaskTex=0,vitaCrtScanTex=0,vitaCrtFullProgram=0;
+static GLint vitaCrtFullTexLoc=-1,vitaCrtFullMaskLoc=-1,vitaCrtFullScanLoc=-1;
+static int vitaCrtFullDisabled=0;
+static GLfloat vitaCrtMesh[VITA_CRT_GX*VITA_CRT_GY*5];
+static GLushort vitaCrtIndices[(VITA_CRT_GX-1)*(VITA_CRT_GY-1)*6];
+static int vitaCrtMeshKey[5]={-1,-1,-1,-1,-1};
+
+static void vita_crt_warp(float x,float y,float* u,float* v){
+    /* x,y in NDC; returns the texture coordinate this screen point shows. */
+    float k=(1.0f+VITA_CRT_CURVE*(x*x+y*y))/(1.0f+VITA_CRT_CURVE);
+    *u=x*k*0.5f+0.5f; *v=y*k*0.5f+0.5f;
+}
+
+static bool vita_crt_full_init(void){
+    if(vitaCrtFullDisabled)return false;
+    if(vitaCrtFullProgram)return true;
+    static const char* vertex=
+        "attribute vec2 a_position; attribute vec2 a_uv; attribute float a_scan;\n"
+        "varying vec2 v_uv; varying vec2 v_scr; varying float v_scan;\n"
+        "void main(){v_uv=a_uv;v_scan=a_scan;v_scr=a_position*0.5+0.5;"
+        "gl_Position=vec4(a_position,0.0,1.0);}\n";
+    static const char* fragment=
+        "precision mediump float;\n"
+        "varying vec2 v_uv; varying vec2 v_scr; varying float v_scan;\n"
+        "uniform sampler2D u_tex; uniform sampler2D u_mask; uniform sampler2D u_scan;\n"
+        "void main(){\n"
+        " vec3 col=texture2D(u_tex,v_uv).rgb;\n"
+        " vec3 m=texture2D(u_mask,v_scr).rgb;\n"
+        " float s=texture2D(u_scan,vec2(0.5,v_scan)).r;\n"
+        " gl_FragColor=vec4(col*m*(s*1.5),1.0);\n"
+        "}\n";
+    GLuint vs=vitaCrtModCompile(GL_VERTEX_SHADER,vertex);
+    GLuint fs=vs?vitaCrtModCompile(GL_FRAGMENT_SHADER,fragment):0;
+    if(!vs||!fs){
+        if(vs)glDeleteShader(vs);
+        if(fs)glDeleteShader(fs);
+        vitaCrtFullDisabled=1;
+        log_line("VITAGL_CRT_FULL=compile_failed tube_fallback");
+        return false;
+    }
+    GLuint program=glCreateProgram();
+    glAttachShader(program,vs);glAttachShader(program,fs);
+    glBindAttribLocation(program,0,"a_position");
+    glBindAttribLocation(program,1,"a_uv");
+    glBindAttribLocation(program,2,"a_scan");
+    glLinkProgram(program);
+    GLint ok=0;glGetProgramiv(program,GL_LINK_STATUS,&ok);
+    glDeleteShader(vs);glDeleteShader(fs);
+    if(!ok){glDeleteProgram(program);vitaCrtFullDisabled=1;
+            log_line("VITAGL_CRT_FULL=link_failed tube_fallback");return false;}
+    /* Render target for border + game. */
+    glGenTextures(1,&vitaCrtFullTex);
+    glBindTexture(GL_TEXTURE_2D,vitaCrtFullTex);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,VITA_CRT_W,VITA_CRT_H,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glGenFramebuffers(1,&vitaCrtFullFbo);
+    glBindFramebuffer(GL_FRAMEBUFFER,vitaCrtFullFbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,vitaCrtFullTex,0);
+    GLenum status=glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER,0);
+    if(status!=GL_FRAMEBUFFER_COMPLETE){
+        glDeleteFramebuffers(1,&vitaCrtFullFbo);glDeleteTextures(1,&vitaCrtFullTex);
+        vitaCrtFullFbo=vitaCrtFullTex=0;glDeleteProgram(program);vitaCrtFullDisabled=1;
+        log_line("VITAGL_CRT_FULL=fbo_incomplete tube_fallback");
+        return false;
+    }
+    /* Mask: rounded tube edge x vignette x aperture grille x gain, in the
+     * same maths as the v0.82 shader, evaluated once per screen pixel. */
+    unsigned char* mask=(unsigned char*)malloc((size_t)VITA_CRT_W*VITA_CRT_H*4);
+    if(mask==NULL){vitaCrtFullDisabled=1;return false;}
+    for(int y=0;y<VITA_CRT_H;++y){
+        for(int x=0;x<VITA_CRT_W;++x){
+            float nx=((float)x+0.5f)/VITA_CRT_W*2.0f-1.0f;
+            float ny=((float)y+0.5f)/VITA_CRT_H*2.0f-1.0f;
+            float u,v;vita_crt_warp(nx,ny,&u,&v);
+            float iu=u<=0.0f||u>=1.0f?0.0f:(u<0.004f?u/0.004f:(u>0.996f?(1.0f-u)/0.004f:1.0f));
+            float iv=v<=0.0f||v>=1.0f?0.0f:(v<0.004f?v/0.004f:(v>0.996f?(1.0f-v)/0.004f:1.0f));
+            float e=u*(1.0f-u)*v*(1.0f-v)*16.0f;
+            float vig=e<=0.0f?0.0f:powf(e,0.22f);
+            if(vig>1.0f)vig=1.0f;
+            float base=iu*iv*vig*1.24f/VITA_CRT_GAIN;
+            int m=x%3;
+            float g[3]={0.88f,0.88f,0.88f};g[m]=1.0f;
+            unsigned char* px=mask+((size_t)y*VITA_CRT_W+x)*4;
+            for(int c=0;c<3;++c){
+                float val=base*g[c]*255.0f+0.5f;
+                px[c]=(unsigned char)(val>255.0f?255.0f:val);
+            }
+            px[3]=255;
+        }
+    }
+    glGenTextures(1,&vitaCrtMaskTex);
+    glBindTexture(GL_TEXTURE_2D,vitaCrtMaskTex);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,VITA_CRT_W,VITA_CRT_H,0,GL_RGBA,GL_UNSIGNED_BYTE,mask);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    free(mask);
+    /* Scanline profile mix(0.55,1,sin^2) sampled at 4 points, repeated. */
+    static const unsigned char scan[16]={140,140,140,255, 198,198,198,255,
+                                         255,255,255,255, 198,198,198,255};
+    glGenTextures(1,&vitaCrtScanTex);
+    glBindTexture(GL_TEXTURE_2D,vitaCrtScanTex);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,1,4,0,GL_RGBA,GL_UNSIGNED_BYTE,scan);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+    glBindTexture(GL_TEXTURE_2D,0);
+    int n=0;
+    for(int j=0;j<VITA_CRT_GY-1;++j)for(int i=0;i<VITA_CRT_GX-1;++i){
+        GLushort a=(GLushort)(j*VITA_CRT_GX+i),b=(GLushort)(a+1),
+                 c=(GLushort)(a+VITA_CRT_GX),d=(GLushort)(c+1);
+        vitaCrtIndices[n++]=a;vitaCrtIndices[n++]=b;vitaCrtIndices[n++]=c;
+        vitaCrtIndices[n++]=b;vitaCrtIndices[n++]=d;vitaCrtIndices[n++]=c;
+    }
+    vitaCrtFullProgram=program;
+    vitaCrtFullTexLoc=glGetUniformLocation(program,"u_tex");
+    vitaCrtFullMaskLoc=glGetUniformLocation(program,"u_mask");
+    vitaCrtFullScanLoc=glGetUniformLocation(program,"u_scan");
+    log_line("VITAGL_CRT_FULL=ready mesh=48x28 mask=960x544 borders_warped=1");
+    return true;
+}
+
+/* Mesh: position, warped texture coordinate, scanline phase (game rows). */
+static void vita_crt_full_mesh(int32_t texH,int32_t sy,int32_t ey){
+    int key[5]={texH,sy,ey,VITA_CRT_W,VITA_CRT_H};
+    if(memcmp(key,vitaCrtMeshKey,sizeof(key))==0)return;
+    memcpy(vitaCrtMeshKey,key,sizeof(key));
+    float rows=(float)texH*0.5f;
+    float span=(float)(ey-sy);if(span<1.0f)span=1.0f;
+    for(int j=0;j<VITA_CRT_GY;++j)for(int i=0;i<VITA_CRT_GX;++i){
+        float x=(float)i/(VITA_CRT_GX-1)*2.0f-1.0f;
+        float y=(float)j/(VITA_CRT_GY-1)*2.0f-1.0f;
+        float u,v;vita_crt_warp(x,y,&u,&v);
+        GLfloat* m=vitaCrtMesh+(j*VITA_CRT_GX+i)*5;
+        m[0]=x;m[1]=y;m[2]=u;m[3]=v;
+        /* GL rows grow upward; game row 0 is at ey. */
+        m[4]=((float)ey-v*VITA_CRT_H)/span*rows;
+    }
+}
+
+GLuint vita_crt_full_target(void){
+    if(!vitaCrtTubeEnabledThisFrame||!vita_crt_full_init())return 0;
+    return vitaCrtFullFbo;
+}
+
+/* GLCommon fullscreen hook: border + game are in vitaCrtFullTex; draw the
+ * curved screen onto the window. */
+static bool vita_crt_full_present(int32_t texH,int32_t sx,int32_t sy,int32_t ex,int32_t ey,
+                                  int32_t windowW,int32_t windowH){
+    (void)sx;(void)ex;
+    GLint oldProgram=0,oldBuffer=0,oldTexture=0,oldActive=GL_TEXTURE0;
+    GLint oldAttribEnabled[3]={0,0,0};
+    GLboolean oldBlend=glIsEnabled(GL_BLEND);
+    GLboolean oldScissor=glIsEnabled(GL_SCISSOR_TEST);
+    glGetIntegerv(GL_CURRENT_PROGRAM,&oldProgram);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING,&oldBuffer);
+    glGetIntegerv(GL_ACTIVE_TEXTURE,&oldActive);
+    for(int a=0;a<3;++a)glGetVertexAttribiv(a,GL_VERTEX_ATTRIB_ARRAY_ENABLED,&oldAttribEnabled[a]);
+    vita_crt_full_mesh(texH,sy,ey);
+    glBindFramebuffer(GL_FRAMEBUFFER,0);
+    glViewport(0,0,windowW,windowH);
+    glDisable(GL_BLEND);glDisable(GL_SCISSOR_TEST);glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);glDisable(GL_CULL_FACE);
+    glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
+#ifdef __vita__
+    glBindVertexArray(0);
+#endif
+    glUseProgram(vitaCrtFullProgram);
+    glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,vitaCrtScanTex);
+    glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,vitaCrtMaskTex);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D,&oldTexture);
+    glBindTexture(GL_TEXTURE_2D,vitaCrtFullTex);
+    if(vitaCrtFullTexLoc>=0)glUniform1i(vitaCrtFullTexLoc,0);
+    if(vitaCrtFullMaskLoc>=0)glUniform1i(vitaCrtFullMaskLoc,1);
+    if(vitaCrtFullScanLoc>=0)glUniform1i(vitaCrtFullScanLoc,2);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
+    glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,5*sizeof(GLfloat),vitaCrtMesh);
+    glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,5*sizeof(GLfloat),vitaCrtMesh+2);
+    glVertexAttribPointer(2,1,GL_FLOAT,GL_FALSE,5*sizeof(GLfloat),vitaCrtMesh+4);
+    glEnableVertexAttribArray(0);glEnableVertexAttribArray(1);glEnableVertexAttribArray(2);
+    while(glGetError()!=GL_NO_ERROR){}
+    glDrawElements(GL_TRIANGLES,(GLsizei)(sizeof(vitaCrtIndices)/sizeof(vitaCrtIndices[0])),
+                   GL_UNSIGNED_SHORT,vitaCrtIndices);
+    GLenum drawError=glGetError();
+    for(int a=0;a<3;++a)if(!oldAttribEnabled[a])glDisableVertexAttribArray(a);
+    glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,0);
+    glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,0);
+    glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,(GLuint)oldTexture);
+    glActiveTexture((GLenum)oldActive);
+    glBindBuffer(GL_ARRAY_BUFFER,(GLuint)oldBuffer);
+    glUseProgram((GLuint)oldProgram);
+    if(oldBlend)glEnable(GL_BLEND);
+    if(oldScissor)glEnable(GL_SCISSOR_TEST);
+    /* The whole screen, border included, went through the tube: the
+     * border-strip overlay in playable_main has nothing left to do. */
+    vitaCrtTubeDrewThisFrame=1;
+    vitaCrtTubeRect[0]=0;vitaCrtTubeRect[1]=0;vitaCrtTubeRect[2]=windowW;vitaCrtTubeRect[3]=windowH;
+    static int firstLogged=0;
+    if(!firstLogged){
+        firstLogged=1;
+        char line[128];
+        snprintf(line,sizeof(line),"VITAGL_CRT_FULL=first_draw game_rect=%d,%d-%d,%d rows=%d gl_error=0x%04X",
+                 (int)sx,(int)sy,(int)ex,(int)ey,(int)texH,(unsigned)drawError);
+        log_line(line);
+    }
+    if(drawError!=GL_NO_ERROR){
+        vitaCrtFullDisabled=1;   /* next frames use the v0.82 tube */
+        log_line("VITAGL_CRT_FULL=draw_error tube_fallback");
+    }
+    return true;
+}

@@ -177,6 +177,7 @@ void GLLegacyRenderer_collectRetiredTexturesForRoomChange(GLLegacyRenderer* gl);
 void GLLegacyRenderer_prepareRoomTextureSet(GLLegacyRenderer* gl, Room* room);
 uint32_t GLLegacyRenderer_preloadRoomTextureSet(GLLegacyRenderer* gl);
 uint32_t GLLegacyRenderer_preloadChapterBattleCore(GLLegacyRenderer* gl);
+uint32_t GLLegacyRenderer_rewarmBattleCore(GLLegacyRenderer* gl, uint64_t budgetUs);
 #endif
 Renderer* GLLegacyRenderer_create(void);
 

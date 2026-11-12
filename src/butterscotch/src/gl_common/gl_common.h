@@ -34,6 +34,14 @@ typedef bool (*GLCommonCompositeHook)(GLuint texture, int32_t texW, int32_t texH
                                       int32_t windowW, int32_t windowH);
 extern GLCommonCompositeHook g_glCommonCompositeHook;
 extern GLuint g_glCommonCompositeTexture;
+/* v0.84-4: when non-zero, the border and the game are composed into this
+ * framebuffer (960x544) and g_glCommonFullscreenHook presents it, e.g. the
+ * Vita CRT Agressivo tube that curves the whole screen. Reset every frame. */
+typedef bool (*GLCommonFullscreenHook)(int32_t texH, int32_t sx, int32_t sy,
+                                       int32_t ex, int32_t ey,
+                                       int32_t windowW, int32_t windowH);
+extern GLuint g_glCommonFullscreenTarget;
+extern GLCommonFullscreenHook g_glCommonFullscreenHook;
 
 // ===[ Surface arrays ]===
 

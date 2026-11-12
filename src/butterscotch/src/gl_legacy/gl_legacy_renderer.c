@@ -2718,6 +2718,15 @@ static uint64_t vitaGpuTextureBytes(GLLegacyRenderer* gl, uint32_t pageId, int w
            (vitaTextureNeedsFullColor(gl, pageId) ? 4ULL : 2ULL);
 }
 
+/* v0.84-4: pages of the chapter's battle core (party, battle box, hit
+ * feedback), filled by GLLegacyRenderer_preloadChapterBattleCore. */
+static bool* vitaBattleCorePages = nullptr;
+static uint32_t vitaBattleCorePageCount = 0;
+static bool vitaBattleCoreRewarmPending = false;
+static inline bool vitaIsBattleCorePage(uint32_t page) {
+    return vitaBattleCorePages != nullptr && page < vitaBattleCorePageCount && vitaBattleCorePages[page];
+}
+
 static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
     extern int g_vitaActiveChapter;
     uint32_t victim = UINT32_MAX;
@@ -2756,6 +2765,12 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
         // sprites. Preserve a short rolling working set; genuinely stale room
         // pages remain eligible after eight frames.
         uint32_t age = gl->textureFrame - gl->textureLastUsedFrame[i];
+        // v0.84-4: the party/battle-box pages warmed at chapter load are idle
+        // during exploration, so plain LRU always picked them first and the
+        // next battle uploaded them all in its first frame (Chapter 5
+        // Floradinn: 12 pages, 2.2 s). Prefer any other stale page; the urgent
+        // fallback below may still take them when nothing else is left.
+        if (vitaIsBattleCorePage(i)) continue;
         // Flowery's late phases repeatedly replaced the same 1024px pages
         // (page 108 alone was evicted 48 times in one capture). Once a page
         // has paid the synchronous upload cost, keep it stable for one second
@@ -3600,6 +3615,62 @@ static uint32_t vitaEnsureSpritePagesByPrefix(GLLegacyRenderer* gl, const char* 
     return loaded;
 }
 
+static void vitaMarkBattleCoreSprite(GLLegacyRenderer* gl, const char* name) {
+    DataWin* dw = gl->base.dataWin;
+    if (vitaBattleCorePages == nullptr) {
+        vitaBattleCorePageCount = gl->originalTexturePageCount;
+        vitaBattleCorePages = (bool*)safeCalloc(vitaBattleCorePageCount, sizeof(bool));
+    }
+    for (uint32_t i = 0; i < dw->sprt.count; ++i) {
+        const Sprite* spr = &dw->sprt.sprites[i];
+        if (!spr->present || spr->name == nullptr || strcmp(spr->name, name) != 0) continue;
+        for (uint32_t frame = 0; frame < spr->textureCount; ++frame) {
+            int32_t tpagIndex = spr->tpagIndices != nullptr ? spr->tpagIndices[frame] : -1;
+            if (tpagIndex < 0 || (uint32_t)tpagIndex >= dw->tpag.count) continue;
+            int16_t pageId = dw->tpag.items[tpagIndex].texturePageId;
+            if (pageId >= 0 && (uint32_t)pageId < vitaBattleCorePageCount)
+                vitaBattleCorePages[pageId] = true;
+        }
+        return;
+    }
+}
+
+/* v0.84-4: re-upload battle core pages released by a full purge (the Chapter
+ * 5 garden video room purged everything, so the Floradinn battle paid for the
+ * whole set on its first frame). Called at a doorway, behind the transition,
+ * with a time budget; whatever does not fit is retried at the next doorway. */
+uint32_t GLLegacyRenderer_rewarmBattleCore(GLLegacyRenderer* gl, uint64_t budgetUs) {
+    if (gl == nullptr || vitaBattleCorePages == nullptr || !vitaBattleCoreRewarmPending) return 0;
+    uint32_t loaded = 0, missing = 0;
+#ifdef PLATFORM_VITA
+    const uint64_t startUs = sceKernelGetProcessTimeWide();
+#endif
+    bool timeUp = false;
+    for (uint32_t i = 0; i < vitaBattleCorePageCount && i < gl->originalTexturePageCount; ++i) {
+        if (!vitaBattleCorePages[i] || gl->textureLoaded[i]) continue;
+#ifdef PLATFORM_VITA
+        if (sceKernelGetProcessTimeWide() - startUs > budgetUs) timeUp = true;
+#else
+        (void)budgetUs;
+#endif
+        if (timeUp) { missing++; continue; }
+        if (GLLegacyRenderer_ensureTextureLoaded(gl, i)) loaded++;
+        else missing++;
+    }
+    vitaBattleCoreRewarmPending = missing > 0;
+#ifdef PLATFORM_VITA
+    {
+        extern void VitaProbe_logLine(const char* line);
+        char line[128];
+        snprintf(line, sizeof(line), "BATTLE_PRELOAD=rewarm pages=%u missing=%u elapsed_us=%llu",
+                 (unsigned)loaded, (unsigned)missing,
+                 (unsigned long long)(sceKernelGetProcessTimeWide() - startUs));
+        VitaProbe_logLine(line);
+    }
+#endif
+    return loaded;
+}
+
 uint32_t GLLegacyRenderer_preloadChapterBattleCore(GLLegacyRenderer* gl) {
     if (gl == nullptr || gl->base.dataWin == nullptr) return 0;
     extern int g_vitaActiveChapter;
@@ -3671,6 +3742,7 @@ uint32_t GLLegacyRenderer_preloadChapterBattleCore(GLLegacyRenderer* gl) {
         VitaProbe_pumpLoadingScreen();
 #endif
         loaded += vitaEnsureSpritePagesByName(gl, battleCore[i]);
+        vitaMarkBattleCoreSprite(gl, battleCore[i]);
 #ifdef PLATFORM_VITA
         extern void VitaProbe_reportBattlePreloadProgress(uint32_t,uint32_t);
         VitaProbe_reportBattlePreloadProgress(i+1,coreCount);
@@ -3741,6 +3813,13 @@ void GLLegacyRenderer_trimTextureCacheForRoomChange(GLLegacyRenderer* gl, uint64
             continue;
         if (!purgeForNativeVideo && !includeSmallPages &&
             gl->textureWidths[i] <= 512 && gl->textureHeights[i] <= 512) continue;
+        // v0.84-4: a doorway trim keeps the chapter's battle core resident;
+        // only a full purge (video rooms, region changes) releases it, and
+        // GLLegacyRenderer_rewarmBattleCore restores it at a later doorway.
+        if (vitaIsBattleCorePage(i)) {
+            if (!purgeForNativeVideo) continue;
+            vitaBattleCoreRewarmPending = true;
+        }
         extern int g_vitaActiveChapter;
         if (g_vitaActiveChapter == 5 && (i == 30 || i == 55)) continue;
 #ifdef PLATFORM_VITA

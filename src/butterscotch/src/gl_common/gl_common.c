@@ -55,6 +55,8 @@ void GLCommon_computeLetterbox(int32_t gameW, int32_t gameH, int32_t windowW, in
 
 GLCommonCompositeHook g_glCommonCompositeHook = NULL;
 GLuint g_glCommonCompositeTexture = 0;
+GLuint g_glCommonFullscreenTarget = 0;
+GLCommonFullscreenHook g_glCommonFullscreenHook = NULL;
 
 void GLCommon_beginLetterboxBlit(GLuint fbo, GLuint hostFbo) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
@@ -79,11 +81,29 @@ void GLCommon_endLetterboxBlit(int32_t fboWidth, int32_t fboHeight, int32_t game
     // screen (disabled / suppressed / not yet loaded) we still clear to black so
     // the pillarbox margins remain correct.
     extern int VitaBorders_coversScreen(void);
-    if (!VitaBorders_coversScreen())
+    extern GLuint g_vitaBorderTargetFbo;
+    /* v0.84-4: a full-screen effect gets border + game in its own target. */
+    GLuint fullscreenTarget = (g_glCommonFullscreenHook != NULL) ? g_glCommonFullscreenTarget : 0;
+    g_glCommonFullscreenTarget = 0;
+    GLuint composeTarget = fullscreenTarget ? fullscreenTarget : hostFbo;
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, composeTarget);
+    if (fullscreenTarget) glViewport(0, 0, windowW, windowH);
+    if (fullscreenTarget || !VitaBorders_coversScreen())
         glClear(GL_COLOR_BUFFER_BIT);
+    g_vitaBorderTargetFbo = composeTarget;
     VitaBorders_draw(windowW, windowH);
+    g_vitaBorderTargetFbo = 0;
     glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)sourceReadFbo);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hostFbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, composeTarget);
+    if (fullscreenTarget) {
+        GLCommon_computeLetterbox(gameW, gameH, windowW, windowH, &sx, &sy, &ex, &ey);
+        g_glCommonCompositeTexture = 0;
+        glBlitFramebuffer(0, 0, fboWidth, fboHeight, sx, ey, ex, sy, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, hostFbo);
+        g_glCommonFullscreenHook(fboHeight, sx, sy, ex, ey, windowW, windowH);
+        glBindFramebuffer(GL_FRAMEBUFFER, hostFbo);
+        return;
+    }
 #else
     glClear(GL_COLOR_BUFFER_BIT);
 #endif

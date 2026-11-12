@@ -3,6 +3,12 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.84-4
+
+- **Batalha (Chapter 5, Floradinn):** os sprites de batalha do grupo, pré-carregados no Load Chapter, não são mais descartados pela limpeza de textura das trocas de sala. Depois de uma sala que libera tudo (o vídeo do jardim), voltam na troca de sala seguinte, por trás da transição (`BATTLE_PRELOAD=rewarm`). Antes, 12 páginas entravam no primeiro quadro da luta (2,2 s).
+- **room_dw_fcastle_yellowblue:** voltando da escada vizinha, a sala mantém as próprias texturas (limite 52 MiB). O corte para 28 MiB fica só para as outras entradas, e a sala não recarrega mais as plataformas durante o jogo.
+- **CRT Agressivo em tela cheia:** a borda (estática ou animada) e o jogo são compostos juntos e curvados numa passada só. A curvatura vai numa malha 48x28 e a vinheta, a borda do tubo e a grade numa máscara pré-calculada, e o shader faz só 3 leituras de textura. O shader antigo custava ~15 ms por quadro (cliff_verticalwind 17 -> 32 ms). As faixas de scanline separadas para a borda saíram. Se o novo caminho falhar, volta o tubo da v0.82. Prévia no PC: `scripts/preview-crt-full.py`.
+
 ## v0.84-3
 
 - DEBUG: "Enviar log atual" (upload HTTP, nunca configurado) virou **Enviar reports local** (Ligado/Desligado, `debug_report_sync=1`).

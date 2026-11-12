@@ -1525,6 +1525,10 @@ void VitaBorders_cycleCurrent(int direction) {
     updateBordersConfig(borderRoom, files[currentIndex]);
 }
 
+/* v0.84-4: where border quads go (0 = screen; the CRT Agressivo full-screen
+ * tube redirects them into its own target, see GLCommon_endLetterboxBlit). */
+GLuint g_vitaBorderTargetFbo = 0;
+
 static void drawBorderQuadFeathered(GLuint texture, int windowW, int windowH,
                                     float red, float green, float blue,
                                     float x0, float x1, float u0, float u1,
@@ -1537,7 +1541,7 @@ static void drawBorderQuadFeathered(GLuint texture, int windowW, int windowH,
         {u0, 1, red, green, blue, a0, x0, -1},
     };
     memcpy(borderVertices, updated, sizeof(borderVertices));
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, g_vitaBorderTargetFbo);
     glViewport(0, 0, windowW, windowH);
     glDisable(GL_SCISSOR_TEST);
     glMatrixMode(GL_PROJECTION);
@@ -1598,7 +1602,7 @@ static void drawBorderQuadTinted(GLuint texture, int windowW, int windowH, float
         {u0, 1, red, green, blue, alpha, x0, -1},
     };
     memcpy(borderVertices, updated, sizeof(borderVertices));
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, g_vitaBorderTargetFbo);
     glViewport(0, 0, windowW, windowH);
     glDisable(GL_SCISSOR_TEST);
     glMatrixMode(GL_PROJECTION);

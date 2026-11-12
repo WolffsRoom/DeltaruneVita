@@ -879,6 +879,10 @@ static void draw_ch5_sakura_host(Runner *runner, Renderer *renderer) {
 /* gl_common.c: replaces the final application_surface blit (CRT tube). */
 extern bool (*g_glCommonCompositeHook)(GLuint, int32_t, int32_t, int32_t, int32_t,
                                        int32_t, int32_t, int32_t, int32_t);
+/* gl_common.c (v0.84-4): border + game composed in one target, then presented. */
+extern GLuint g_glCommonFullscreenTarget;
+extern bool (*g_glCommonFullscreenHook)(int32_t, int32_t, int32_t, int32_t, int32_t,
+                                        int32_t, int32_t);
 
 // Lightweight final-frame presentation filters. Scanlines draw sparse one-pixel
 // dark lines into the host framebuffer after the game and Vita overlays are
@@ -4675,6 +4679,7 @@ int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
   log_line("VITAGL=init_complete");
   boot_stage("vitagl_init_complete");
   g_glCommonCompositeHook = vita_crt_tube_composite;
+  g_glCommonFullscreenHook = vita_crt_full_present;
 
   // vitaShaRK loads this module from the fixed ur0:data path when the first
   // runtime shader is linked. Report the missing dependency here, while the
@@ -6704,6 +6709,8 @@ int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
         settings.screenFilterMode == 6 && !g_vitaModernGlActive &&
         !settings.open && !settings.adjustMode && !dev_quick_open &&
         !settings.graphicsMenuOpen;
+    /* v0.84-4: border + game composed into the tube target, curved together. */
+    g_glCommonFullscreenTarget = vita_crt_full_target();
     renderer->vtable->endFrameInit(renderer);
     if (frame == 0)
       log_line("FRAME0=end_frame_init_complete");

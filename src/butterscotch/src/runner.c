@@ -5975,8 +5975,16 @@ void Runner_handlePendingRoomChange(Runner* runner) {
              * full floor/platform frame cost 2.18 seconds. 44MiB of atlases
              * and 13 surfaces were resident before movement froze. Keep a
              * clean 28MiB warm-up set instead of carrying the outgoing world. */
-            if(vitaTrimMiB>28ULL)vitaTrimMiB=28ULL;
-            VitaProbe_logLine("VITAGL_CH5_FCASTLE_GPU_GUARD=entry_trim target_mib=28");
+            /* v0.84-4: coming back from the adjacent staircase (219), the
+             * resident set is this room's own (the v0.84-3 log ran it at
+             * ~50 MiB and 30 FPS). Cutting it to 28 MiB made every return
+             * re-upload the platforms during play (5-7 FPS for seconds).
+             * The 28 MiB warm-up stays for every other entry. */
+            uint64_t entryCap=oldRoomIndex==219?52ULL:28ULL;
+            if(vitaTrimMiB>entryCap)vitaTrimMiB=entryCap;
+            VitaProbe_logLine(entryCap==52ULL?
+                "VITAGL_CH5_FCASTLE_GPU_GUARD=entry_trim target_mib=52 from=staircase":
+                "VITAGL_CH5_FCASTLE_GPU_GUARD=entry_trim target_mib=28");
         }
         if (g_vitaActiveChapter == 5 && newRoomName &&
             strncmp(newRoomName,"room_dw_cliff_",14)==0 &&
@@ -6043,6 +6051,11 @@ void Runner_handlePendingRoomChange(Runner* runner) {
             (GLLegacyRenderer*)runner->renderer);
         uint32_t vitaPreloadedPages = GLLegacyRenderer_preloadRoomTextureSet(
             (GLLegacyRenderer*)runner->renderer);
+        /* v0.84-4: put back the battle core a full purge released (not into
+         * a native-video room, which needs that memory). */
+        if (newRoomName == NULL || strstr(newRoomName, "video") == NULL)
+            vitaPreloadedPages += GLLegacyRenderer_rewarmBattleCore(
+                (GLLegacyRenderer*)runner->renderer, 900000ULL);
         if(g_vitaActiveChapter==5 && newRoomName &&
            strcmp(newRoomName,"room_dw_fcastle_yellowblue")==0){
             /* A single GPU fence after atlas LRU cleanup, before creating

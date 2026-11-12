@@ -5289,6 +5289,28 @@ static void glDrawLine(Renderer* renderer, float x1, float y1, float x2, float y
     float px = (-dy / len) * halfW;
     float py = (dx / len) * halfW;
 
+#ifdef PLATFORM_VITA
+    /* v0.85-3: inside a line-trail Draw event, queue the segment instead of
+     * one draw call per segment. Every streamer of the Chapter 5 kawkaw
+     * attack draws 15 segments; the separate calls cost up to 19 ms per frame.
+     * Nothing else is drawn in that event, and the window's end flushes. */
+    if (renderer->lineBatchWindow && renderer->currentShader < 0 && !vitaCustomShaderActive) {
+        const Vita2DVertex vertices[4] = {
+            {0.5f, 0.5f, r, g, b, alpha, x1 + px, y1 + py},
+            {0.5f, 0.5f, r, g, b, alpha, x1 - px, y1 - py},
+            {0.5f, 0.5f, r, g, b, alpha, x2 - px, y2 - py},
+            {0.5f, 0.5f, r, g, b, alpha, x2 + px, y2 + py},
+        };
+        if (vitaQuadBatchCount >= VITA_QUAD_BATCH_MAX ||
+            (vitaQuadBatchCount > 0 && vitaQuadBatchTexture != gl->whiteTexture))
+            vitaQuadBatchFlush();
+        vitaQuadBatchTexture = gl->whiteTexture;
+        memcpy(&vitaQuadBatch[vitaQuadBatchCount * 4], vertices, sizeof(vertices));
+        vitaQuadBatchCount++;
+        return;
+    }
+#endif
+
     glBindTexture(GL_TEXTURE_2D, gl->whiteTexture);
 
     // Vertex 0: start + perpendicular

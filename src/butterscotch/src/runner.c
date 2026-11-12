@@ -1263,7 +1263,19 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         }
         nativeDraw = true;
     }
+    /* v0.85-3: batch the line trail of each Chapter 5 kawkaw streamer
+     * (15 draw_line_width segments) into one draw call. */
+    bool lineBatch = !nativeDraw && eventType == EVENT_DRAW && runner->renderer != nullptr &&
+        !g_vitaModernGlActive && instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
+        runner->dataWin->objt.objects[instance->objectIndex].name != nullptr &&
+        strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "obj_kawkaw_streamer") == 0;
+    if (lineBatch) runner->renderer->lineBatchWindow = true;
     if (!nativeDraw) executeCode(runner, instance, codeId);
+    if (lineBatch) {
+        runner->renderer->lineBatchWindow = false;
+        runner->renderer->vtable->flush(runner->renderer);
+    }
     Runner_restoreFusumaCull(runner, &fusumaCull);
 #else
     executeCode(runner, instance, codeId);
@@ -5993,10 +6005,17 @@ void Runner_handlePendingRoomChange(Runner* runner) {
              * ~50 MiB and 30 FPS). Cutting it to 28 MiB made every return
              * re-upload the platforms during play (5-7 FPS for seconds).
              * The 28 MiB warm-up stays for every other entry. */
-            uint64_t entryCap=oldRoomIndex==219?52ULL:28ULL;
+            /* v0.85-3: any Flower Castle neighbour (the v0.84-3 log entered
+             * from seth_encounter, 227, and ran 86-104 ms frames for seconds
+             * re-uploading); the 28 MiB cut is kept for jumps from another
+             * region, where the v0.80-37 freeze happened (103 -> 221). */
+            const char* oldRoomName =
+                (oldRoomIndex >= 0 && (uint32_t)oldRoomIndex < runner->dataWin->room.count)
+                    ? runner->dataWin->room.rooms[oldRoomIndex].name : NULL;
+            uint64_t entryCap=(oldRoomName && strncmp(oldRoomName,"room_dw_fcastle_",16)==0)?52ULL:28ULL;
             if(vitaTrimMiB>entryCap)vitaTrimMiB=entryCap;
             VitaProbe_logLine(entryCap==52ULL?
-                "VITAGL_CH5_FCASTLE_GPU_GUARD=entry_trim target_mib=52 from=staircase":
+                "VITAGL_CH5_FCASTLE_GPU_GUARD=entry_trim target_mib=52 from=fcastle":
                 "VITAGL_CH5_FCASTLE_GPU_GUARD=entry_trim target_mib=28");
         }
         if (g_vitaActiveChapter == 5 && newRoomName &&

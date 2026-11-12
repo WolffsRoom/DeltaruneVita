@@ -3,6 +3,12 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.85-3
+
+- **CRT no primeiro uso:** com um filtro CRT já escolhido, os shaders (e a máscara do tubo) são preparados no boot. O primeiro quadro com CRT em jogo custava 0,31 s de compilação (`room_shop_ch5`, `gui_us=310707`). Não era erro: as linhas `VITAGL_CRT_MOD` são essa compilação.
+- **Batalha da kawkawdash:** cada `obj_kawkaw_streamer` desenha um rastro de 15 segmentos, e cada segmento era uma chamada de desenho separada (até 1,3 s a cada ~60 quadros no log). Agora o rastro de cada instância sai numa chamada só.
+- **yellowblue:** o limite de 52 MiB vale para qualquer entrada vinda do Flower Castle (o log da v0.84-3 entrou pela seth_encounter e ficou em quadros de 86 a 104 ms). O corte para 28 MiB fica para saltos de outra região.
+
 ## v0.85-2
 
 - **Início de batalha no Capítulo 5 (kawkawdash):** com a VRAM apertada nas salas do penhasco (orçamento de 24 MiB), o descarte de emergência ainda tirava os sprites de batalha, e a luta os reenviava nos primeiros quadros (quadros de 0,6 a 1,4 s). Agora eles são a última opção de descarte. Quando saem, voltam na troca de sala seguinte ou no instante em que o encontro começa (`obj_encounterbasic`), no mesmo quadro que o jogo já gasta montando a luta, com limite de 0,4 s.

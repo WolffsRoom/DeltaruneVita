@@ -247,6 +247,7 @@ struct Renderer {
     BlendFactors blendFactors;
     int32_t cameraCurrent;
     bool quadBatchWindow; // Chapter 4 tower Draw event: Legacy-GL may queue surface sprites (Vita).
+    bool lineBatchWindow; // v0.85-3: one Draw event of line trails (Ch5 kawkaw streamers): queue draw_line_width quads (Vita).
     bool quadBatchPartWindow; // DEVICE_MENU Draw event: Legacy-GL may queue draw_*_part quads (Vita).
 };
 

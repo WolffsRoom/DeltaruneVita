@@ -4702,6 +4702,17 @@ int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
   VitaSettings settings;
   VitaSettings_load(&settings);
   boot_stage("settings_loaded config_ini_written");
+  /* v0.85-3: compile the CRT shaders (and build the tube mask) during boot
+   * when a CRT filter is already selected. On first use in gameplay the
+   * runtime compile cost a 0.31 s frame (room_shop_ch5, gui_us=310707). */
+  if (settings.screenFilterMode == 6) {
+    vita_crt_full_init();
+    vita_crt_tube_init();
+    boot_stage("crt_precompiled mode=agressivo");
+  } else if (settings.screenFilterMode == 1 || settings.screenFilterMode == 5) {
+    vita_crt_mod_init();
+    boot_stage("crt_precompiled mode=overlay");
+  }
   if (settings.saveSyncEnabled) {
     /* v0.84: opt-in PC <-> Vita save sync server (vita_save_sync.c). */
     SaveSync_setEnabled(true, SAVE_PATH);

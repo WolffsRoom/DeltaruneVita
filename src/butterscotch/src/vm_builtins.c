@@ -11715,6 +11715,30 @@ static RValue builtin_surface_set_target(VMContext* ctx, RValue* args, MAYBE_UNU
                 ctx->vitaSuppressSurfaceDraw = true;
                 return RValue_makeReal(1.0);
             }
+            /* v0.85: Flower Castle shadow-puppet walls (fusuma). The mask
+             * clears its 640x480 clip surface and redraws every wall,
+             * door, party member, bullet, particle and platform silhouette
+             * into it on every frame (room_dw_fcastle_obscured_bullets ran
+             * at 16-17 FPS). The silhouettes are refreshed at 15 Hz; the
+             * cached surface is still composited every frame (that draw
+             * comes after surface_reset_target), and Step, movement and
+             * collisions are untouched (silhouettes lag at most one frame). */
+            if (objectName != nullptr && g_vitaActiveChapter == 5 &&
+                strcmp(objectName, "obj_plat_fusuma_mask") == 0 &&
+                (runner->frameCount & 1U) != 0U && runner->renderer != nullptr) {
+                int sw = (int)Renderer_getSurfaceWidth(runner->renderer, surfaceId);
+                int sh = (int)Renderer_getSurfaceHeight(runner->renderer, surfaceId);
+                if (sw == 640 && sh == 480) {
+                    ctx->vitaSuppressSurfaceDraw = true;
+                    static unsigned int lastFusumaLog = 0;
+                    if (runner->frameCount - lastFusumaLog >= 300U) {
+                        extern void VitaProbe_logLine(const char* line);
+                        VitaProbe_logLine("CH5_FUSUMA_MASK_REUSE=15hz target=640x480");
+                        lastFusumaLog = runner->frameCount;
+                    }
+                    return RValue_makeReal(1.0);
+                }
+            }
             if (objectName != nullptr &&
                 strcmp(objectName, "obj_flowery_towery") == 0 &&
                 g_vitaActiveChapter == 5 &&

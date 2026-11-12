@@ -1269,7 +1269,11 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
         !g_vitaModernGlActive && instance->objectIndex >= 0 &&
         (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
         runner->dataWin->objt.objects[instance->objectIndex].name != nullptr &&
-        strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "obj_kawkaw_streamer") == 0;
+        (strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "obj_kawkaw_streamer") == 0 ||
+         /* v0.85-4: dialogue text drawn one character per draw_text */
+         strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "obj_writer") == 0 ||
+         strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "obj_dmgwriter") == 0 ||
+         strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "DEVICE_MENU") == 0);
     if (lineBatch) runner->renderer->lineBatchWindow = true;
     if (!nativeDraw) executeCode(runner, instance, codeId);
     if (lineBatch) {
@@ -6083,11 +6087,10 @@ void Runner_handlePendingRoomChange(Runner* runner) {
             (GLLegacyRenderer*)runner->renderer);
         uint32_t vitaPreloadedPages = GLLegacyRenderer_preloadRoomTextureSet(
             (GLLegacyRenderer*)runner->renderer);
-        /* v0.84-4: put back the battle core a full purge released (not into
-         * a native-video room, which needs that memory). */
-        if (newRoomName == NULL || strstr(newRoomName, "video") == NULL)
-            vitaPreloadedPages += GLLegacyRenderer_rewarmBattleCore(
-                (GLLegacyRenderer*)runner->renderer, 900000ULL);
+        /* v0.85-4: no battle-core rewarm at doorways. The v0.85 hardware log
+         * showed it costing ~1 s at every room change (5-6 BC3 pages at
+         * ~180 ms each, the rest retried at the next door). The core is
+         * restored when an encounter starts (obj_encounterbasic). */
         if(g_vitaActiveChapter==5 && newRoomName &&
            strcmp(newRoomName,"room_dw_fcastle_yellowblue")==0){
             /* A single GPU fence after atlas LRU cleanup, before creating

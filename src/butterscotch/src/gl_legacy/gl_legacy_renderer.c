@@ -1702,6 +1702,9 @@ static void glLegacyUpdateShaderMatrices(Renderer* renderer) {
 
 // camera_apply: swap the active world->clip projection on the current target without touching its viewport.
 static void glApplyProjection(Renderer* renderer, const Matrix4f* viewMatrix, const Matrix4f* projectionMatrix) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
 
     Matrix4f world = renderer->gmlMatrices[MATRIX_WORLD];
     Matrix4f view = *viewMatrix;
@@ -2145,6 +2148,9 @@ static void glBeginFrame(Renderer* renderer, int32_t gameW, int32_t gameH, int32
 }
 
 static void glBeginView(Renderer* renderer, MAYBE_UNUSED int32_t viewX, MAYBE_UNUSED int32_t viewY, MAYBE_UNUSED int32_t viewW, MAYBE_UNUSED int32_t viewH, int32_t portX, int32_t portY, int32_t portW, int32_t portH, MAYBE_UNUSED float viewAngle) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
 
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -2168,10 +2174,16 @@ static void glBeginView(Renderer* renderer, MAYBE_UNUSED int32_t viewX, MAYBE_UN
 }
 
 static void glEndView(MAYBE_UNUSED Renderer* renderer) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     glDisable(GL_SCISSOR_TEST);
 }
 
 static void glBeginGUI(Renderer* renderer, int32_t guiW, int32_t guiH, int32_t portX, int32_t portY, int32_t portW, int32_t portH, int32_t targetSurfaceId) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
 
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -2234,6 +2246,9 @@ static void glBeginGUI(Renderer* renderer, int32_t guiW, int32_t guiH, int32_t p
 }
 
 static void glSetGuiProjection(MAYBE_UNUSED Renderer* renderer, int32_t guiW, int32_t guiH, int32_t portW, int32_t portH, bool renderingToUserSurface) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     Matrix4f projection;
     Matrix4f_guiProjection(&projection, (float) guiW, (float) guiH, (float) portW, (float) portH);
     // GL surfaces are stored bottom-up and draw_surface samples them with vertical flip.
@@ -2268,6 +2283,9 @@ static void glSetGuiProjection(MAYBE_UNUSED Renderer* renderer, int32_t guiW, in
 }
 
 static void glEndGUI(MAYBE_UNUSED Renderer* renderer) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     glDisable(GL_SCISSOR_TEST);
 }
 
@@ -2299,6 +2317,9 @@ static void glRendererFlush(MAYBE_UNUSED Renderer* renderer) {
 }
 
 static void glClearScreen(MAYBE_UNUSED Renderer* renderer, uint32_t color, float alpha) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: queued quads before the clear */
+#endif
     float r = (float) BGR_R(color) / 255.0f;
     float g = (float) BGR_G(color) / 255.0f;
     float b = (float) BGR_B(color) / 255.0f;
@@ -5598,6 +5619,32 @@ static void glDrawText(Renderer* renderer, const char* text, float x, float y, f
                     int32_t glyphTpagIdx;
 
                     if (glResolveGlyph(gl, dw, &fontState, glyph, cursorX, cursorY, &glyphTexId, &glyphTpagIdx, &u0, &v0, &u1, &v1, &localX0, &localY0)) {
+#ifdef PLATFORM_VITA
+                        /* v0.85-4: in a text Draw event (obj_writer, DEVICE_MENU) queue
+                         * glyphs: the writer draws one character per draw_text, and
+                         * each glyph was its own draw call (~10 s of draw time in the
+                         * v0.85 Chapter 5 log). State changes flush the queue. */
+                        if (renderer->lineBatchWindow && renderer->currentShader < 0 && !vitaCustomShaderActive) {
+                            float qx1 = localX0 + (float) glyph->sourceWidth, qy1 = localY0 + (float) glyph->sourceHeight;
+                            float q0x, q0y, q1x, q1y, q2x, q2y, q3x, q3y;
+                            Matrix4f_transformPoint(&transform, localX0, localY0, &q0x, &q0y);
+                            Matrix4f_transformPoint(&transform, qx1, localY0, &q1x, &q1y);
+                            Matrix4f_transformPoint(&transform, qx1, qy1, &q2x, &q2y);
+                            Matrix4f_transformPoint(&transform, localX0, qy1, &q3x, &q3y);
+                            const Vita2DVertex gv[4] = {
+                                {u0, v0, r, g, b, alpha, q0x, q0y}, {u1, v0, r, g, b, alpha, q1x, q1y},
+                                {u1, v1, r, g, b, alpha, q2x, q2y}, {u0, v1, r, g, b, alpha, q3x, q3y},
+                            };
+                            if (vitaQuadBatchCount >= VITA_QUAD_BATCH_MAX ||
+                                (vitaQuadBatchCount > 0 && vitaQuadBatchTexture != glyphTexId))
+                                vitaQuadBatchFlush();
+                            vitaQuadBatchTexture = glyphTexId;
+                            memcpy(&vitaQuadBatch[vitaQuadBatchCount * 4], gv, sizeof(gv));
+                            vitaQuadBatchCount++;
+                            drewSuccessfully = true;
+                            goto glyph_advance;
+                        }
+#endif
                         glBindTexture(GL_TEXTURE_2D, glyphTexId);
                         PS3_PALETTED_BEGIN(glyphTpagIdx);
 
@@ -5635,6 +5682,9 @@ static void glDrawText(Renderer* renderer, const char* text, float x, float y, f
                     }
                 }
 
+#ifdef PLATFORM_VITA
+            glyph_advance:
+#endif
                 cursorX += glyph->shift;
                 if (drewSuccessfully && hasNext) {
                     cursorX += TextUtils_getKerningOffset(glyph, nextCh);
@@ -5755,6 +5805,34 @@ static void glDrawTextColor(Renderer* renderer, const char* text, float x, float
                     int32_t glyphTpagIdx;
 
                     if (glResolveGlyph(gl, dw, &fontState, glyph, cursorX, cursorY, &glyphTexId, &glyphTpagIdx, &u0, &v0, &u1, &v1, &localX0, &localY0)) {
+#ifdef PLATFORM_VITA
+                        /* v0.85-4: in a text Draw event (obj_writer, DEVICE_MENU) queue
+                         * glyphs: the writer draws one character per draw_text, and
+                         * each glyph was its own draw call (~10 s of draw time in the
+                         * v0.85 Chapter 5 log). State changes flush the queue. */
+                        if (renderer->lineBatchWindow && renderer->currentShader < 0 && !vitaCustomShaderActive) {
+                            float qx1 = localX0 + (float) glyph->sourceWidth, qy1 = localY0 + (float) glyph->sourceHeight;
+                            float q0x, q0y, q1x, q1y, q2x, q2y, q3x, q3y;
+                            Matrix4f_transformPoint(&transform, localX0, localY0, &q0x, &q0y);
+                            Matrix4f_transformPoint(&transform, qx1, localY0, &q1x, &q1y);
+                            Matrix4f_transformPoint(&transform, qx1, qy1, &q2x, &q2y);
+                            Matrix4f_transformPoint(&transform, localX0, qy1, &q3x, &q3y);
+                            const Vita2DVertex gv[4] = {
+                                {u0, v0, BGR_R(c1) / 255.0f, BGR_G(c1) / 255.0f, BGR_B(c1) / 255.0f, alpha, q0x, q0y},
+                                {u1, v0, BGR_R(c2) / 255.0f, BGR_G(c2) / 255.0f, BGR_B(c2) / 255.0f, alpha, q1x, q1y},
+                                {u1, v1, BGR_R(c3) / 255.0f, BGR_G(c3) / 255.0f, BGR_B(c3) / 255.0f, alpha, q2x, q2y},
+                                {u0, v1, BGR_R(c4) / 255.0f, BGR_G(c4) / 255.0f, BGR_B(c4) / 255.0f, alpha, q3x, q3y},
+                            };
+                            if (vitaQuadBatchCount >= VITA_QUAD_BATCH_MAX ||
+                                (vitaQuadBatchCount > 0 && vitaQuadBatchTexture != glyphTexId))
+                                vitaQuadBatchFlush();
+                            vitaQuadBatchTexture = glyphTexId;
+                            memcpy(&vitaQuadBatch[vitaQuadBatchCount * 4], gv, sizeof(gv));
+                            vitaQuadBatchCount++;
+                            drewSuccessfully = true;
+                            goto glyph_advance_color;
+                        }
+#endif
                         glBindTexture(GL_TEXTURE_2D, glyphTexId);
                         PS3_PALETTED_BEGIN(glyphTpagIdx);
 
@@ -5791,6 +5869,9 @@ static void glDrawTextColor(Renderer* renderer, const char* text, float x, float
                     }
                 }
 
+#ifdef PLATFORM_VITA
+            glyph_advance_color:
+#endif
                 cursorX += glyph->shift;
                 gradientX   += glyph->shift;
                 if (drewSuccessfully && hasNext) {
@@ -6009,6 +6090,9 @@ static int32_t glGpuGetBlendMode(Renderer* renderer) {
 }
 
 static void glGpuSetBlendMode(Renderer* renderer, int32_t mode) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
 #ifdef PLATFORM_VITA
     if (gl->currentBlendMode != mode) vitaQuadBatchFlush();
@@ -6024,6 +6108,9 @@ static void glGpuSetBlendMode(Renderer* renderer, int32_t mode) {
 }
 
 static void glGpuSetBlendModeExt(Renderer* renderer, int32_t sfactor, int32_t dfactor, int32_t sfactor_alpha, int32_t dfactor_alpha) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
 #ifdef PLATFORM_VITA
     if (gl->currentBlendMode != bm_complex || gl->currentSFactor != sfactor ||
@@ -6045,6 +6132,9 @@ static void glGpuSetBlendModeExt(Renderer* renderer, int32_t sfactor, int32_t df
 }
 
 static void glGpuSetBlendEnable(Renderer* renderer, bool enable) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     (void)renderer;
     enable ? glEnable(GL_BLEND) : glDisable(GL_BLEND);
 }
@@ -6055,6 +6145,9 @@ static bool glGpuGetBlendEnable(MAYBE_UNUSED Renderer* renderer) {
 }
 
 static void glGpuSetAlphaTestEnable(MAYBE_UNUSED Renderer* renderer, bool enable) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
 #ifdef PLATFORM_VITA
     GLLegacyRenderer* gl = (GLLegacyRenderer*)renderer;
     gl->alphaTestEnable = enable;
@@ -6070,6 +6163,9 @@ static void glGpuSetAlphaTestEnable(MAYBE_UNUSED Renderer* renderer, bool enable
  * RGB with the fog colour and keeps the alpha. A linear ramp ending at depth 0
  * gives the same result for these flat quads, and custom shaders stay unaffected. */
 static void glGpuSetFog(MAYBE_UNUSED Renderer* renderer, bool enable, uint32_t color) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     if (enable) {
         const GLfloat fogColor[4] = {
             (float) BGR_R(color) / 255.0f, (float) BGR_G(color) / 255.0f,
@@ -6086,10 +6182,16 @@ static void glGpuSetFog(MAYBE_UNUSED Renderer* renderer, bool enable, uint32_t c
 }
 
 static void glGpuSetAlphaTestRef(MAYBE_UNUSED Renderer* renderer, uint8_t ref) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     glAlphaFunc(GL_GREATER, ref/255.0f);
 }
 
 static void glGpuSetColorWriteEnable(Renderer* renderer, bool red, bool green, bool blue, bool alpha) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
     gl->colorWriteR = red;
     gl->colorWriteG = green;
@@ -6278,6 +6380,9 @@ static void glLegacySurfaceFree(Renderer* renderer, int32_t surfaceId) {
 }
 
 static bool glLegacySetRenderTarget(Renderer* renderer, int32_t surfaceId, bool implicitApplicationSurface) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
 #ifdef PLATFORM_VITA
     vitaQuadBatchFlush();
@@ -6888,6 +6993,9 @@ static void vitaPaletteBindLookup(GLLegacyRenderer* gl, int32_t slot,
 
 // Bind a texture into the stage returned by glShaderGetSamplerIndex.
 static void glTextureSetStage(Renderer* renderer, int32_t slot, uint32_t texHandle) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
     if (slot < 0 || slot >= 8) return; // up to 8 texture units
 
@@ -7385,6 +7493,9 @@ uint32_t GLLegacyRenderer_prepareShaders(GLLegacyRenderer* gl, VitaShaderPrepare
 #endif
 
 static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     GLLegacyRenderer* gl = (GLLegacyRenderer*) renderer;
     const bool validShader = shaderIndex >= 0 &&
         (uint32_t)shaderIndex < gl->base.dataWin->shdr.count;
@@ -7593,6 +7704,9 @@ static void glGpuSetShader(Renderer* renderer, MAYBE_UNUSED int32_t shaderIndex)
     }
 }
 static void glGpuResetShader(Renderer* renderer) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     renderer->currentShader = -1;
 #ifdef PLATFORM_VITA
     vitaCustomShaderActive = false;
@@ -7658,6 +7772,9 @@ static int32_t glShaderGetSamplerIndex(Renderer* renderer, int32_t shaderIndex, 
     return -1;
 }
 static void glShaderSetUniformF(MAYBE_UNUSED Renderer* renderer, int32_t handle, int32_t count, float value1, float value2, float value3, float value4) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     if (handle < 0) return;
     if (count == 1) glUniform1f(handle, value1);
     else if (count == 2) glUniform2f(handle, value1, value2);
@@ -7665,9 +7782,15 @@ static void glShaderSetUniformF(MAYBE_UNUSED Renderer* renderer, int32_t handle,
     else if (count == 4) glUniform4f(handle, value1, value2, value3, value4);
 }
 static void glShaderSetUniformFArray(MAYBE_UNUSED Renderer* renderer, int32_t handle, float* values, uint32_t count) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     if (handle >= 0 && values && count > 0) glUniform4fv(handle, count, values);
 }
 static void glShaderSetUniformI(MAYBE_UNUSED Renderer* renderer, int32_t handle, int32_t count, int32_t value1, int32_t value2, int32_t value3, int32_t value4) {
+#ifdef PLATFORM_VITA
+    vitaQuadBatchFlush(); /* v0.85-4: state change ends a queued quad run */
+#endif
     if (handle < 0) return;
     if (count == 1) glUniform1i(handle, value1);
     else if (count == 2) glUniform2i(handle, value1, value2);

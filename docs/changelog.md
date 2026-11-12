@@ -3,6 +3,11 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.85-4
+
+- **Trocas de sala ~1 s mais rápidas:** a recarga dos sprites de batalha em toda porta (v0.84-4) saiu. O log da v0.85 mostrou `BATTLE_PRELOAD=rewarm` custando ~1 s a cada troca de sala (5 ou 6 páginas BC3 a ~180 ms cada, e o resto tentado de novo na porta seguinte). A recarga fica só no início de um encontro (limite de 0,4 s), e a proteção contra descarte continua.
+- **Texto em lote:** no Draw do `obj_writer`, `obj_dmgwriter` e `DEVICE_MENU`, as letras entram num lote de quads, em vez de uma chamada de desenho por letra. O writer desenha um caractere por `draw_text`, e no log a soma era ~10 s de desenho de `obj_writer`. Qualquer troca de estado (blend, shader, fog, alfa, alvo, câmera, clear) esvazia o lote antes, então a ordem e a aparência não mudam.
+
 ## v0.85-3
 
 - **CRT no primeiro uso:** com um filtro CRT já escolhido, os shaders (e a máscara do tubo) são preparados no boot. O primeiro quadro com CRT em jogo custava 0,31 s de compilação (`room_shop_ch5`, `gui_us=310707`). Não era erro: as linhas `VITAGL_CRT_MOD` são essa compilação.

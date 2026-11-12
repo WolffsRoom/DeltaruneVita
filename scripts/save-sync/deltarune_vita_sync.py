@@ -67,10 +67,31 @@ def digest(name, data):
 def game_running():
     if os.name != "nt":
         return False
+    # Win32 process snapshot instead of running tasklist: in the windowed .exe a
+    # child console program flashed a cmd window on every sync pass (~3 s).
     try:
-        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq DELTARUNE.exe", "/NH"],
-                             capture_output=True, text=True, timeout=5).stdout
-        return "DELTARUNE.exe" in out
+        import ctypes, ctypes.wintypes as wt
+        class PROCESSENTRY32W(ctypes.Structure):
+            _fields_ = [("dwSize", wt.DWORD), ("cntUsage", wt.DWORD), ("th32ProcessID", wt.DWORD),
+                        ("th32DefaultHeapID", ctypes.c_size_t), ("th32ModuleID", wt.DWORD),
+                        ("cntThreads", wt.DWORD), ("th32ParentProcessID", wt.DWORD),
+                        ("pcPriClassBase", ctypes.c_long), ("dwFlags", wt.DWORD),
+                        ("szExeFile", ctypes.c_wchar * 260)]
+        k32 = ctypes.windll.kernel32
+        k32.CreateToolhelp32Snapshot.restype = wt.HANDLE
+        snap = k32.CreateToolhelp32Snapshot(0x2, 0)          # TH32CS_SNAPPROCESS
+        if not snap or snap == wt.HANDLE(-1).value:
+            return False
+        try:
+            e = PROCESSENTRY32W(); e.dwSize = ctypes.sizeof(e)
+            ok = k32.Process32FirstW(snap, ctypes.byref(e))
+            while ok:
+                if e.szExeFile.lower() == "deltarune.exe":
+                    return True
+                ok = k32.Process32NextW(snap, ctypes.byref(e))
+            return False
+        finally:
+            k32.CloseHandle(snap)
     except Exception:
         return False
 

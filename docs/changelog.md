@@ -3,6 +3,10 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.85-2
+
+- **Início de batalha no Capítulo 5 (kawkawdash):** com a VRAM apertada nas salas do penhasco (orçamento de 24 MiB), o descarte de emergência ainda tirava os sprites de batalha, e a luta os reenviava nos primeiros quadros (quadros de 0,6 a 1,4 s). Agora eles são a última opção de descarte. Quando saem, voltam na troca de sala seguinte ou no instante em que o encontro começa (`obj_encounterbasic`), no mesmo quadro que o jogo já gasta montando a luta, com limite de 0,4 s.
+
 ## v0.85-1
 
 - **room_dw_fcastle_obscured_bullets (e demais salas com paredes fusuma):** a camada de silhuetas (`obj_plat_fusuma_mask`, um surface de 640x480 limpo e redesenhado com todas as paredes, portas, personagens, balas, partículas e plataformas a cada quadro) agora é refeita a 15 Hz. Nos quadros intermediários, as chamadas de desenho dentro desse surface são ignoradas e a imagem anterior continua sendo composta normalmente (`CH5_FUSUMA_MASK_REUSE=15hz`). Step, movimento e colisões seguem a cada quadro, e as silhuetas atrasam no máximo um quadro. Usa o mesmo mecanismo das torres da titanclimb2 do Capítulo 3.

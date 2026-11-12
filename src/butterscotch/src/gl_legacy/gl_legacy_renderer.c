@@ -2886,6 +2886,10 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
                     continue;
                 if (pass == 0 && gl->textureRoomRequired != nullptr &&
                     gl->textureRoomRequired[i]) continue;
+                // v0.85-2: under VRAM pressure (cliff rooms run a 24 MiB
+                // budget) this fallback was taking the battle core, so the
+                // next battle uploaded it on its first frames again.
+                if (pass == 0 && vitaIsBattleCorePage(i)) continue;
                 if (gl->textureLastUsedFrame[i] < oldestFrame) {
                     oldestFrame = gl->textureLastUsedFrame[i];
                     victim = i;
@@ -2898,6 +2902,10 @@ static bool vitaEvictTexturePage(GLLegacyRenderer* gl, uint32_t protectedPage) {
     uint64_t bytes = gl->textureGpuBytes != nullptr && gl->textureGpuBytes[victim] != 0 ?
                      gl->textureGpuBytes[victim] :
                      vitaGpuTextureBytes(gl, victim, gl->textureWidths[victim], gl->textureHeights[victim]);
+    /* v0.85-2: a battle core page lost to pressure comes back at the next
+     * doorway (GLLegacyRenderer_rewarmBattleCore), not on the battle's
+     * first frame. */
+    if (vitaIsBattleCorePage(victim)) vitaBattleCoreRewarmPending = true;
     vitaTextureLog(victim, gl->textureWidths[victim], gl->textureHeights[victim],
                    4096, "evict_lru");
     gl->vitaTextureEvictions++;

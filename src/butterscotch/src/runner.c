@@ -918,6 +918,19 @@ static void Runner_executeResolvedEvent(Runner* runner, Instance* instance, int3
     extern bool g_vitaModernGlActive;
     extern bool g_vitaExperimentalGlActive;
     extern void VitaProbe_logLine(const char* text);
+#if defined(PLATFORM_VITA) && !defined(NATIVE_GXM_PROBE_VERSION)
+    /* v0.85-2: an encounter is starting in the same room (no doorway since
+     * the battle core was lost to VRAM pressure). Put it back now, in the
+     * frame that already pays for the encounter setup, instead of across the
+     * battle's first frames (Chapter 5 kawkawdash: 0.6-1.4 s frames). */
+    if (eventType == EVENT_CREATE && !g_vitaModernGlActive && runner->renderer != nullptr &&
+        instance->objectIndex >= 0 &&
+        (uint32_t)instance->objectIndex < runner->dataWin->objt.count &&
+        runner->dataWin->objt.objects[instance->objectIndex].name != nullptr &&
+        strcmp(runner->dataWin->objt.objects[instance->objectIndex].name, "obj_encounterbasic") == 0) {
+        GLLegacyRenderer_rewarmBattleCore((GLLegacyRenderer*)runner->renderer, 400000ULL);
+    }
+#endif
     // The legacy renderer cannot apply Chapter 5's shader_replace_simple LUT.
     // Executing obj_lutshader nevertheless copied the full 640x480
     // application surface to another FBO and back every frame. Skip that

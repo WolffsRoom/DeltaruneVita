@@ -264,10 +264,25 @@ def live_window_setup(holder):
         follow = tk.BooleanVar(value=True)
         tk.Checkbutton(bar, text="auto-scroll", variable=follow, fg="white", bg="black",
                        selectcolor="black", activebackground="black").pack(side="right", padx=6)
+        wrap = tk.BooleanVar(value=False)
         text = tk.Text(top, bg="#0b0b0b", fg="#e6e6e6", insertbackground="white",
                        font=("Consolas", 10), wrap="none", borderwidth=0)
         ys = tk.Scrollbar(top, command=text.yview); text.configure(yscrollcommand=ys.set)
+        xs = tk.Scrollbar(top, orient="horizontal", command=text.xview); text.configure(xscrollcommand=xs.set)
+        def apply_wrap():
+            # Line wrap on: long PERF/MEMORY lines fold; off: horizontal scrollbar.
+            text.configure(wrap="word" if wrap.get() else "none")
+            if wrap.get(): xs.pack_forget()
+            else: xs.pack(side="bottom", fill="x", before=text)
+            if follow.get(): text.see("end")
+        tk.Checkbutton(bar, text={"Portuguese-BR": "quebra de linha", "Spanish": "ajuste de línea",
+                                  "French": "retour à la ligne", "German": "Zeilenumbruch",
+                                  "Italian": "a capo", "Turkish": "satir kaydir", "Russian": "перенос строк",
+                                  "Japanese": "折り返し"}.get(win.lang, "line wrap"),
+                       variable=wrap, command=apply_wrap, fg="white", bg="black",
+                       selectcolor="black", activebackground="black").pack(side="right", padx=6)
         ys.pack(side="right", fill="y"); text.pack(fill="both", expand=True)
+        apply_wrap()
         text.tag_configure("err", foreground="#ff6b6b")
         text.tag_configure("warn", foreground="#ffd166")
         def pump():

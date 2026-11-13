@@ -1,0 +1,8 @@
+# Chapter 3: sofa, tabuleiros, TV World e green room
+room_dw_couch_overworld_intro
+room_board_1
+room_board_2
+room_dw_teevie_large_01
+room_dw_teevie_stealth_d
+room_dw_green_room
+room_dw_snow_zone

@@ -57,3 +57,48 @@ Portas próprias, separadas do Save Sync (26540/26541), para os dois rodarem jun
   `drsync_ui.py` (`configure()` troca nome, título e cor do coração).
 - Teste local: `scratch/review-v081/debugtest.cmd` compila o mesmo C como servidor Windows
   (`-DDEBUG_SYNC_DESKTOP_TEST`) e `debugtest.py` faz o teste de ponta a ponta.
+
+## Auto-teste (v0.86)
+
+Com o jogo aberto no Vita, em gameplay no capítulo do roteiro, e **Enviar reports local** ligado, o PC
+consegue navegar pelas salas sozinho e juntar os logs, sem nenhum toque no Vita:
+
+```
+python scripts\save-sync\deltarune_vita_debug.py --autotest ch5
+python scripts\save-sync\deltarune_vita_debug.py --autotest meu-roteiro.txt --seconds 30
+python scripts\save-sync\deltarune_vita_debug.py --status
+python scripts\save-sync\deltarune_vita_debug.py --rooms
+```
+
+(o mesmo vale para `DeltaruneDebug.exe`). Para cada sala do roteiro, o auto-teste:
+
+1. marca o log (`DEBUG_REMOTE=mark text=autotest_<sala>`);
+2. pede a sala pelo mesmo caminho do navegador de salas DEV (L+Triângulo). Salas que dependem da história
+   são redirecionadas por `vitaDevSafeNavigatorTarget`, e o relatório mostra `pedida → real`. O pedido é
+   recusado se houver menu aberto ou outra troca de sala em curso;
+3. espera a sala assentar (4 s) e grava um devlog de N segundos (DEV_SAMPLE + profiler GML);
+4. segue o log do probe ao vivo durante tudo.
+
+No fim, baixa os devlogs gerados e grava em `Documentos\DeltaruneVita Debug\autotest\<data-hora>\`:
+`report.md` (FPS médio/mínimo, quadro médio/máximo e os 2 scripts GML mais caros por sala),
+`devlogs\` e `probe-during-test.log`.
+
+Roteiros recomendados (`scripts/save-sync/autotest/`), um por capítulo, com as salas mais pesadas ou
+representativas: `ch1.txt` … `ch5.txt`. Formato: uma sala por linha, segundos opcionais, `#` para
+comentários. Salas que não existem no capítulo aberto são puladas.
+
+Limitações: não dispara batalhas nem cutscenes (só visita salas). Funciona no VitaGL; no Native GXM o
+servidor responde, mas os comandos não são aplicados.
+
+### Comandos novos do protocolo
+
+- `STATUS` → `STATUS room=<nome> index=<i> chapter=<c> frame=<f> fps=<x> pending=<0|1> capture=<0|1> menu=<0|1> last=<resultado> build=<versão>`
+  (publicado pelo jogo a cada 15 quadros). `last` é `room_jump:<sala>`, `room_already:`,
+  `room_unavailable:`, `room_busy:` ou `capture:<s>`.
+- `ROOMS` → `ROOM <índice> <nome>` por sala do capítulo, depois `END`.
+- `CMD ROOM <nome>`, `CMD CAPTURE <segundos>`, `CMD CAPTURE_STOP`, `CMD MARK <texto>` → `OK <seq>`
+  (ou `ERR busy` com a fila de 8 cheia).
+
+Cada cliente do PC tem a sua própria thread no Vita (até 3), então o app na bandeja e o auto-teste
+funcionam conectados ao mesmo tempo. Teste local: `scratch/review-v081/autotest_e2e.py`, contra o
+servidor de teste, que simula o jogo.

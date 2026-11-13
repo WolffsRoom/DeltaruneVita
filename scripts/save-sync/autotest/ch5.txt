@@ -1,0 +1,14 @@
+# Chapter 5: cidade, jardim, penhasco e Flower Castle (as salas dos ultimos logs)
+room_town_south
+room_town_mid
+room_dw_garden_meetflowery
+room_dw_garden_mushrooms
+room_dw_cliff_twirlflowerwind
+room_dw_cliff_kawkawdash
+room_dw_cliff_verticalwind_post
+room_dw_cliff_shop
+room_dw_fcastle_foyer
+room_dw_fcastle_yellowblue
+room_dw_fcastle_obscured_bullets
+room_dw_fcastle_ultradash
+room_dw_fcastle_orange_gauntlet

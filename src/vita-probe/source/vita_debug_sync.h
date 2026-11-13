@@ -23,4 +23,19 @@ bool DebugSync_isEnabled(void);
 void DebugSync_startFromConfig(void);
 const char *DebugSync_status(void);
 
+/* v0.86 auto-test: commands queued by the PC (DELTARUNE Debug --autotest),
+ * taken by the game's main thread once per frame. */
+enum { DEBUG_CMD_ROOM = 1, DEBUG_CMD_CAPTURE = 2, DEBUG_CMD_CAPTURE_STOP = 3, DEBUG_CMD_MARK = 4 };
+typedef struct DebugSyncCommand {
+    int kind;
+    int seconds;
+    unsigned seq;
+    char arg[96];
+} DebugSyncCommand;
+bool DebugSync_takeCommand(DebugSyncCommand *out);
+/* One "key=value ..." line answered to STATUS (room, frame, fps, capture...). */
+void DebugSync_publishStatus(const char *line);
+/* Room names for ROOMS (valid for the chapter's lifetime). */
+void DebugSync_setRoomNames(const char *(*nameAt)(int), int count);
+
 #endif

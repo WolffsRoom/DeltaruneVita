@@ -105,6 +105,32 @@ class Vita:
         data = self._exact(int(head[1]))
         return data, int(head[2]), "RESET" in head
 
+    # ---- v0.86 auto-test ----
+    def status(self):
+        self._send(b"STATUS\n")
+        line = self._line()
+        if not line.startswith("STATUS"):
+            raise IOError("STATUS: " + line)
+        return line[7:]
+
+    def rooms(self):
+        self._send(b"ROOMS\n")
+        out = []
+        while True:
+            line = self._line()
+            if line == "END":
+                return out
+            parts = line.split(" ", 2)
+            if len(parts) == 3 and parts[0] == "ROOM":
+                out.append(parts[2])
+
+    def command(self, text):
+        self._send(("CMD %s\n" % text).encode("utf-8"))
+        reply = self._line()
+        if not reply.startswith("OK"):
+            raise IOError("CMD %s: %s" % (text, reply))
+        return reply
+
     def close(self):
         try:
             self._send(b"BYE\n")
@@ -346,8 +372,31 @@ def main():
     ap.add_argument("--vita", help="Vita IP (skips discovery)")
     ap.add_argument("--lang", help="UI language")
     ap.add_argument("--console", action="store_true")
+    ap.add_argument("--autotest", metavar="PLAN",
+                    help="run an auto-test: a plan file or preset (ch1..ch5, see autotest/) and exit")
+    ap.add_argument("--seconds", type=int, default=20, help="capture length per room (auto-test)")
+    ap.add_argument("--rooms", action="store_true", help="print the current chapter's room names and exit")
+    ap.add_argument("--status", action="store_true", help="print the game's status line and exit")
     args = ap.parse_args()
     args.state_dir.mkdir(parents=True, exist_ok=True)
+    if args.autotest or args.rooms or args.status:
+        ip = args.vita or discover(timeout=10)
+        if ip is None:
+            print("PS Vita not found: is the game open with 'Send reports locally' on (DEBUG tab)?")
+            return 2
+        vita = Vita(ip)
+        try:
+            if args.status:
+                print(vita.status())
+            elif args.rooms:
+                print("\n".join(vita.rooms()))
+            else:
+                import drdebug_autotest
+                drdebug_autotest.run(vita, args.autotest, args.out_dir,
+                                     lambda *a: log(args.state_dir, *a), args.seconds)
+        finally:
+            vita.close()
+        return 0
     return console(args) if args.console else tray(args)
 
 if __name__ == "__main__":

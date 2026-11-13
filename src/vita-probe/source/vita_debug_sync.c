@@ -43,6 +43,74 @@ static char g_dataDir[192] = DEBUG_SYNC_DATA_ROOT;
 static char g_status[64] = "off";
 
 static void set_status(const char *s) { snprintf(g_status, sizeof(g_status), "%s", s); }
+
+/* ---- v0.86 remote control (auto-test) ----
+ * The PC queues commands (go to room, capture a devlog); the game's main
+ * thread takes them with DebugSync_takeCommand and publishes a status line.
+ * Each PC client has its own thread; one lock serialises command handling. */
+#define DS_CMD_RING 8
+static DebugSyncCommand g_cmdRing[DS_CMD_RING];
+static volatile unsigned g_cmdHead = 0, g_cmdTail = 0, g_cmdSeq = 0;
+static char g_statusLine[384] = "starting";
+static const char *(*g_roomNameFn)(int) = NULL;
+static volatile int g_roomCount = 0;
+static volatile int g_clientCount = 0;
+#if defined(DEBUG_SYNC_DESKTOP_TEST)
+static CRITICAL_SECTION g_lock; static volatile LONG g_lockInit = 0;
+static void ds_lock(void) {
+    if (InterlockedCompareExchange(&g_lockInit, 1, 0) == 0) InitializeCriticalSection(&g_lock), g_lockInit = 2;
+    while (g_lockInit != 2) Sleep(0);
+    EnterCriticalSection(&g_lock);
+}
+static void ds_unlock(void) { LeaveCriticalSection(&g_lock); }
+#define DS_BARRIER() MemoryBarrier()
+#define DS_INC(p) InterlockedIncrement((volatile LONG *)(p))
+#define DS_DEC(p) InterlockedDecrement((volatile LONG *)(p))
+#else
+static SceUID g_lock = -1;
+static void ds_lock(void) {
+    if (g_lock < 0) g_lock = sceKernelCreateMutex("drdebug_lock", 0, 0, NULL);
+    sceKernelLockMutex(g_lock, 1, NULL);
+}
+static void ds_unlock(void) { sceKernelUnlockMutex(g_lock, 1); }
+#define DS_BARRIER() __sync_synchronize()
+#define DS_INC(p) __sync_fetch_and_add((p), 1)
+#define DS_DEC(p) __sync_fetch_and_sub((p), 1)
+#endif
+
+static unsigned queue_command(int kind, const char *arg, int seconds) {
+    ds_lock();
+    unsigned seq = 0;
+    if (g_cmdHead - g_cmdTail < DS_CMD_RING) {
+        DebugSyncCommand *c = &g_cmdRing[g_cmdHead % DS_CMD_RING];
+        c->kind = kind; c->seconds = seconds; c->seq = ++g_cmdSeq;
+        snprintf(c->arg, sizeof(c->arg), "%s", arg ? arg : "");
+        seq = c->seq;
+        DS_BARRIER();
+        g_cmdHead++;
+    }
+    ds_unlock();
+    return seq;
+}
+
+bool DebugSync_takeCommand(DebugSyncCommand *out) {
+    if (g_cmdTail == g_cmdHead) return false;
+    DS_BARRIER();
+    *out = g_cmdRing[g_cmdTail % DS_CMD_RING];
+    g_cmdTail++;
+    return true;
+}
+
+void DebugSync_publishStatus(const char *line) {
+    ds_lock();
+    snprintf(g_statusLine, sizeof(g_statusLine), "%s", line ? line : "");
+    ds_unlock();
+}
+
+void DebugSync_setRoomNames(const char *(*nameAt)(int), int count) {
+    g_roomNameFn = nameAt;
+    g_roomCount = count;
+}
 bool DebugSync_isEnabled(void) { return g_enabled; }
 const char *DebugSync_status(void) { return g_enabled ? g_status : "off"; }
 
@@ -266,16 +334,49 @@ static void serve_client(ds_sock c) {
     set_status("PC connected");
     while (g_enabled && recv_line(c, line, sizeof(line))) {
         char area[16], name[64]; unsigned long long offset = 0;
+        int seconds = 0;
+        if (strcmp(line, "STATUS") == 0) {
+            char reply[420];
+            ds_lock();
+            snprintf(reply, sizeof(reply), "STATUS %s\n", g_statusLine);
+            ds_unlock();
+            if (!send_text(c, reply)) break;
+            continue;
+        }
+        if (strcmp(line, "ROOMS") == 0) {
+            bool ok = true;
+            for (int i = 0; i < g_roomCount && ok && g_roomNameFn != NULL; ++i) {
+                const char *n = g_roomNameFn(i);
+                char out[160]; snprintf(out, sizeof(out), "ROOM %d %s\n", i, n ? n : "");
+                ok = send_text(c, out);
+            }
+            if (!ok || !send_text(c, "END\n")) break;
+            continue;
+        }
+        if (strncmp(line, "CMD ", 4) == 0) {
+            unsigned seq = 0;
+            if (sscanf(line, "CMD ROOM %63s", name) == 1) seq = queue_command(DEBUG_CMD_ROOM, name, 0);
+            else if (sscanf(line, "CMD CAPTURE %d", &seconds) == 1) seq = queue_command(DEBUG_CMD_CAPTURE, "", seconds);
+            else if (strcmp(line, "CMD CAPTURE_STOP") == 0) seq = queue_command(DEBUG_CMD_CAPTURE_STOP, "", 0);
+            else if (sscanf(line, "CMD MARK %63s", name) == 1) seq = queue_command(DEBUG_CMD_MARK, name, 0);
+            char reply[64];
+            if (seq) snprintf(reply, sizeof(reply), "OK %u\n", seq);
+            else snprintf(reply, sizeof(reply), "ERR busy\n");
+            if (!send_text(c, reply)) break;
+            continue;
+        }
+        ds_lock();   /* send_file/send_tail use static buffers */
+        bool keep = true;
         if (strncmp(line, "HELLO", 5) == 0) {
             char reply[96];
             snprintf(reply, sizeof(reply), "OK DRDEBUG %d PSVita\n", DEBUG_SYNC_PROTOCOL);
-            if (!send_text(c, reply)) break;
+            if (!send_text(c, reply)) keep = false;
         } else if (strcmp(line, "LIST") == 0) {
             struct list_ctx ctx = { c, true, "devlog" };
             list_tree(&ctx, g_devDir, "", 0);
             ctx.area = "shot";
             list_tree(&ctx, g_shotDir, "", 0);
-            if (!ctx.ok || !send_text(c, "END\n")) break;
+            if (!ctx.ok || !send_text(c, "END\n")) keep = false;
         } else if (strcmp(line, "LOGS") == 0) {
             const char *logs[2] = { "butterscotch-probe.log", "native-gxm-probe.log" };
             bool ok = true;
@@ -286,26 +387,59 @@ static void serve_client(ds_sock c) {
                 char out[160]; snprintf(out, sizeof(out), "LOG %s %llu %llu\n", logs[i], size, mtime);
                 ok = send_text(c, out);
             }
-            if (!ok || !send_text(c, "END\n")) break;
+            if (!ok || !send_text(c, "END\n")) keep = false;
         } else if (sscanf(line, "GET %15s", area) == 1) {
             const char *root = area_root(area);
             const char *rel = line + 4 + strlen(area);
             while (*rel == ' ') ++rel;
-            if (root == NULL || !safe_rel(rel)) { if (!send_text(c, "ERR refused\n")) break; continue; }
-            char path[400]; snprintf(path, sizeof(path), "%s%s", root, rel);
-            if (!send_file(c, path)) break;
+            if (root == NULL || !safe_rel(rel)) { if (!send_text(c, "ERR refused\n")) keep = false; }
+            else { char path[400]; snprintf(path, sizeof(path), "%s%s", root, rel);
+                   if (!send_file(c, path)) keep = false; }
         } else if (sscanf(line, "TAIL %63s %llu", name, &offset) == 2) {
-            if (!is_log_name(name)) { if (!send_text(c, "ERR refused\n")) break; continue; }
-            if (!send_tail(c, name, offset)) break;
+            if (!is_log_name(name)) { if (!send_text(c, "ERR refused\n")) keep = false; }
+            else if (!send_tail(c, name, offset)) keep = false;
         } else if (strcmp(line, "BYE") == 0) {
-            break;
+            keep = false;
         } else {
-            if (!send_text(c, "ERR unknown\n")) break;
+            if (!send_text(c, "ERR unknown\n")) keep = false;
         }
+        ds_unlock();
+        if (!keep) break;
     }
     ds_close(c);
     set_status("waiting for PC");
 }
+
+/* One thread per PC client: the tray app and an auto-test run can be
+ * connected at the same time. */
+#define DS_MAX_CLIENTS 3
+#if defined(DEBUG_SYNC_DESKTOP_TEST)
+static DWORD WINAPI client_thread(LPVOID p) {
+    serve_client((ds_sock)(uintptr_t)p);
+    DS_DEC(&g_clientCount);
+    return 0;
+}
+static void start_client(ds_sock c) {
+    DS_INC(&g_clientCount);
+    HANDLE h = CreateThread(NULL, 0, client_thread, (LPVOID)(uintptr_t)c, 0, NULL);
+    if (h == NULL) { DS_DEC(&g_clientCount); ds_close(c); } else CloseHandle(h);
+}
+#else
+static int client_thread(SceSize args, void *argp) {
+    (void)args;
+    ds_sock c = *(ds_sock *)argp;
+    serve_client(c);
+    DS_DEC(&g_clientCount);
+    return sceKernelExitDeleteThread(0);
+}
+static void start_client(ds_sock c) {
+    DS_INC(&g_clientCount);
+    SceUID t = sceKernelCreateThread("drdebug_client", client_thread, 0x10000100 + 20, 48 * 1024, 0, 0, NULL);
+    if (t < 0 || sceKernelStartThread(t, sizeof(c), &c) < 0) {
+        DS_DEC(&g_clientCount); ds_close(c);
+    }
+}
+#endif
 
 #if !defined(DEBUG_SYNC_DESKTOP_TEST)
 static bool net_ready(void) {
@@ -345,8 +479,8 @@ static void server_loop(void) {
             snprintf(msg, sizeof(msg), "DRDEBUG %d %d PSVita\n", DEBUG_SYNC_PROTOCOL, DEBUG_SYNC_TCP_PORT);
             ds_broadcast(udp, msg);
         }
-        ds_sock c = ds_accept(listener);
-        if (c != DS_BAD) serve_client(c);
+        ds_sock c = g_clientCount < DS_MAX_CLIENTS ? ds_accept(listener) : DS_BAD;
+        if (c != DS_BAD) start_client(c);
         else ds_sleep_ms(200);
     }
     ds_close(listener);
@@ -355,6 +489,56 @@ static void server_loop(void) {
 }
 
 #if defined(DEBUG_SYNC_DESKTOP_TEST)
+/* Desktop stand-in for the game's main thread: applies auto-test commands,
+ * publishes STATUS and writes devlog captures like playable_main does. */
+static const char *fake_rooms[] = { "room_dw_cliff_kawkawdash", "room_dw_fcastle_yellowblue",
+                                    "room_town_south", "room_dw_garden_meetflowery" };
+static const char *fake_room_name(int i) { return fake_rooms[i]; }
+static DWORD WINAPI fake_game_thread(LPVOID p) {
+    (void)p;
+    DebugSync_setRoomNames(fake_room_name, 4);
+    char room[96] = "room_town_south";
+    unsigned frame = 0, pendingUntil = 0, captureUntil = 0, seqNo = 0;
+    char pendingRoom[96] = "", last[120] = "none";
+    FILE *cap = NULL;
+    for (;;) {
+        Sleep(33); frame++;
+        DebugSyncCommand c;
+        while (DebugSync_takeCommand(&c)) {
+            if (c.kind == DEBUG_CMD_ROOM) {
+                int known = 0; for (int i = 0; i < 4; ++i) if (strcmp(fake_rooms[i], c.arg) == 0) known = 1;
+                if (!known) snprintf(last, sizeof(last), "room_unavailable:%s", c.arg);
+                else if (strcmp(room, c.arg) == 0) snprintf(last, sizeof(last), "room_already:%s", c.arg);
+                else { snprintf(pendingRoom, sizeof(pendingRoom), "%s", c.arg); pendingUntil = frame + 20;
+                       snprintf(last, sizeof(last), "room_jump:%s", c.arg); }
+            }
+            else if (c.kind == DEBUG_CMD_CAPTURE) {
+                char dir[300], path[400];
+                snprintf(dir, sizeof(dir), "%schapter 5", g_devDir); CreateDirectoryA(dir, NULL);
+                snprintf(path, sizeof(path), "%s\\%u_%s_test.log", dir, ++seqNo, room);
+                cap = fopen(path, "wb");
+                if (cap) fprintf(cap, "DELTARUNE_VITA_DEV_CAPTURE=1\nBUILD_VERSION=desktop-test\nCHAPTER=5 START_ROOM=%s\n", room);
+                captureUntil = frame + (unsigned)c.seconds * 30U;
+            } else if (c.kind == DEBUG_CMD_CAPTURE_STOP) captureUntil = frame;
+        }
+        if (pendingRoom[0] && frame >= pendingUntil) {
+            snprintf(room, sizeof(room), "%s", pendingRoom); pendingRoom[0] = '\0';
+            char line[200]; snprintf(line, sizeof(line), "ROOM_CHANGE frame=%u name=%s\n", frame, room);
+            FILE *f = NULL; char lp[300]; snprintf(lp, sizeof(lp), "%sbutterscotch-probe.log", g_dataDir);
+            if ((f = fopen(lp, "ab")) != NULL) { fputs(line, f); fclose(f); }
+        }
+        if (cap && frame % 30U == 0U)
+            fprintf(cap, "DEV_SAMPLE frame=%u room=%s fps=%.2f total_us=%u\n", frame, room,
+                    strstr(room, "kawkaw") ? 24.5 : 30.0, strstr(room, "kawkaw") ? 40800U : 33000U);
+        if (cap && frame >= captureUntil) { fputs("DEV_CAPTURE=end\n", cap); fclose(cap); cap = NULL; }
+        char st[300];
+        snprintf(st, sizeof(st), "room=%s index=0 chapter=5 frame=%u fps=30.0 pending=%d capture=%d menu=0 last=%s build=desktop-test",
+                 room, frame, pendingRoom[0] ? 1 : 0, cap ? 1 : 0, last);
+        DebugSync_publishStatus(st);
+    }
+    return 0;
+}
+
 /* Test harness: debug_sync_test <devlogs\> <screenshots\> <data root\> */
 int main(int argc, char **argv) {
     if (argc < 4) { fprintf(stderr, "usage: debug_sync_test <devlogs\\> <shots\\> <data\\>\n"); return 2; }
@@ -364,6 +548,7 @@ int main(int argc, char **argv) {
     snprintf(g_dataDir, sizeof(g_dataDir), "%s", argv[3]);
     g_enabled = true;
     fprintf(stderr, "DEBUG_SYNC_TEST serving on %d\n", DEBUG_SYNC_TCP_PORT);
+    CreateThread(NULL, 0, fake_game_thread, NULL, 0, NULL);
     server_loop();
     return 0;
 }

@@ -1,0 +1,6 @@
+# Chapter 1: cidade, Castle Town, campos e floresta (salas com mais objetos e trocas de textura)
+room_town_north
+room_castle_town
+room_field_checkers1
+room_forest_savepoint2
+room_dark_chase1

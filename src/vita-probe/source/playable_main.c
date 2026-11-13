@@ -4570,6 +4570,115 @@ static void vita_save_anywhere(Runner *runner, uint32_t buttons,
   log_line(line);
 }
 
+/* ---- v0.86 auto-test (DELTARUNE Debug --autotest) ----
+ * Commands arrive on the debug server thread (vita_debug_sync.c) and are
+ * applied here, on the main thread, once per frame:
+ *  ROOM <name>     same jump as the DEV Room Navigator (vitaDevSafeNavigatorTarget
+ *                  redirects rooms that need story state), only when no room
+ *                  transition is pending and no menu is open;
+ *  CAPTURE <s>     a devlog capture (DEV_SAMPLE + GML profiler) for s seconds;
+ *  CAPTURE_STOP / MARK <text> (a marker line in the probe log).
+ * A STATUS line is published every 15 frames for the PC to poll. */
+static const DataWin *debug_remote_dw = NULL;
+static const char *debug_remote_room_name(int i) {
+  if (debug_remote_dw == NULL || i < 0 || (uint32_t)i >= debug_remote_dw->room.count)
+    return "";
+  return debug_remote_dw->room.rooms[i].name ? debug_remote_dw->room.rooms[i].name : "";
+}
+static bool debug_remote_capture_owned = false;
+static uint64_t debug_remote_capture_until = 0;
+static uint64_t debug_remote_fps_t0 = 0;
+static uint32_t debug_remote_fps_f0 = 0;
+static float debug_remote_fps = 0.0f;
+static char debug_remote_last[96] = "none";
+
+static void debug_remote_frame(Runner *runner, Renderer *renderer, DataWin *dw,
+                               int chapter, uint32_t frame, bool menuOpen) {
+  if (!DebugSync_isEnabled() || runner == NULL || dw == NULL)
+    return;
+  if (debug_remote_dw != dw) {
+    debug_remote_dw = dw;
+    DebugSync_setRoomNames(debug_remote_room_name, (int)dw->room.count);
+  }
+  uint64_t now = sceKernelGetProcessTimeWide();
+  DebugSyncCommand cmd;
+  while (DebugSync_takeCommand(&cmd)) {
+    char line[240];
+    if (cmd.kind == DEBUG_CMD_ROOM) {
+      int raw = -1;
+      for (uint32_t i = 0; i < dw->room.count; ++i)
+        if (dw->room.rooms[i].name && strcmp(dw->room.rooms[i].name, cmd.arg) == 0) {
+          raw = (int)i;
+          break;
+        }
+      int target = raw >= 0 ? vitaDevSafeNavigatorTarget(dw, chapter, raw) : -1;
+      if (target < 0 || (uint32_t)target >= dw->room.count) {
+        snprintf(debug_remote_last, sizeof(debug_remote_last), "room_unavailable:%.60s", cmd.arg);
+      } else if (menuOpen || runner->pendingRoom >= 0) {
+        snprintf(debug_remote_last, sizeof(debug_remote_last), "room_busy:%.60s", cmd.arg);
+      } else if (target == runner->currentRoomIndex) {
+        snprintf(debug_remote_last, sizeof(debug_remote_last), "room_already:%.60s", cmd.arg);
+      } else {
+        snprintf(line, sizeof(line),
+                 "DEBUG_REMOTE=room seq=%u from=%d to=%d name=%.90s requested=%.60s",
+                 cmd.seq, runner->currentRoomIndex, target, dw->room.rooms[target].name, cmd.arg);
+        log_line(line);
+        dev_log_write(line);
+        renderer->vtable->flush(renderer);
+        glFinish();
+        if (!g_vitaModernGlActive)
+          GLLegacyRenderer_collectRetiredTexturesForRoomChange((GLLegacyRenderer *)renderer);
+        vglForceGarbageCollection();
+        g_vitaDevRoomJumpClean = 1;
+        g_vitaDevRoomJumpTarget = target;
+        runner->pendingRoom = target;
+        snprintf(debug_remote_last, sizeof(debug_remote_last), "room_jump:%.60s",
+                 dw->room.rooms[target].name);
+      }
+    } else if (cmd.kind == DEBUG_CMD_CAPTURE) {
+      int seconds = cmd.seconds < 1 ? 1 : (cmd.seconds > 600 ? 600 : cmd.seconds);
+      dev_log_start(runner->currentRoom != NULL ? runner->currentRoom->name : NULL);
+      Profiler_setEnabled(&runner->vmContext->profiler, true);
+      debug_remote_capture_owned = true;
+      debug_remote_capture_until = now + (uint64_t)seconds * 1000000ULL;
+      snprintf(line, sizeof(line), "DEBUG_REMOTE=capture_begin seq=%u seconds=%d", cmd.seq, seconds);
+      log_line(line);
+      dev_log_write(line);
+      snprintf(debug_remote_last, sizeof(debug_remote_last), "capture:%d", seconds);
+    } else if (cmd.kind == DEBUG_CMD_CAPTURE_STOP) {
+      debug_remote_capture_until = now;
+    } else if (cmd.kind == DEBUG_CMD_MARK) {
+      snprintf(line, sizeof(line), "DEBUG_REMOTE=mark seq=%u text=%.80s", cmd.seq, cmd.arg);
+      log_line(line);
+      dev_log_write(line);
+    }
+  }
+  if (debug_remote_capture_owned && now >= debug_remote_capture_until) {
+    log_line("DEBUG_REMOTE=capture_end");
+    dev_log_stop();
+    Profiler_setEnabled(&runner->vmContext->profiler, false);
+    debug_remote_capture_owned = false;
+  }
+  if (debug_remote_fps_t0 == 0) {
+    debug_remote_fps_t0 = now;
+    debug_remote_fps_f0 = frame;
+  } else if (now - debug_remote_fps_t0 >= 1000000ULL) {
+    debug_remote_fps = (float)(frame - debug_remote_fps_f0) * 1000000.0f /
+                       (float)(now - debug_remote_fps_t0);
+    debug_remote_fps_t0 = now;
+    debug_remote_fps_f0 = frame;
+  }
+  if ((frame % 15U) == 0U) {
+    char status[360];
+    snprintf(status, sizeof(status),
+             "room=%.80s index=%d chapter=%d frame=%u fps=%.1f pending=%d capture=%d menu=%d last=%.80s build=%s",
+             runner->currentRoom && runner->currentRoom->name ? runner->currentRoom->name : "none",
+             runner->currentRoomIndex, chapter, frame, debug_remote_fps,
+             runner->pendingRoom >= 0 ? 1 : 0, dev_log_fd >= 0 ? 1 : 0, menuOpen ? 1 : 0,
+             debug_remote_last, PORT_BUILD_VERSION);
+    DebugSync_publishStatus(status);
+  }
+}
 int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
 
@@ -5973,6 +6082,9 @@ int main(void) {  setvbuf(stdout, NULL, _IONBF, 0);
       if (consumeQuick || dev_quick_open)
         pad.buttons = 0;
     }
+    /* v0.86 auto-test: commands from DELTARUNE Debug (--autotest). */
+    debug_remote_frame(runner, renderer, dw, active_chapter, frame,
+                       settings.open || settings.adjustMode || dev_quick_open);
     /* The original seven-room overlay and L+D-Pad directory are retired.
      * All room choices and safe transitions live in the L+Triangle modal. */
     dev_room_nav_held = false;

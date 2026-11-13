@@ -3,6 +3,11 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.86-1
+
+- **Auto-teste pelo DELTARUNE Debug:** com o Vita na mesma rede e `Enviar reports local` ligado, o PC navega sozinho pelas salas de um roteiro (mesmo caminho seguro do navegador de salas DEV), grava um devlog por sala, segue o log ao vivo e monta um relatório (FPS e scripts GML mais caros por sala). Roteiros recomendados em `scripts/save-sync/autotest/ch1..ch5.txt`. Uso: `deltarune_vita_debug.py --autotest ch5`. Detalhes em `docs/debug-sync-protocol.md`.
+- Servidor de debug: até 3 clientes ao mesmo tempo (app na bandeja + auto-teste). Comandos novos: `STATUS`, `ROOMS` e `CMD ROOM/CAPTURE/CAPTURE_STOP/MARK`.
+
 ## v0.85-4
 
 - **Trocas de sala ~1 s mais rápidas:** a recarga dos sprites de batalha em toda porta (v0.84-4) saiu. O log da v0.85 mostrou `BATTLE_PRELOAD=rewarm` custando ~1 s a cada troca de sala (5 ou 6 páginas BC3 a ~180 ms cada, e o resto tentado de novo na porta seguinte). A recarga fica só no início de um encontro (limite de 0,4 s), e a proteção contra descarte continua.

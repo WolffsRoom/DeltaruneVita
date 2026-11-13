@@ -1,0 +1,7 @@
+# Chapter 4: igreja, escaladas e torres (titanclimb)
+room_dw_church
+room_dw_churchb_darkclimb
+room_dw_churchb_gersonstudy
+room_dw_puzzlecloset_2
+room_dw_churchc_titanclimb1_tiled
+room_dw_churchc_titanclimb2_tiled

@@ -188,7 +188,9 @@ static VitaBorderAsset resolve_ch3(const char* room, const VitaBorderRuleState* 
         asset = VITA_BORDER_ASSET_DW_GREEN_SLOPPY_Z;
     if (room_eq(room, "room_town_krisyard_dark")) asset = VITA_BORDER_ASSET_LW_TOWN_NIGHT;
     if (room_eq(room, "room_dw_snow_zone")) asset = VITA_BORDER_ASSET_DW_TV_BLACK;
-    if (room_eq(room, "room_dw_snow_zone_battle")) asset = VITA_BORDER_ASSET_DW_BLUE_STARS;
+    /* v0.86-2: the blue stars come with Tenna's whip crack inside the battle
+     * room (VitaBorders_noteSound sets the gameshow scene), not on entry. */
+    if (room_eq(room, "room_dw_snow_zone_battle")) asset = VITA_BORDER_ASSET_DW_TV_BLACK;
     return asset;
 }
 

@@ -3,6 +3,11 @@
 > Documentação técnica detalhada por build da série `v0.81`: consulte [`docs/builds-v0.81.md`](builds-v0.81.md).  
 > Notas de lançamento oficiais e consolidadas para a atualização `v0.81`: consulte [`docs/releases/v0.81.md`](releases/v0.81.md).
 
+## v0.86-2
+
+- **Cutscene sépia do Capítulo 3 (room_torhouse_sepia):** as pernas das silhuetas apareciam abaixo do sofá. A cena pinta o fundo com `ossafe_fill_rectangle(0, 400, view_wport[0], view_hport[0])`, e o runner devolvia 0 para uma view que a sala não configura, então o retângulo não desenhava nada. Agora `view_wport`/`view_hport` de uma view sem porta devolvem o tamanho da sala, como a view automática do GameMaker.
+- **Borda da batalha do Tenna (room_dw_snow_zone_battle):** a borda azul de estrelas entrava na chegada à sala. Agora a sala começa com a borda preta da TV e troca no estalo do chicote (`snd_whip_crack_only`), como na cena da `room_dw_snow_zone`.
+
 ## v0.86-1
 
 - **Auto-teste pelo DELTARUNE Debug:** com o Vita na mesma rede e `Enviar reports local` ligado, o PC navega sozinho pelas salas de um roteiro (mesmo caminho seguro do navegador de salas DEV), grava um devlog por sala, segue o log ao vivo e monta um relatório (FPS e scripts GML mais caros por sala). Roteiros recomendados em `scripts/save-sync/autotest/ch1..ch5.txt`. Uso: `deltarune_vita_debug.py --autotest ch5`. Detalhes em `docs/debug-sync-protocol.md`.

@@ -941,10 +941,23 @@ RValue VMBuiltins_getVariable(VMContext* ctx, Instance* inst, int16_t builtinVar
             if (arrayIndex >= 0 && MAX_VIEWS > arrayIndex) return RValue_makeReal((GMLReal) runner->views[arrayIndex].portY);
             return RValue_makeReal(0.0);
         case BUILTIN_VAR_VIEW_WPORT:
-            if (arrayIndex >= 0 && MAX_VIEWS > arrayIndex) return RValue_makeReal((GMLReal) runner->views[arrayIndex].portWidth);
+            /* v0.86-2: a view the room never configured (port 0x0) reports the
+             * room size, like GameMaker's automatic view. room_torhouse_sepia
+             * (Ch3) fills ossafe_fill_rectangle(0, 400, view_wport[0],
+             * view_hport[0]) and drew nothing, so the silhouettes' legs showed
+             * below the sofa. */
+            if (arrayIndex >= 0 && MAX_VIEWS > arrayIndex) {
+                int32_t pw = runner->views[arrayIndex].portWidth;
+                if (pw <= 0 && runner->currentRoom != nullptr) pw = (int32_t) runner->currentRoom->width;
+                return RValue_makeReal((GMLReal) pw);
+            }
             return RValue_makeReal(0.0);
         case BUILTIN_VAR_VIEW_HPORT:
-            if (arrayIndex >= 0 && MAX_VIEWS > arrayIndex) return RValue_makeReal((GMLReal) runner->views[arrayIndex].portHeight);
+            if (arrayIndex >= 0 && MAX_VIEWS > arrayIndex) {
+                int32_t ph = runner->views[arrayIndex].portHeight;
+                if (ph <= 0 && runner->currentRoom != nullptr) ph = (int32_t) runner->currentRoom->height;
+                return RValue_makeReal((GMLReal) ph);
+            }
             return RValue_makeReal(0.0);
         case BUILTIN_VAR_VIEW_VISIBLE:
             if (arrayIndex >= 0 && MAX_VIEWS > arrayIndex) return RValue_makeBool(runner->views[arrayIndex].enabled);

@@ -1269,7 +1269,8 @@ void VitaBorders_noteChapter3BoardSwitch(void) {
 
 void VitaBorders_noteSound(const char* soundName) {
     if (borderChapter != 3 || soundName == NULL) return;
-    if (strcmp(borderRoom, "room_dw_snow_zone") == 0 &&
+    if ((strcmp(borderRoom, "room_dw_snow_zone") == 0 ||
+         strcmp(borderRoom, "room_dw_snow_zone_battle") == 0) &&
         strcmp(soundName, "snd_whip_crack_only") == 0 &&
         chapter3BorderScene != CH3_BORDER_SCENE_KNIGHT_BLACK) {
         chapter3BorderScene = CH3_BORDER_SCENE_GAMESHOW_BLUE;

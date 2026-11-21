@@ -56,7 +56,7 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
     </tr>
     <tr>
       <td align="center">
-        <img src="https://camo.githubusercontent.com/dee30e6462a1965238af6e219cc098f5480bc8387fb4d7503f083c71be2565a3/68747470733a2f2f7374617469632e77696b69612e6e6f636f6f6b69652e6e65742f64656c746172756e652f696d616765732f652f65652f44656c746172756e655f4368325f49636f6e2e706e672f7265766973696f6e2f6c61746573742f7468756d626e61696c2f77696474682f3336302f6865696768742f3435303f63623d3230323530373233313833373331" width="48" alt="Chapter 2">
+        <img src="https://static.wikia.nocookie.net/deltarune/images/e/ee/Deltarune_Ch2_Icon.png/revision/latest/thumbnail/width/360/height/450?cb=20250723183731" width="48" alt="Chapter 2">
         <br><b>Chapter 2</b>
       </td>
       <td align="center"><b>Playable</b></td>
@@ -65,7 +65,7 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
     </tr>
     <tr>
       <td align="center">
-        <img src="https://camo.githubusercontent.com/d573fffb4d7374200e7c833d52e608449922c6242c485668fda765f6acef4f6e/68747470733a2f2f7374617469632e77696b69612e6e6f636f6f6b69652e6e65742f64656c746172756e652f696d616765732f372f37322f44656c746172756e655f332d315f69636f6e2e706e672f7265766973696f6e2f6c61746573743f63623d3230323530373238313634313231" width="48" alt="Chapter 3">
+        <img src="https://static.wikia.nocookie.net/deltarune/images/7/72/Deltarune_3-1_icon.png/revision/latest?cb=20250728164121" width="48" alt="Chapter 3">
         <br><b>Chapter 3</b>
       </td>
       <td align="center"><b>Playable</b></td>
@@ -77,7 +77,7 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
     </tr>
     <tr>
       <td align="center">
-        <img src="https://camo.githubusercontent.com/23f827c9398d628a50138c43386cc2118ff0e47e1524ce423fa3cc3ca5315a00/68747470733a2f2f7374617469632e77696b69612e6e6f636f6f6b69652e6e65742f64656c746172756e652f696d616765732f322f32622f44656c746172756e655f4368345f49636f6e2e706e672f7265766973696f6e2f6c61746573743f63623d3230323530373238313634393532" width="48" alt="Chapter 4">
+        <img src="https://static.wikia.nocookie.net/deltarune/images/2/2b/Deltarune_Ch4_Icon.png/revision/latest?cb=20250728164952" width="48" alt="Chapter 4">
         <br><b>Chapter 4</b>
       </td>
       <td align="center"><b>Playable</b></td>
@@ -89,7 +89,7 @@ DeltaruneVita runs the official Windows/Steam GameMaker data through a Vita-focu
     </tr>
     <tr>
       <td align="center">
-        <img src="https://camo.githubusercontent.com/cdb165ac69009027243b34e3800ecfe6596cf84d92ec49edca2c0c59458f0545/68747470733a2f2f7374617469632e77696b69612e6e6f636f6f6b69652e6e65742f64656c746172756e652f696d616765732f662f66632f44656c746172756e655f4368355f69636f6e2e706e672f7265766973696f6e2f6c61746573743f63623d3230323630363234313734343232" width="48" alt="Chapter 5">
+        <img src="https://static.wikia.nocookie.net/deltarune/images/f/fc/Deltarune_Ch5_icon.png/revision/latest?cb=20260624174422" width="48" alt="Chapter 5">
         <br><b>Chapter 5</b>
       </td>
       <td align="center"><b>Playable</b></td>
